@@ -1,0 +1,111 @@
+/**
+ * Push notifications (Expo).
+ *
+ * Two halves:
+ *  1. DEVICE REGISTRATION — get this device's Expo push token and store it in
+ *     `push_tokens` (via db.ts) so the backend can target it later.
+ *  2. SENDING — a client cannot push to *other* users' devices. When a task or
+ *     note is added, the app asks the backend to fan out a push to every linked
+ *     account (facilitator + individual + supporters). That fan-out runs in a
+ *     Supabase Edge Function (or the proxy server) that looks up the
+ *     recipients' tokens and calls Expo's push API. See docs/BACKEND.md.
+ *
+ * For the prototype (no backend), `notifyCareTeam` shows a LOCAL notification on
+ * this device so you can see the behavior end-to-end, and logs who *would* be
+ * notified in production.
+ */
+
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { BACKEND_URL } from '../config';
+
+// Show notifications while the app is foregrounded too.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+/**
+ * Ask for permission and return this device's Expo push token (or null if
+ * unavailable, e.g. a simulator). Safe to call on every app start.
+ */
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  if (!Device.isDevice) return null; // push tokens require a physical device
+
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  let status = existing;
+  if (existing !== 'granted') {
+    const req = await Notifications.requestPermissionsAsync();
+    status = req.status;
+  }
+  if (status !== 'granted') return null;
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+  }
+
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+export type NotifyAudience = 'facilitator' | 'individual' | 'supporters';
+
+export interface NotifyInput {
+  title: string;
+  body: string;
+  /** Who should receive it. Production fan-out resolves these to push tokens. */
+  audiences: NotifyAudience[];
+  /** Display names, for the local-demo notification copy. */
+  audienceNames?: string[];
+}
+
+/**
+ * Notify the care team that something changed (a task or note was added).
+ * Production: POSTs to the backend, which fans out Expo pushes to every linked
+ * account. Prototype: shows a local notification so the behavior is visible.
+ */
+export async function notifyCareTeam(input: NotifyInput): Promise<void> {
+  if (BACKEND_URL) {
+    try {
+      await fetch(`${BACKEND_URL}/api/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      return;
+    } catch (e) {
+      console.warn('[push] backend notify failed, falling back to local', e);
+    }
+  }
+
+  // Prototype fallback: a local notification on this device.
+  await Notifications.scheduleNotificationAsync({
+    content: { title: input.title, body: input.body },
+    trigger: null, // fire immediately
+  });
+}
+
+/** Human-readable summary of who a change will notify (for UI affordances). */
+export function describeAudience(audiences: NotifyAudience[]): string {
+  const label: Record<NotifyAudience, string> = {
+    facilitator: 'the facilitator',
+    individual: 'the individual getting help',
+    supporters: 'family supporters',
+  };
+  const parts = audiences.map((a) => label[a]);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
+}

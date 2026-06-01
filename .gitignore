@@ -30,8 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files — NEVER commit real secrets (Anthropic key, Supabase keys)
+.env
 .env*.local
+server/.env
 
 # typescript
 *.tsbuildinfo

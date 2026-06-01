@@ -1,20 +1,29 @@
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider } from './src/state/auth';
+import { AppStateProvider } from './src/state/store';
+import { RootNavigator } from './src/navigation/RootNavigator';
+import { registerForPushNotificationsAsync } from './src/services/push';
 
 export default function App() {
+  useEffect(() => {
+    // Ask for push permission and register this device's token. On a real
+    // device with Supabase configured, also persist it via db.savePushToken.
+    registerForPushNotificationsAsync().catch(() => {});
+  }, []);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppStateProvider>
+          <NavigationContainer>
+            <StatusBar style="dark" />
+            <RootNavigator />
+          </NavigationContainer>
+        </AppStateProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
