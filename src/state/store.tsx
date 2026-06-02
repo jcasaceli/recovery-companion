@@ -125,6 +125,8 @@ interface AppState extends PersistedState {
   setClientStatus: (id: string, status: ClientStatus) => Promise<void>;
   /** Facilitator: change a client's level of care. */
   setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
+  /** Re-run the cloud bootstrap (e.g. after a member links via join code). */
+  reloadCloud: () => Promise<void>;
   /** Cloud mode only: whether a client is currently open. Always true local. */
   cloudHasIndividual: boolean;
   /** Merged, reverse-chronological feed of all progress events */
@@ -600,6 +602,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       backToClients,
       setClientStatus,
       setClientLevel,
+      reloadCloud: async () => { if (cloud) await loadCloud(); },
       cloudHasIndividual: cloud ? !!individualId : true,
       timeline,
     };

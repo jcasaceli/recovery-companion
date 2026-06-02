@@ -196,10 +196,33 @@ export async function resolveMyIndividual(): Promise<{ individualId: string; rec
     if (rows && rows.length) return { individualId: rows[0].id, record: rows[0] };
     return null;
   }
+  // A member is linked to their record via individuals.profile_id.
+  const { data: u } = await db().auth.getUser();
+  if (u.user) {
+    const { data: own } = await db().from('individuals').select('*').eq('profile_id', u.user.id).maybeSingle();
+    if (own) return { individualId: own.id, record: own };
+  }
   const links = await listMyIndividuals();
   const first = (links ?? [])[0] as any;
   if (first?.individuals) return { individualId: first.individual_id, record: first.individuals };
   return null;
+}
+
+/** Facilitator: get (or generate) a member's join code to share. */
+export async function getJoinCode(individualId: string): Promise<string> {
+  const { data: ind } = await db().from('individuals').select('join_code').eq('id', individualId).maybeSingle();
+  if (ind?.join_code) return ind.join_code;
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const { error } = await db().from('individuals').update({ join_code: code }).eq('id', individualId);
+  if (error) throw error;
+  return code;
+}
+
+/** Member: redeem a join code to link to their resident record. */
+export async function redeemJoinCode(code: string): Promise<string> {
+  const { data, error } = await db().rpc('redeem_join_code', { p_code: code.trim() });
+  if (error) throw error;
+  return data as string;
 }
 
 /** Facilitator onboarding: ensure the facilitator has an org (create if none). */

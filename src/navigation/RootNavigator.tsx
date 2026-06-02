@@ -15,6 +15,7 @@ import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { ClientsScreen } from '../screens/ClientsScreen';
+import { LinkMemberScreen } from '../screens/LinkMemberScreen';
 import { TasksScreen } from '../screens/TasksScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
@@ -67,12 +68,16 @@ export function RootNavigator() {
   if (auth.configured) {
     if (auth.status === 'loading') return null;
     if (auth.status === 'signedOut') return <AuthScreen />;
-    // Facilitators get an admin console (Clients / Resources / Account) until
-    // they open a client, at which point they enter that client's app.
+    // Facilitators get an admin console (Clients / Payments / Resources /
+    // Account) until they open a client, at which point they enter its app.
     if (auth.profile?.role === 'facilitator' && !cloudHasIndividual) {
       return <FacilitatorTabs />;
     }
-    return <MainStack />; // signed in (with a client open, for a facilitator)
+    // A member who isn't linked to a sober living yet enters their join code.
+    if (auth.profile?.role !== 'facilitator' && !cloudHasIndividual) {
+      return <LinkMemberScreen />;
+    }
+    return <MainStack />; // signed in & linked
   }
 
   // Local prototype: gate on the on-device onboarding flag.

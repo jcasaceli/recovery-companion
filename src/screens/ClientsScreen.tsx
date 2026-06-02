@@ -8,6 +8,7 @@ import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { ClientStatus, LevelOfCare } from '../types';
 import { LEVELS_OF_CARE, LEVEL_OF_CARE_LABELS } from '../utils/format';
+import { getJoinCode } from '../services/db';
 
 export function ClientsScreen() {
   const { clients, createClient, selectClient, setClientStatus, setClientLevel } = useAppState();
@@ -24,6 +25,18 @@ export function ClientsScreen() {
 
   // change-level modal
   const [levelEditId, setLevelEditId] = useState<string | null>(null);
+
+  const invite = async (id: string, name: string) => {
+    try {
+      const code = await getJoinCode(id);
+      Alert.alert(
+        `Invite ${name}`,
+        `Share this join code with ${name}. They sign up as a member and enter it to link their account:\n\n${code}`,
+      );
+    } catch (e: any) {
+      Alert.alert('Could not get code', e?.message ?? 'Try again.');
+    }
+  };
 
   const shown = clients.filter((c) => c.status === filter);
   const counts = {
@@ -134,6 +147,9 @@ export function ClientsScreen() {
                     </View>
                   </TouchableOpacity>
                   <View style={styles.rowActions}>
+                    <TouchableOpacity onPress={() => invite(c.id, c.firstName)} style={styles.miniBtn} hitSlop={6}>
+                      <Text style={styles.miniBtnText}>Invite</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => setLevelEditId(c.id)} style={styles.miniBtn} hitSlop={6}>
                       <Text style={styles.miniBtnText}>Level</Text>
                     </TouchableOpacity>
