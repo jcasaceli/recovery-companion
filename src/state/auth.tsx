@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const loadProfile = async () => {
+  const loadProfile = async (attempt = 0) => {
     try {
       const row: any = await dbApi.getMyProfile();
       if (row) {
@@ -63,9 +63,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailVerified: row.email_verified ?? false,
           phoneVerified: row.phone_verified ?? false,
         });
+        return;
       }
-    } catch {
-      /* profile may not exist yet right after signup */
+      // No profile row. Right after signup the trigger may lag a beat — retry
+      // once. If it's still missing, the session is stale (e.g. the user was
+      // deleted) — sign out so the app returns to the login screen.
+      if (attempt < 1) {
+        setTimeout(() => loadProfile(attempt + 1), 1200);
+      } else {
+        console.warn('[auth] no profile for session — signing out stale session');
+        await dbApi.signOut();
+      }
+    } catch (e) {
+      console.warn('[auth] loadProfile failed', e);
     }
   };
 

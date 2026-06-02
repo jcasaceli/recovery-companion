@@ -14,6 +14,7 @@ import { MessagesScreen } from '../screens/MessagesScreen';
 import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
+import { AddClientScreen } from '../screens/AddClientScreen';
 import { TasksScreen } from '../screens/TasksScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
@@ -57,12 +58,16 @@ function Tabs({ navigation }: any) {
 
 export function RootNavigator() {
   const auth = useAuth();
-  const { onboarded, ready } = useAppState();
+  const { onboarded, ready, cloudHasIndividual } = useAppState();
 
   // Cloud mode (Supabase configured): gate on authentication.
   if (auth.configured) {
     if (auth.status === 'loading') return null;
     if (auth.status === 'signedOut') return <AuthScreen />;
+    // A facilitator with no clients yet creates their first one.
+    if (auth.profile?.role === 'facilitator' && !cloudHasIndividual) {
+      return <AddClientScreen />;
+    }
     return <MainStack />; // signed in
   }
 

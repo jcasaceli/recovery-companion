@@ -294,11 +294,27 @@ create policy "member orgs" on organizations
 create policy "own org membership" on org_members
   for select using (profile_id = auth.uid());
 
+-- Inserts: any authenticated user can create an org; a user can add a
+-- membership row only for themselves.
+create policy "create orgs" on organizations
+  for insert with check (auth.uid() is not null);
+create policy "join org as self" on org_members
+  for insert with check (profile_id = auth.uid());
+
 -- Individuals: accessible to related users and the owning org's facilitators.
 create policy "access individuals" on individuals
   for select using (can_access(id));
 create policy "facilitators manage individuals" on individuals
   for all using (is_facilitator_for(id)) with check (is_facilitator_for(id));
+-- Explicit INSERT policy: create an individual under an org you belong to
+-- (the FOR ALL check above can't see the not-yet-inserted row by id).
+create policy "create individuals in my org" on individuals
+  for insert with check (
+    exists (
+      select 1 from org_members m
+      where m.org_id = individuals.org_id and m.profile_id = auth.uid()
+    )
+  );
 
 -- Care relationships: you can see rows for individuals you can access.
 create policy "access relationships" on care_relationships

@@ -103,6 +103,17 @@ interface AppState extends PersistedState {
   togglePostLike: (postId: string) => void;
   /** Add one or many schedule events (bulk = from a facilitator's photo). */
   addScheduleEvents: (events: Omit<ScheduleEvent, 'id'>[]) => void;
+  /** Facilitator: create a client (individual) under their org, then load it. */
+  createClient: (input: {
+    firstName: string;
+    programName?: string;
+    treatmentStartDate?: string;
+    sobrietyDate?: string;
+    orgName?: string;
+  }) => Promise<void>;
+  /** Cloud mode only: whether the signed-in user has an individual to show.
+   *  Always true in the local prototype. */
+  cloudHasIndividual: boolean;
   /** Merged, reverse-chronological feed of all progress events */
   timeline: TimelineEntry[];
 }
@@ -167,90 +178,90 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const cloud = auth.configured && auth.status === 'signedIn';
   const [individualId, setIndividualId] = useState<string | undefined>(undefined);
 
-  // Local persistence (prototype path only).
+  // Local persistence (prototype path only). When Supabase is configured the
+  // cloud is authoritative — never read or write the on-device cache.
   useEffect(() => {
-    if (cloud) {
+    if (auth.configured) {
       setReady(true);
       return;
     }
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) setState(JSON.parse(raw));
+        // Merge over emptyState so newer fields always exist (older caches
+        // may predate some keys).
+        if (raw) setState({ ...emptyState, ...JSON.parse(raw) });
       } catch (e) {
         console.warn('[store] failed to load state', e);
       } finally {
         setReady(true);
       }
     })();
-  }, [cloud]);
+  }, [auth.configured]);
 
   useEffect(() => {
-    if (!ready || cloud) return; // never persist cloud data to AsyncStorage
+    if (!ready || auth.configured) return; // never persist when in cloud mode
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch((e) =>
       console.warn('[store] failed to save state', e),
     );
-  }, [state, ready, cloud]);
+  }, [state, ready, auth.configured]);
 
-  // Cloud bootstrap: when signed in, resolve the user's individual and load
-  // their data from Supabase into the same state shape the screens already use.
-  useEffect(() => {
-    if (!cloud) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const resolved = await dbApi.resolveMyIndividual();
-        if (cancelled) return;
-        if (!resolved) {
-          setIndividualId(undefined);
-          setState((s) => ({ ...s, onboarded: true }));
-          return;
-        }
-        const id = resolved.individualId;
-        const r: any = resolved.record;
-        setIndividualId(id);
-        const [checkIns, tasks, notes, posts, schedule] = await Promise.all([
-          dbApi.listCheckIns(id),
-          dbApi.listTasks(id),
-          dbApi.listNotes(id),
-          dbApi.listPosts(),
-          dbApi.listScheduleEvents(id),
-        ]);
-        if (cancelled) return;
-        setState((s) => ({
-          ...s,
-          onboarded: true,
-          lovedOne: {
-            id,
-            firstName: r.first_name,
-            relationship: 'child',
-            programName: r.program_name ?? '',
-            programType: r.program_type ?? 'outpatient',
-            treatmentStartDate: r.treatment_start_date ?? today(),
-            sobrietyDate: r.sobriety_date ?? undefined,
-            careTeam: [],
-          },
-          communityAccess: r.community_access ?? false,
-          checkIns: (checkIns ?? []).map((c: any) => ({
-            id: c.id, date: c.date, mood: c.mood, note: c.note ?? undefined, tags: c.tags ?? [],
-          })),
-          tasks,
-          notes,
-          posts,
-          scheduleEvents: (schedule ?? []).map((e: any) => ({
-            id: e.id, title: e.title, date: e.date, startTime: e.start_time ?? undefined,
-            endTime: e.end_time ?? undefined, location: e.location ?? undefined,
-            source: e.source, createdByName: 'Care team',
-          })),
-        }));
-      } catch (e) {
-        console.warn('[store] cloud bootstrap failed', e);
+  // Load (or reload) the signed-in user's data from Supabase into the same
+  // state shape the screens use. Reusable so createClient can refresh too.
+  const loadCloud = async () => {
+    try {
+      const resolved = await dbApi.resolveMyIndividual();
+      if (!resolved) {
+        setIndividualId(undefined);
         setState((s) => ({ ...s, onboarded: true }));
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const id = resolved.individualId;
+      const r: any = resolved.record;
+      setIndividualId(id);
+      const [checkIns, tasks, notes, posts, schedule] = await Promise.all([
+        dbApi.listCheckIns(id),
+        dbApi.listTasks(id),
+        dbApi.listNotes(id),
+        dbApi.listPosts(),
+        dbApi.listScheduleEvents(id),
+      ]);
+      setState((s) => ({
+        ...s,
+        onboarded: true,
+        lovedOne: {
+          id,
+          firstName: r.first_name,
+          relationship: 'child',
+          programName: r.program_name ?? '',
+          programType: r.program_type ?? 'outpatient',
+          treatmentStartDate: r.treatment_start_date ?? today(),
+          sobrietyDate: r.sobriety_date ?? undefined,
+          careTeam: [],
+        },
+        communityAccess: r.community_access ?? false,
+        checkIns: (checkIns ?? []).map((c: any) => ({
+          id: c.id, date: c.date, mood: c.mood, note: c.note ?? undefined, tags: c.tags ?? [],
+        })),
+        tasks,
+        notes,
+        posts,
+        scheduleEvents: (schedule ?? []).map((e: any) => ({
+          id: e.id, title: e.title, date: e.date, startTime: e.start_time ?? undefined,
+          endTime: e.end_time ?? undefined, location: e.location ?? undefined,
+          source: e.source, createdByName: 'Care team',
+        })),
+      }));
+    } catch (e) {
+      console.warn('[store] cloud bootstrap failed', e);
+      setState((s) => ({ ...s, onboarded: true }));
+    }
+  };
+
+  // Bootstrap when signed in (or the user changes).
+  useEffect(() => {
+    if (cloud) loadCloud();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloud, auth.session?.user?.id]);
 
   const value = useMemo<AppState>(() => {
@@ -484,6 +495,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    const createClient: AppState['createClient'] = async (input) => {
+      if (!cloud) return;
+      const orgId = await dbApi.ensureFacilitatorOrg(input.orgName?.trim() || 'My Organization');
+      await dbApi.createIndividual({
+        orgId,
+        firstName: input.firstName.trim(),
+        programName: input.programName?.trim() || undefined,
+        treatmentStartDate: input.treatmentStartDate || undefined,
+        sobrietyDate: input.sobrietyDate || undefined,
+      });
+      await loadCloud();
+    };
+
     const timeline: TimelineEntry[] = [
       ...state.checkIns.map((c) => ({ id: c.id, kind: 'check-in' as const, date: c.date, data: c })),
       ...state.milestones.map((m) => ({ id: m.id, kind: 'milestone' as const, date: m.date, data: m })),
@@ -507,6 +531,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       addPost,
       togglePostLike,
       addScheduleEvents,
+      createClient,
+      cloudHasIndividual: cloud ? !!individualId : true,
       timeline,
     };
   }, [state, ready, cloud, individualId]);

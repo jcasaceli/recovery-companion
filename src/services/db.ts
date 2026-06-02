@@ -68,6 +68,21 @@ export async function signUp(input: SignUpInput) {
     },
   });
   if (error) throw error;
+
+  // If we already have a session (email confirmation OFF), create the profile
+  // row from the client too. This works regardless of whether the DB trigger
+  // (migration 0004) is installed. Idempotent with the trigger via upsert.
+  if (data.session && data.user) {
+    const { error: pErr } = await db().from('profiles').upsert({
+      id: data.user.id,
+      role: input.role,
+      full_name: input.fullName,
+      email: input.email,
+      phone: input.phone ?? null,
+      verify_channel: input.verifyChannel,
+    });
+    if (pErr) console.warn('[db] profile upsert after signup failed', pErr.message);
+  }
   return data;
 }
 
@@ -121,7 +136,7 @@ export async function getMyProfile() {
     .from('profiles')
     .select('*')
     .eq('id', u.user.id)
-    .single();
+    .maybeSingle(); // null instead of throwing when the row doesn't exist
   if (error) throw error;
   return data;
 }
@@ -177,25 +192,33 @@ export async function ensureFacilitatorOrg(name: string): Promise<string> {
     .eq('profile_id', uid)
     .limit(1);
   if (existing && existing.length) return existing[0].org_id as string;
+  // organizations.created_by defaults to auth.uid(); the "creator sees org"
+  // SELECT policy lets the returning-select succeed.
   const { data: org, error } = await db()
     .from('organizations')
-    .insert({ name })
+    .insert({ name, created_by: uid })
     .select('id')
     .single();
   if (error) throw error;
-  await db().from('org_members').insert({ org_id: org.id, profile_id: uid, is_owner: true });
+  const { error: mErr } = await db()
+    .from('org_members')
+    .insert({ org_id: org.id, profile_id: uid, is_owner: true });
+  if (mErr) throw mErr;
   return org.id as string;
 }
 
-/** Create an individual care record (facilitator), optionally linking a profile. */
+/** Create an individual care record (facilitator). No returning-select: the
+ *  store reloads afterward and finds the new client via a normal query. This
+ *  avoids the RLS-on-returning issue (is_facilitator_for can't see the row that
+ *  was just inserted within the same statement). */
 export async function createIndividual(input: {
   orgId: string;
   firstName: string;
   programName?: string;
   treatmentStartDate?: string;
   sobrietyDate?: string;
-}): Promise<string> {
-  const { data, error } = await db()
+}): Promise<void> {
+  const { error } = await db()
     .from('individuals')
     .insert({
       org_id: input.orgId,
@@ -203,11 +226,8 @@ export async function createIndividual(input: {
       program_name: input.programName ?? null,
       treatment_start_date: input.treatmentStartDate ?? null,
       sobriety_date: input.sobrietyDate ?? null,
-    })
-    .select('id')
-    .single();
+    });
   if (error) throw error;
-  return data.id as string;
 }
 
 export async function setCommunityAccess(individualId: string, allowed: boolean) {
