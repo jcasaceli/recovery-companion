@@ -45,22 +45,34 @@ export function FacilitatorPaymentsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const period = currentPeriod();
-  // Only confirmed ('paid') payments count toward "paid this month".
-  const paidThisMonth = (id: string) =>
-    payments.find((p) => p.individualId === id && p.periodMonth === period && p.status === 'paid');
+  // Sum of CONFIRMED payments this month for a client.
+  const paidSum = (id: string) =>
+    payments
+      .filter((p) => p.individualId === id && p.periodMonth === period && p.status === 'paid')
+      .reduce((s, p) => s + p.amountCents, 0);
+
+  // 'paid' (sum ≥ rent), 'partial' (0 < sum < rent), 'none' (sum 0). Only for rent > 0.
+  const payStatus = (m: any): 'paid' | 'partial' | 'none' | 'norent' => {
+    const rent = m.monthly_rent_cents || 0;
+    if (rent <= 0) return 'norent';
+    const sum = paidSum(m.id);
+    if (sum >= rent) return 'paid';
+    if (sum > 0) return 'partial';
+    return 'none';
+  };
 
   const confirm = async (id: string) => {
     try { await dbApi.confirmPayment(id); load(); }
     catch (e: any) { Alert.alert('Could not confirm', e?.message ?? 'Try again.'); }
   };
 
-  // Analytics for the current month.
-  let onTime = 0, late = 0, due = 0;
+  // Analytics for the current month (only clients who owe rent).
+  let paid = 0, partial = 0, none = 0;
   for (const m of members) {
-    if (!m.monthly_rent_cents) continue; // only count members with rent set
-    const pay = paidThisMonth(m.id);
-    if (pay) (pay.onTime === false ? late++ : onTime++);
-    else due++;
+    const s = payStatus(m);
+    if (s === 'paid') paid++;
+    else if (s === 'partial') partial++;
+    else if (s === 'none') none++;
   }
 
   if (loading) {
@@ -80,9 +92,9 @@ export function FacilitatorPaymentsScreen() {
           <SectionTitle>This month</SectionTitle>
           <PieChart
             data={[
-              { label: 'Paid on time', value: onTime, color: colors.success },
-              { label: 'Paid late', value: late, color: colors.warning },
-              { label: 'Due / unpaid', value: due, color: colors.crisis },
+              { label: 'Paid in full', value: paid, color: colors.success },
+              { label: 'Partially paid', value: partial, color: colors.warning },
+              { label: 'Not paid', value: none, color: colors.crisis },
             ]}
           />
         </Card>
@@ -92,21 +104,28 @@ export function FacilitatorPaymentsScreen() {
           <Card><Text style={typography.bodySecondary}>No active members yet.</Text></Card>
         ) : (
           members.map((m) => {
-            const pay = paidThisMonth(m.id);
+            const st = payStatus(m);
+            const sum = paidSum(m.id);
+            const rent = m.monthly_rent_cents || 0;
             const expanded = expandedId === m.id;
             const history = payments.filter((p) => p.individualId === m.id);
+            const statusText =
+              st === 'norent' ? 'No rent set'
+              : st === 'paid' ? `Paid in full (${money(sum)})`
+              : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
+              : `Not paid (${money(rent)} due)`;
+            const statusColor =
+              st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
             return (
               <Card key={m.id}>
                 <View style={styles.memberRow}>
                   <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
-                    <Text style={typography.h3}>{m.first_name}</Text>
+                    <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
                     <Text style={typography.caption}>
                       Rent {money(m.monthly_rent_cents)}
-                      {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ' · no due day set'}
+                      {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}
                     </Text>
-                    <Text style={[styles.statusLine, { color: pay ? (pay.onTime === false ? colors.warning : colors.success) : colors.crisis }]}>
-                      {pay ? (pay.onTime === false ? 'Paid late this month' : 'Paid on time this month') : 'Not paid this month'}
-                    </Text>
+                    <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
                     <Text style={styles.expandHint}>
                       {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
                     </Text>

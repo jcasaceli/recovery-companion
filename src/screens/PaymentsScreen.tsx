@@ -26,14 +26,32 @@ export function PaymentsScreen() {
   const [ctx, setCtx] = useState<Awaited<ReturnType<typeof dbApi.getResidentContext>>>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState('');
+  const [paidSoFar, setPaidSoFar] = useState(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    dbApi.getResidentContext()
-      .then((c) => { setCtx(c); if (c?.rentCents) setAmount((c.rentCents / 100).toFixed(2)); })
-      .catch(() => setCtx(null))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const c = await dbApi.getResidentContext();
+        setCtx(c);
+        if (c) {
+          const pays = await dbApi.listMyPayments(c.individualId).catch(() => []);
+          const sum = (pays as any[])
+            .filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid')
+            .reduce((s, p) => s + p.amountCents, 0);
+          setPaidSoFar(sum);
+          const remaining = Math.max(0, (c.rentCents ?? 0) - sum);
+          if (remaining > 0) setAmount((remaining / 100).toFixed(2));
+        }
+      } catch {
+        setCtx(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
+
+  const remainingCents = Math.max(0, (ctx?.rentCents ?? 0) - paidSoFar);
 
   const cents = () => Math.round(parseFloat(amount || '0') * 100);
 
@@ -98,7 +116,14 @@ export function PaymentsScreen() {
         {nextDueLabel(ctx.dueDay) ? (
           <Text style={typography.bodySecondary}>Next due: {nextDueLabel(ctx.dueDay)}</Text>
         ) : null}
-        <Text style={[typography.caption, { marginTop: spacing.sm }]}>Amount to pay</Text>
+        {ctx.rentCents ? (
+          <Text style={[typography.bodySecondary, { marginTop: 2 }]}>
+            Paid this month: {money(paidSoFar) ?? '$0'} · Remaining: {money(remainingCents) ?? '$0'}
+          </Text>
+        ) : (
+          <Text style={typography.bodySecondary}>Your facilitator hasn't set your rent yet.</Text>
+        )}
+        <Text style={[typography.caption, { marginTop: spacing.sm }]}>Amount to pay (full or partial)</Text>
         <View style={styles.amtRow}>
           <Text style={styles.dollar}>$</Text>
           <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
