@@ -17,6 +17,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
+import { stripeRouter, stripeWebhook } from './stripe.js';
 
 const PORT = process.env.PORT || 8787;
 // Default to the most capable model. Override with ASSISTANT_MODEL if you want
@@ -75,7 +76,15 @@ const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
 const app = express();
 app.use(cors()); // tighten the origin allowlist before production
+
+// Stripe webhook needs the RAW body for signature verification — mount it
+// BEFORE express.json() so the body isn't parsed.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+
 app.use(express.json({ limit: '1mb' }));
+
+// Stripe JSON endpoints (onboarding, rent checkout, platform subscription).
+app.use('/api/stripe', stripeRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, hasKey: Boolean(apiKey) });

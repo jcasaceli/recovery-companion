@@ -139,6 +139,25 @@ export interface MessageThread {
 
 export type AppRole = 'individual' | 'supporter' | 'facilitator';
 
+export type ClientStatus = 'in_care' | 'completed';
+
+export type LevelOfCare =
+  | 'detox'
+  | 'residential'
+  | 'php'
+  | 'iop'
+  | 'sober_companion'
+  | 'sober_living';
+
+/** Summary row for the facilitator's client list. */
+export interface ClientSummary {
+  id: string;
+  firstName: string;
+  programName?: string;
+  status: ClientStatus;
+  levelOfCare?: LevelOfCare;
+}
+
 export interface Profile {
   id: string;
   role: AppRole;

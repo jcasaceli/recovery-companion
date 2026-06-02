@@ -6,6 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { notifyCareTeam } from '../services/push';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
+import { useAuth } from '../state/auth';
 import { TimelineEntry, CheckIn, Milestone, TreatmentSession } from '../types';
 import {
   daysSince,
@@ -17,7 +18,9 @@ import {
 
 export function HomeScreen() {
   const nav = useNavigation<any>();
-  const { lovedOne, checkIns, milestones, timeline } = useAppState();
+  const { lovedOne, checkIns, milestones, timeline, backToClients } = useAppState();
+  const auth = useAuth();
+  const isFacilitator = auth.profile?.role === 'facilitator';
 
   const sober = lovedOne.sobrietyDate ? daysSince(lovedOne.sobrietyDate) : null;
   const recentMood = checkIns[0];
@@ -49,10 +52,20 @@ export function HomeScreen() {
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
+    // Residents and their supporters can pay rent.
+    ...(auth.profile?.role !== 'facilitator'
+      ? [{ label: 'Pay rent', icon: 'card-outline' as any, screen: 'Payments' }]
+      : []),
   ];
 
   return (
     <Screen>
+      {isFacilitator ? (
+        <TouchableOpacity onPress={backToClients} style={styles.backToClients} hitSlop={8}>
+          <Ionicons name="chevron-back" size={16} color={colors.primary} />
+          <Text style={styles.backToClientsText}>All clients</Text>
+        </TouchableOpacity>
+      ) : null}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <ScreenTitle
@@ -188,6 +201,8 @@ function describeEntry(entry: TimelineEntry): string {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
   gear: { paddingTop: spacing.md + 4, paddingLeft: spacing.sm },
+  backToClients: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.xs },
+  backToClientsText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   quick: {
     flex: 1,

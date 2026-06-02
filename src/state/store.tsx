@@ -36,6 +36,9 @@ import {
   SobrietyReset,
   CommunityPost,
   ScheduleEvent,
+  ClientSummary,
+  ClientStatus,
+  LevelOfCare,
 } from '../types';
 import { notifyCareTeam, NotifyAudience } from '../services/push';
 import { useAuth } from './auth';
@@ -67,6 +70,8 @@ interface PersistedState {
   communityAccess: boolean;
   posts: CommunityPost[];
   scheduleEvents: ScheduleEvent[];
+  /** Facilitator's client list (cloud mode). */
+  clients: ClientSummary[];
 }
 
 /** Fields collected during onboarding to create the loved-one profile. */
@@ -110,9 +115,17 @@ interface AppState extends PersistedState {
     treatmentStartDate?: string;
     sobrietyDate?: string;
     orgName?: string;
+    levelOfCare?: LevelOfCare;
   }) => Promise<void>;
-  /** Cloud mode only: whether the signed-in user has an individual to show.
-   *  Always true in the local prototype. */
+  /** Facilitator: open a client (loads their data, enters the main app). */
+  selectClient: (id: string) => Promise<void>;
+  /** Facilitator: return to the client list. */
+  backToClients: () => void;
+  /** Facilitator: move a client between In Care / Completed. */
+  setClientStatus: (id: string, status: ClientStatus) => Promise<void>;
+  /** Facilitator: change a client's level of care. */
+  setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
+  /** Cloud mode only: whether a client is currently open. Always true local. */
   cloudHasIndividual: boolean;
   /** Merged, reverse-chronological feed of all progress events */
   timeline: TimelineEntry[];
@@ -147,6 +160,7 @@ const emptyState: PersistedState = {
   communityAccess: true,
   posts: [],
   scheduleEvents: [],
+  clients: [],
 };
 
 const demoPosts: CommunityPost[] = [
@@ -206,52 +220,74 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     );
   }, [state, ready, auth.configured]);
 
-  // Load (or reload) the signed-in user's data from Supabase into the same
-  // state shape the screens use. Reusable so createClient can refresh too.
+  // Load a specific client's full detail into the screen-facing state.
+  const loadClientDetail = async (id: string) => {
+    const r: any = await dbApi.getIndividual(id);
+    if (!r) return;
+    const [checkIns, tasks, notes, posts, schedule] = await Promise.all([
+      dbApi.listCheckIns(id),
+      dbApi.listTasks(id),
+      dbApi.listNotes(id),
+      dbApi.listPosts(),
+      dbApi.listScheduleEvents(id),
+    ]);
+    setIndividualId(id);
+    setState((s) => ({
+      ...s,
+      onboarded: true,
+      lovedOne: {
+        id,
+        firstName: r.first_name,
+        relationship: 'child',
+        programName: r.program_name ?? '',
+        programType: r.program_type ?? 'outpatient',
+        treatmentStartDate: r.treatment_start_date ?? today(),
+        sobrietyDate: r.sobriety_date ?? undefined,
+        careTeam: [],
+      },
+      communityAccess: r.community_access ?? false,
+      checkIns: (checkIns ?? []).map((c: any) => ({
+        id: c.id, date: c.date, mood: c.mood, note: c.note ?? undefined, tags: c.tags ?? [],
+      })),
+      tasks,
+      notes,
+      posts,
+      scheduleEvents: (schedule ?? []).map((e: any) => ({
+        id: e.id, title: e.title, date: e.date, startTime: e.start_time ?? undefined,
+        endTime: e.end_time ?? undefined, location: e.location ?? undefined,
+        source: e.source, createdByName: 'Care team',
+      })),
+    }));
+  };
+
+  // Bootstrap: facilitators load their client list and stay on it until they
+  // pick a client; individuals/supporters auto-load their linked individual.
   const loadCloud = async () => {
     try {
+      const profile: any = await dbApi.getMyProfile();
+      if (!profile) {
+        setState((s) => ({ ...s, onboarded: true }));
+        return;
+      }
+      if (profile.role === 'facilitator') {
+        const list = (await dbApi.listFacilitatorIndividuals()) ?? [];
+        const clients = list.map((c: any) => ({
+          id: c.id,
+          firstName: c.first_name,
+          programName: c.program_name ?? undefined,
+          status: (c.status ?? 'in_care') as 'in_care' | 'completed',
+          levelOfCare: c.level_of_care ?? undefined,
+        }));
+        setState((s) => ({ ...s, onboarded: true, clients }));
+        return; // no client selected yet → ClientsScreen
+      }
       const resolved = await dbApi.resolveMyIndividual();
       if (!resolved) {
         setIndividualId(undefined);
         setState((s) => ({ ...s, onboarded: true }));
         return;
       }
-      const id = resolved.individualId;
-      const r: any = resolved.record;
-      setIndividualId(id);
-      const [checkIns, tasks, notes, posts, schedule] = await Promise.all([
-        dbApi.listCheckIns(id),
-        dbApi.listTasks(id),
-        dbApi.listNotes(id),
-        dbApi.listPosts(),
-        dbApi.listScheduleEvents(id),
-      ]);
-      setState((s) => ({
-        ...s,
-        onboarded: true,
-        lovedOne: {
-          id,
-          firstName: r.first_name,
-          relationship: 'child',
-          programName: r.program_name ?? '',
-          programType: r.program_type ?? 'outpatient',
-          treatmentStartDate: r.treatment_start_date ?? today(),
-          sobrietyDate: r.sobriety_date ?? undefined,
-          careTeam: [],
-        },
-        communityAccess: r.community_access ?? false,
-        checkIns: (checkIns ?? []).map((c: any) => ({
-          id: c.id, date: c.date, mood: c.mood, note: c.note ?? undefined, tags: c.tags ?? [],
-        })),
-        tasks,
-        notes,
-        posts,
-        scheduleEvents: (schedule ?? []).map((e: any) => ({
-          id: e.id, title: e.title, date: e.date, startTime: e.start_time ?? undefined,
-          endTime: e.end_time ?? undefined, location: e.location ?? undefined,
-          source: e.source, createdByName: 'Care team',
-        })),
-      }));
+      await loadClientDetail(resolved.individualId);
     } catch (e) {
       console.warn('[store] cloud bootstrap failed', e);
       setState((s) => ({ ...s, onboarded: true }));
@@ -329,6 +365,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           communityAccess: true,
           posts: demoPosts,
           scheduleEvents: demoSchedule,
+          clients: [],
         });
         return;
       }
@@ -368,6 +405,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         communityAccess: false,
         posts: [],
         scheduleEvents: [],
+        clients: [],
       });
     };
 
@@ -504,8 +542,34 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         programName: input.programName?.trim() || undefined,
         treatmentStartDate: input.treatmentStartDate || undefined,
         sobrietyDate: input.sobrietyDate || undefined,
+        levelOfCare: input.levelOfCare || undefined,
       });
-      await loadCloud();
+      await loadCloud(); // refresh the client list (stays on the Clients page)
+    };
+
+    const selectClient: AppState['selectClient'] = async (id) => {
+      if (cloud) await loadClientDetail(id);
+    };
+
+    const backToClients = () => {
+      setIndividualId(undefined);
+      if (cloud) loadCloud();
+    };
+
+    const setClientStatus: AppState['setClientStatus'] = async (id, status) => {
+      if (cloud) await dbApi.updateClientStatus(id, status).catch(logCloud);
+      setState((s) => ({
+        ...s,
+        clients: s.clients.map((c) => (c.id === id ? { ...c, status } : c)),
+      }));
+    };
+
+    const setClientLevel: AppState['setClientLevel'] = async (id, level) => {
+      if (cloud) await dbApi.updateClientLevel(id, level).catch(logCloud);
+      setState((s) => ({
+        ...s,
+        clients: s.clients.map((c) => (c.id === id ? { ...c, levelOfCare: level } : c)),
+      }));
     };
 
     const timeline: TimelineEntry[] = [
@@ -532,6 +596,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       togglePostLike,
       addScheduleEvents,
       createClient,
+      selectClient,
+      backToClients,
+      setClientStatus,
+      setClientLevel,
       cloudHasIndividual: cloud ? !!individualId : true,
       timeline,
     };

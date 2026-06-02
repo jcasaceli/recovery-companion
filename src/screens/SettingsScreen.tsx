@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, Switch } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Alert, TextInput, Switch, ActivityIndicator } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { PROGRAM_LABELS, formatDate, formatDateTime } from '../utils/format';
+import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
 
 export function SettingsScreen() {
   const {
@@ -14,10 +15,42 @@ export function SettingsScreen() {
     communityAccess,
     setCommunityAccess,
     sobrietyResets,
+    cloudHasIndividual,
   } = useAppState();
 
   const auth = useAuth();
+  const isFacilitator = auth.profile?.role === 'facilitator';
   const [dateInput, setDateInput] = useState(lovedOne.sobrietyDate ?? '');
+  const [connect, setConnect] = useState<ConnectStatus | null>(null);
+  const [connectBusy, setConnectBusy] = useState(false);
+
+  useEffect(() => {
+    if (isFacilitator) {
+      getConnectStatus().then(setConnect).catch(() => setConnect(null));
+    }
+  }, [isFacilitator]);
+
+  const onboard = async () => {
+    setConnectBusy(true);
+    try {
+      await startConnectOnboarding();
+      // Refresh status when they return.
+      const s = await getConnectStatus().catch(() => null);
+      if (s) setConnect(s);
+    } catch (e: any) {
+      Alert.alert('Payments setup unavailable', e?.message ?? 'Please try again.');
+    } finally {
+      setConnectBusy(false);
+    }
+  };
+
+  const subscribe = async () => {
+    try {
+      await startPlatformSubscribe();
+    } catch (e: any) {
+      Alert.alert('Could not start subscription', e?.message ?? 'Please try again.');
+    }
+  };
 
   const confirmReset = () => {
     Alert.alert('Start over?', 'This clears all data on this device and returns to the welcome screen.', [
@@ -39,6 +72,37 @@ export function SettingsScreen() {
     <Screen>
       <ScreenTitle title="Settings" />
 
+      {isFacilitator ? (
+        <>
+          <SectionTitle>Payments</SectionTitle>
+          <Card>
+            <Text style={[typography.body, { fontWeight: '600' }]}>Accept rent from residents</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              {connect?.chargesEnabled
+                ? '✅ Connected — you can accept payments. Residents keep 100% to you.'
+                : connect?.connected
+                ? '⏳ Setup started — finish Stripe onboarding to accept payments.'
+                : 'Connect Stripe to accept one-time and recurring rent. Funds go directly to your bank.'}
+            </Text>
+            <Button
+              title={connect?.chargesEnabled ? 'Manage payment setup' : 'Set up payments'}
+              onPress={onboard}
+              disabled={connectBusy}
+            />
+            {connectBusy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
+          </Card>
+          <Card>
+            <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              $60/month to use Recovery Companion for your sober living.
+            </Text>
+            <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
+          </Card>
+        </>
+      ) : null}
+
+      {cloudHasIndividual ? (
+      <>
       <SectionTitle>Loved one</SectionTitle>
       <Card>
         <Text style={typography.h3}>{lovedOne.firstName}</Text>
@@ -104,6 +168,9 @@ export function SettingsScreen() {
           ))
         )}
       </Card>
+
+      </>
+      ) : null}
 
       <SectionTitle>About the assistant</SectionTitle>
       <Card>

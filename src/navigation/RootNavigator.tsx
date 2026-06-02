@@ -14,13 +14,15 @@ import { MessagesScreen } from '../screens/MessagesScreen';
 import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
-import { AddClientScreen } from '../screens/AddClientScreen';
+import { ClientsScreen } from '../screens/ClientsScreen';
 import { TasksScreen } from '../screens/TasksScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
+import { PaymentsScreen } from '../screens/PaymentsScreen';
 
 const Tab = createBottomTabNavigator();
+const FacTab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -64,17 +66,45 @@ export function RootNavigator() {
   if (auth.configured) {
     if (auth.status === 'loading') return null;
     if (auth.status === 'signedOut') return <AuthScreen />;
-    // A facilitator with no clients yet creates their first one.
+    // Facilitators get an admin console (Clients / Resources / Account) until
+    // they open a client, at which point they enter that client's app.
     if (auth.profile?.role === 'facilitator' && !cloudHasIndividual) {
-      return <AddClientScreen />;
+      return <FacilitatorTabs />;
     }
-    return <MainStack />; // signed in
+    return <MainStack />; // signed in (with a client open, for a facilitator)
   }
 
   // Local prototype: gate on the on-device onboarding flag.
   if (!ready) return null;
   if (!onboarded) return <OnboardingScreen />;
   return <MainStack />;
+}
+
+const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
+  Clients: { active: 'people', inactive: 'people-outline' },
+  Resources: { active: 'heart', inactive: 'heart-outline' },
+  Account: { active: 'person-circle', inactive: 'person-circle-outline' },
+};
+
+function FacilitatorTabs() {
+  return (
+    <FacTab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: colors.primaryDark,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+        tabBarIcon: ({ focused, color, size }) => {
+          const cfg = FAC_ICONS[route.name];
+          return <Ionicons name={focused ? cfg.active : cfg.inactive} size={size} color={color} />;
+        },
+      })}
+    >
+      <FacTab.Screen name="Clients" component={ClientsScreen} />
+      <FacTab.Screen name="Resources" component={ResourcesScreen} />
+      <FacTab.Screen name="Account" component={SettingsScreen} />
+    </FacTab.Navigator>
+  );
 }
 
 function MainStack() {
@@ -98,6 +128,7 @@ function MainStack() {
       <RootStack.Screen name="Community" component={CommunityScreen} options={{ title: 'Community' }} />
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
+      <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay rent' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </RootStack.Navigator>
   );

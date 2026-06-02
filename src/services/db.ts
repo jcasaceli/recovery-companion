@@ -147,9 +147,28 @@ export async function getMyProfile() {
 
 /** Facilitator: every individual in their org. */
 export async function listFacilitatorIndividuals() {
-  const { data, error } = await db().from('individuals').select('*');
+  const { data, error } = await db().from('individuals').select('*').order('first_name');
   if (error) throw error;
   return data;
+}
+
+/** Fetch one individual's full record (for the selected client). */
+export async function getIndividual(id: string) {
+  const { data, error } = await db().from('individuals').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** Facilitator: move a client between 'in_care' and 'completed'. */
+export async function updateClientStatus(id: string, status: 'in_care' | 'completed') {
+  const { error } = await db().from('individuals').update({ status }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Facilitator: change a client's level of care. */
+export async function updateClientLevel(id: string, levelOfCare: string | null) {
+  const { error } = await db().from('individuals').update({ level_of_care: levelOfCare }).eq('id', id);
+  if (error) throw error;
 }
 
 /** Individual/supporter: the individual record(s) they're linked to. */
@@ -217,6 +236,7 @@ export async function createIndividual(input: {
   programName?: string;
   treatmentStartDate?: string;
   sobrietyDate?: string;
+  levelOfCare?: string;
 }): Promise<void> {
   const { error } = await db()
     .from('individuals')
@@ -226,6 +246,8 @@ export async function createIndividual(input: {
       program_name: input.programName ?? null,
       treatment_start_date: input.treatmentStartDate ?? null,
       sobriety_date: input.sobrietyDate ?? null,
+      level_of_care: input.levelOfCare ?? null,
+      status: 'in_care',
     });
   if (error) throw error;
 }
