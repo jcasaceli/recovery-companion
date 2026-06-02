@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
 import { getMyOrg, setOrgPaymentHandles } from '../services/db';
+import { deleteAccount } from '../services/account';
 
 export function SettingsScreen() {
   const { resetApp } = useAppState();
@@ -17,6 +18,7 @@ export function SettingsScreen() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [cashapp, setCashapp] = useState('');
   const [zelle, setZelle] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (isFacilitator) {
@@ -65,6 +67,39 @@ export function SettingsScreen() {
     } catch (e: any) {
       Alert.alert('Could not start subscription', e?.message ?? 'Please try again.');
     }
+  };
+
+  const runDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      Alert.alert('Account deleted', 'Your account and data have been removed.');
+      await auth.signOut();
+      resetApp();
+    } catch (e: any) {
+      Alert.alert('Could not delete account', e?.message ?? 'Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    const detail = isFacilitator
+      ? 'This permanently deletes your account, your sober living, and all of its resident records and payment history. This cannot be undone.'
+      : 'This permanently deletes your account and all of your data. This cannot be undone.';
+    Alert.alert('Delete account?', detail, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          // Second confirmation for an irreversible action.
+          Alert.alert('Are you sure?', 'This is permanent.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete my account', style: 'destructive', onPress: runDelete },
+          ]),
+      },
+    ]);
   };
 
   const confirmReset = () => {
@@ -134,6 +169,13 @@ export function SettingsScreen() {
             </Text>
           ) : null}
           <Button title="Sign out" variant="secondary" onPress={() => auth.signOut()} />
+          <TouchableOpacity onPress={confirmDelete} disabled={deleting} style={styles.deleteBtn}>
+            {deleting ? (
+              <ActivityIndicator color={colors.crisis} />
+            ) : (
+              <Text style={styles.deleteText}>Delete account</Text>
+            )}
+          </TouchableOpacity>
         </>
       ) : (
         <Button title="Start over (clear data)" variant="secondary" onPress={confirmReset} />
@@ -153,4 +195,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   version: { ...typography.caption, textAlign: 'center', marginTop: spacing.lg, color: colors.textMuted },
+  deleteBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
+  deleteText: { color: colors.crisis, fontWeight: '600' },
 });
