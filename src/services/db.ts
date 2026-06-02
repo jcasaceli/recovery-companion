@@ -575,6 +575,8 @@ export async function recordPayment(p: {
   onTime?: boolean;
   periodMonth?: string;
   paidAt?: string;
+  /** 'paid' (facilitator-confirmed) or 'reported' (member said they paid). */
+  status?: 'paid' | 'reported';
 }) {
   const { data: u } = await db().auth.getUser();
   const { error } = await db().from('payments').insert({
@@ -582,12 +584,19 @@ export async function recordPayment(p: {
     org_id: p.orgId ?? null,
     amount_cents: p.amountCents,
     method: p.method,
+    status: p.status ?? 'paid',
     on_time: p.onTime ?? null,
     period_month: p.periodMonth ?? null,
     source: 'manual',
     paid_at: p.paidAt ?? new Date().toISOString(),
     created_by: u.user?.id ?? null,
   });
+  if (error) throw error;
+}
+
+/** Facilitator: confirm a member-reported CashApp/Zelle payment. */
+export async function confirmPayment(paymentId: string) {
+  const { error } = await db().from('payments').update({ status: 'paid' }).eq('id', paymentId);
   if (error) throw error;
 }
 
@@ -644,6 +653,7 @@ function mapPayment(r: any): Payment {
     memberName: r.individuals?.first_name,
     amountCents: r.amount_cents,
     method: r.method,
+    status: (r.status === 'reported' ? 'reported' : 'paid'),
     onTime: r.on_time ?? undefined,
     periodMonth: r.period_month ?? undefined,
     paidAt: r.paid_at,

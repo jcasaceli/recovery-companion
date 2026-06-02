@@ -45,7 +45,14 @@ export function FacilitatorPaymentsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const period = currentPeriod();
-  const paidThisMonth = (id: string) => payments.find((p) => p.individualId === id && p.periodMonth === period);
+  // Only confirmed ('paid') payments count toward "paid this month".
+  const paidThisMonth = (id: string) =>
+    payments.find((p) => p.individualId === id && p.periodMonth === period && p.status === 'paid');
+
+  const confirm = async (id: string) => {
+    try { await dbApi.confirmPayment(id); load(); }
+    catch (e: any) { Alert.alert('Could not confirm', e?.message ?? 'Try again.'); }
+  };
 
   // Analytics for the current month.
   let onTime = 0, late = 0, due = 0;
@@ -121,11 +128,19 @@ export function FacilitatorPaymentsScreen() {
                     ) : (
                       history.map((p) => (
                         <View key={p.id} style={styles.histRow}>
-                          <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
-                          <Text style={typography.caption}>
-                            {formatDate(p.paidAt)}
-                            {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
+                            <Text style={typography.caption}>
+                              {formatDate(p.paidAt)}
+                              {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                              {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
+                            </Text>
+                          </View>
+                          {p.status === 'reported' ? (
+                            <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
+                              <Text style={styles.confirmBtnText}>Confirm</Text>
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
                       ))
                     )}
@@ -291,6 +306,8 @@ const styles = StyleSheet.create({
   expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
   history: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  confirmBtn: { backgroundColor: colors.success, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  confirmBtnText: { color: colors.textInverse, fontWeight: '700', fontSize: 12 },
   recordBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginBottom: 6 },
   recordBtnText: { color: colors.textInverse, fontWeight: '700', fontSize: 13 },
   rentBtn: { paddingHorizontal: spacing.md, paddingVertical: 4 },

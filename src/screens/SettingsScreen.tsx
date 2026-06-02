@@ -159,22 +159,6 @@ export function SettingsScreen() {
           signed-in user's role is 'facilitator'. */}
       <SectionTitle>Facilitator controls</SectionTitle>
       <Card>
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={typography.body}>Community access</Text>
-            <Text style={typography.caption}>
-              Allow {lovedOne.firstName} to use the community feed (off during
-              treatment when photo sharing isn't allowed).
-            </Text>
-          </View>
-          <Switch
-            value={communityAccess}
-            onValueChange={setCommunityAccess}
-            trackColor={{ true: colors.primary }}
-          />
-        </View>
-      </Card>
-      <Card>
         <Text style={[typography.body, { fontWeight: '600' }]}>Sobriety-date reset log</Text>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Visible to facilitators only. Not shown to the individual or supporters.

@@ -52,10 +52,6 @@ export function HomeScreen() {
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
-    // Residents and their supporters can pay rent.
-    ...(auth.profile?.role !== 'facilitator'
-      ? [{ label: 'Pay rent', icon: 'card-outline' as any, screen: 'Payments' }]
-      : []),
   ];
 
   return (
@@ -95,6 +91,14 @@ export function HomeScreen() {
           </View>
         ) : null}
       </Card>
+
+      {/* Prominent Pay rent button for members */}
+      {!isFacilitator ? (
+        <TouchableOpacity style={styles.payRent} activeOpacity={0.85} onPress={() => nav.navigate('Payments')}>
+          <Ionicons name="card" size={26} color={colors.textInverse} />
+          <Text style={styles.payRentText}>Pay rent</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Quick links */}
       <View style={styles.quickRow}>
@@ -203,6 +207,17 @@ const styles = StyleSheet.create({
   gear: { paddingTop: spacing.md + 4, paddingLeft: spacing.sm },
   backToClients: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.xs },
   backToClientsText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  payRent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadow.card,
+  },
+  payRentText: { color: colors.textInverse, fontWeight: '800', fontSize: 20, marginLeft: spacing.sm },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   quick: {
     flex: 1,

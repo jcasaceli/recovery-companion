@@ -149,6 +149,8 @@ export interface Payment {
   memberName?: string;
   amountCents: number;
   method: PaymentMethod;
+  /** 'paid' = confirmed; 'reported' = member said they paid (CashApp/Zelle), awaiting facilitator confirmation. */
+  status: 'paid' | 'reported';
   onTime?: boolean;
   periodMonth?: string;
   /** ISO datetime string */

@@ -59,8 +59,9 @@ export function PaymentsScreen() {
         method,
         onTime: ctx.dueDay ? today <= ctx.dueDay : undefined,
         periodMonth: currentPeriod(),
+        status: 'reported', // facilitator confirms it was received
       });
-      Alert.alert('Recorded', `Your ${method === 'cashapp' ? 'CashApp' : 'Zelle'} payment was logged for your facilitator.`);
+      Alert.alert('Reported', `Your ${method === 'cashapp' ? 'CashApp' : 'Zelle'} payment was reported to your facilitator. They'll confirm once it's received.`);
     } catch (e: any) {
       Alert.alert('Could not record', e?.message ?? 'Try again.');
     }
@@ -118,7 +119,7 @@ export function PaymentsScreen() {
         <Card>
           <Text style={styles.method}>💵 CashApp</Text>
           <Text style={[typography.bodySecondary, { marginBottom: spacing.sm }]}>Send to {ctx.cashapp}</Text>
-          <Button title="Open CashApp & log payment" onPress={() => reportManual('cashapp', `https://cash.app/${encodeURIComponent(ctx.cashapp!.replace(/^\$?/, '$'))}`)} />
+          <Button title="Open CashApp & notify facilitator" onPress={() => reportManual('cashapp', `https://cash.app/${encodeURIComponent(ctx.cashapp!.replace(/^\$?/, '$'))}`)} />
         </Card>
       ) : null}
 
@@ -127,7 +128,7 @@ export function PaymentsScreen() {
         <Card>
           <Text style={styles.method}>🏦 Zelle</Text>
           <Text style={[typography.bodySecondary, { marginBottom: spacing.sm }]}>Send to {ctx.zelle}</Text>
-          <Button title="I paid with Zelle" onPress={() => reportManual('zelle')} />
+          <Button title="I sent it via Zelle (notify facilitator)" onPress={() => reportManual('zelle')} />
         </Card>
       ) : null}
 

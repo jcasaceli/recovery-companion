@@ -2,9 +2,9 @@
 
 import { MoodLevel, ProgramType, SessionType, LevelOfCare } from '../types';
 
-export const LEVELS_OF_CARE: LevelOfCare[] = [
-  'detox', 'residential', 'php', 'iop', 'sober_companion', 'sober_living',
-];
+// Focused on sober livings: only this level is offered in the UI. (The DB enum
+// still permits the others for future use.)
+export const LEVELS_OF_CARE: LevelOfCare[] = ['sober_living'];
 
 export const LEVEL_OF_CARE_LABELS: Record<LevelOfCare, string> = {
   detox: 'Detox',

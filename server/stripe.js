@@ -174,6 +174,12 @@ stripeRouter.post('/rent/checkout', async (req, res) => {
 
     // Direct charge ON the connected account → funds settle to the operator,
     // Stripe fees come out of their balance, and there is NO application fee.
+    const rentMeta = {
+      kind: 'rent',
+      individual_id: found.individual.id,
+      org_id: found.org.id,
+      amount_cents: String(amount),
+    };
     const session = await stripe.checkout.sessions.create(
       {
         mode: recurring ? 'subscription' : 'payment',
@@ -181,12 +187,10 @@ stripeRouter.post('/rent/checkout', async (req, res) => {
         success_url: RETURN_URL,
         cancel_url: RETURN_URL,
         customer_email: user.email || undefined,
-        metadata: {
-          kind: 'rent',
-          individual_id: found.individual.id,
-          org_id: found.org.id,
-          amount_cents: String(amount),
-        },
+        metadata: rentMeta,
+        // Carry metadata onto the subscription so recurring invoices can be
+        // attributed back to the member.
+        ...(recurring ? { subscription_data: { metadata: rentMeta } } : {}),
       },
       { stripeAccount: connectedAccount },
     );
@@ -224,6 +228,28 @@ stripeRouter.post('/platform/subscribe', async (req, res) => {
   }
 });
 
+// Insert a card payment record (one-time or recurring), computing on-time.
+async function recordCardPayment(meta, amountTotal) {
+  if (!supabaseAdmin) return;
+  const { data: ind } = await supabaseAdmin
+    .from('individuals')
+    .select('rent_due_day')
+    .eq('id', meta.individual_id)
+    .maybeSingle();
+  const now = new Date();
+  const onTime = ind?.rent_due_day ? now.getUTCDate() <= ind.rent_due_day : null;
+  await supabaseAdmin.from('payments').insert({
+    individual_id: meta.individual_id,
+    org_id: meta.org_id ?? null,
+    amount_cents: Number(meta.amount_cents) || amountTotal || 0,
+    method: 'card',
+    source: 'stripe',
+    status: 'paid',
+    on_time: onTime,
+    period_month: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+  });
+}
+
 // ── Webhook (mounted with express.raw in index.js) ───────────────────────────
 export async function stripeWebhook(req, res) {
   if (!stripe) return res.status(503).end();
@@ -250,30 +276,28 @@ export async function stripeWebhook(req, res) {
       }
       case 'checkout.session.completed': {
         const s = event.data.object;
-        if (supabaseAdmin && s.metadata?.kind === 'rent' && s.metadata.individual_id) {
-          // Record a card rent payment. Compute on-time from the member's due day.
-          const { data: ind } = await supabaseAdmin
-            .from('individuals')
-            .select('rent_due_day')
-            .eq('id', s.metadata.individual_id)
-            .maybeSingle();
-          const now = new Date();
-          const onTime = ind?.rent_due_day ? now.getUTCDate() <= ind.rent_due_day : null;
-          await supabaseAdmin.from('payments').insert({
-            individual_id: s.metadata.individual_id,
-            org_id: s.metadata.org_id ?? null,
-            amount_cents: Number(s.metadata.amount_cents) || s.amount_total || 0,
-            method: 'card',
-            source: 'stripe',
-            on_time: onTime,
-            period_month: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
-          });
-        } else if (supabaseAdmin && s.metadata?.org_id) {
+        if (s.metadata?.kind === 'rent' && s.mode === 'payment' && s.metadata.individual_id) {
+          // One-time card rent. (Recurring is recorded via invoice.paid below,
+          // to avoid double-counting the first subscription charge.)
+          await recordCardPayment(s.metadata, s.amount_total);
+        } else if (supabaseAdmin && s.metadata?.org_id && s.metadata?.kind !== 'rent') {
           // Platform subscription activated.
           await supabaseAdmin
             .from('organizations')
             .update({ subscription_status: 'active', stripe_subscription_id: s.subscription })
             .eq('id', s.metadata.org_id);
+        }
+        break;
+      }
+      case 'invoice.paid': {
+        // Recurring rent charge on a connected account.
+        const inv = event.data.object;
+        if (event.account && inv.subscription) {
+          const sub = await stripe.subscriptions.retrieve(inv.subscription, { stripeAccount: event.account });
+          const md = sub.metadata || {};
+          if (md.kind === 'rent' && md.individual_id) {
+            await recordCardPayment(md, inv.amount_paid);
+          }
         }
         break;
       }
