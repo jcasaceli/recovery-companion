@@ -68,7 +68,7 @@ export function ClientProfileScreen() {
 
   const inviteMsg = () => {
     const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
-    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
+    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Sober Living Companion app to track your progress and pay rent.${code}`;
   };
   const textInvite = () => {
     if (!client.phone) return;
@@ -77,7 +77,7 @@ export function ClientProfileScreen() {
   };
   const emailInvite = () => {
     if (!client.email) return;
-    const subject = `Join ${org?.name || 'our sober living'} on Recovery Companion`;
+    const subject = `Join ${org?.name || 'our sober living'} on Sober Living Companion`;
     Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open email'));
   };
 

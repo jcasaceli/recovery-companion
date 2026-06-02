@@ -1,5 +1,5 @@
 /**
- * Recovery Companion — backend proxy for the "Companion" assistant.
+ * Sober Living Companion — backend proxy for the "Companion" assistant.
  *
  * Why this exists: the Anthropic API key must NEVER ship inside the mobile app
  * (a shipped app can be decompiled and the key lifted). This tiny service holds
@@ -132,7 +132,7 @@ app.get('/return', (_req, res) => {
 display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;text-align:center;padding:24px}
 .card{background:#fff;border-radius:20px;padding:32px;max-width:360px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 h1{color:#3E8E7E;font-size:22px}p{color:#6B6B6B;line-height:1.5}</style></head>
-<body><div class="card"><h1>✅ All set</h1><p>You can close this window and return to the Recovery Companion app.</p></div></body></html>`);
+<body><div class="card"><h1>✅ All set</h1><p>You can close this window and return to the Sober Living Companion app.</p></div></body></html>`);
 });
 
 app.post('/api/assistant', async (req, res) => {
@@ -192,7 +192,7 @@ app.post('/api/assistant', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Recovery Companion server listening on http://localhost:${PORT}`);
+  console.log(`Sober Living Companion server listening on http://localhost:${PORT}`);
   console.log(`  model: ${MODEL}`);
   console.log(`  ANTHROPIC_API_KEY: ${apiKey ? 'set' : 'MISSING (set it in server/.env)'}`);
 });

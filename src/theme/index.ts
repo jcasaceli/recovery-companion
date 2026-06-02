@@ -1,5 +1,5 @@
 /**
- * Design tokens for Recovery Companion.
+ * Design tokens for Sober Living Companion.
  *
  * The palette is intentionally calm and warm rather than clinical — families
  * using this app are often under stress, so we lean on soft greens (growth,

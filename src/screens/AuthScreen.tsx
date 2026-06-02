@@ -70,7 +70,7 @@ export function AuthScreen() {
         keyboardDismissMode="interactive"
       >
         <Text style={styles.emoji}>🌱</Text>
-        <Text style={styles.title}>Recovery Companion</Text>
+        <Text style={styles.title}>Sober Living Companion</Text>
 
         {step === 'choose' && (
           <View>

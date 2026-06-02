@@ -1,5 +1,5 @@
 /**
- * Core data models for Recovery Companion.
+ * Core data models for Sober Living Companion.
  *
  * IMPORTANT (compliance): In production, much of this data is protected under
  * HIPAA and 42 CFR Part 2 (federal confidentiality rules for substance use

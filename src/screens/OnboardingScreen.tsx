@@ -66,7 +66,7 @@ export function OnboardingScreen() {
         {step === 'welcome' && (
           <View>
             <Text style={styles.emoji}>🌱</Text>
-            <Text style={styles.title}>Welcome to{'\n'}Recovery Companion</Text>
+            <Text style={styles.title}>Welcome to{'\n'}Sober Living Companion</Text>
             <Text style={styles.lead}>
               A calm, private space to follow your loved one's treatment journey,
               ask questions any time, and stay connected with their care team.

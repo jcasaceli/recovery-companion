@@ -144,7 +144,7 @@ export function SettingsScreen() {
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              $60/month to use Recovery Companion for your sober living.
+              $60/month to use Sober Living Companion for your sober living.
             </Text>
             <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
           </Card>
@@ -180,7 +180,7 @@ export function SettingsScreen() {
       ) : (
         <Button title="Start over (clear data)" variant="secondary" onPress={confirmReset} />
       )}
-      <Text style={styles.version}>Recovery Companion · preview build</Text>
+      <Text style={styles.version}>Sober Living Companion · preview build</Text>
     </Screen>
   );
 }

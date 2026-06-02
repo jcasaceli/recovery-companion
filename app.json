@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Recovery Companion",
+    "name": "Sober Living Companion",
     "slug": "recovery-companion",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -33,20 +33,20 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Recovery Companion uses your location only when you tap “I’m at a meeting” to record where you checked in."
+          "locationWhenInUsePermission": "Sober Living Companion uses your location only when you tap “I’m at a meeting” to record where you checked in."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Recovery Companion needs photo access so you can import a schedule from a picture.",
-          "cameraPermission": "Recovery Companion needs camera access so you can add a photo to a post or schedule."
+          "photosPermission": "Sober Living Companion needs photo access so you can import a schedule from a picture.",
+          "cameraPermission": "Sober Living Companion needs camera access so you can add a photo to a post or schedule."
         }
       ],
       [
         "expo-calendar",
         {
-          "calendarPermission": "Recovery Companion needs calendar access to add your meetings and appointments."
+          "calendarPermission": "Sober Living Companion needs calendar access to add your meetings and appointments."
         }
       ],
       "expo-notifications"

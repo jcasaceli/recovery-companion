@@ -1,5 +1,5 @@
 /**
- * Stripe integration for Recovery Companion.
+ * Stripe integration for Sober Living Companion.
  *
  * Two money flows:
  *  1. RENT — residents pay their sober-living operator. Stripe Connect, charges
