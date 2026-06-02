@@ -10,8 +10,24 @@ import { formatDateTime } from '../utils/format';
 export function ClientProfileScreen() {
   const route = useRoute<any>();
   const { id } = route.params;
-  const { clients, setRent, setClientStatus, selectClient } = useAppState();
+  const { clients, setRent, setClientStatus, selectClient, updateClient } = useAppState();
   const client = clients.find((c) => c.id === id);
+
+  const [ef, setEf] = useState({
+    firstName: client?.firstName ?? '',
+    lastName: client?.lastName ?? '',
+    houseName: client?.houseName ?? '',
+    phone: client?.phone ?? '',
+    email: client?.email ?? '',
+  });
+  const saveDetails = async () => {
+    try {
+      await updateClient(id, ef);
+      Alert.alert('Saved ✅', 'Client details updated.');
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    }
+  };
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
@@ -56,6 +72,21 @@ export function ClientProfileScreen() {
         title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
         subtitle={client.houseName || 'Sober Living'}
       />
+
+      <SectionTitle>Details</SectionTitle>
+      <Card>
+        <Text style={styles.label}>First name</Text>
+        <TextInput style={styles.input} value={ef.firstName} onChangeText={(t) => setEf({ ...ef, firstName: t })} placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+        <Text style={styles.label}>Last name</Text>
+        <TextInput style={styles.input} value={ef.lastName} onChangeText={(t) => setEf({ ...ef, lastName: t })} placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+        <Text style={styles.label}>House name</Text>
+        <TextInput style={styles.input} value={ef.houseName} onChangeText={(t) => setEf({ ...ef, houseName: t })} placeholderTextColor={colors.textMuted} />
+        <Text style={styles.label}>Phone</Text>
+        <TextInput style={styles.input} value={ef.phone} onChangeText={(t) => setEf({ ...ef, phone: t })} placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+        <Text style={styles.label}>Email</Text>
+        <TextInput style={styles.input} value={ef.email} onChangeText={(t) => setEf({ ...ef, email: t })} placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
+        <Button title="Save details" onPress={saveDetails} disabled={!ef.firstName.trim()} />
+      </Card>
 
       {client.phone ? (
         <Card>

@@ -113,7 +113,10 @@ interface AppState extends PersistedState {
     firstName: string;
     lastName?: string;
     phone?: string;
+    email?: string;
     houseName?: string;
+    monthlyRentCents?: number;
+    rentDueDay?: number;
     programName?: string;
     treatmentStartDate?: string;
     sobrietyDate?: string;
@@ -130,6 +133,8 @@ interface AppState extends PersistedState {
   setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
   /** Facilitator: set a client's monthly rent (cents) + due day (1-31). */
   setRent: (id: string, amountCents: number | null, dueDay: number | null) => Promise<void>;
+  /** Facilitator: edit a client's details (name/house/phone/email). */
+  updateClient: (id: string, fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string }) => Promise<void>;
   /** Re-run the cloud bootstrap (e.g. after a member links via join code). */
   reloadCloud: () => Promise<void>;
   /** Cloud mode only: whether a client is currently open. Always true local. */
@@ -283,6 +288,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           firstName: c.first_name,
           lastName: c.last_name ?? undefined,
           phone: c.phone ?? undefined,
+          email: c.email ?? undefined,
           houseName: c.house_name ?? undefined,
           programName: c.program_name ?? undefined,
           status: (c.status ?? 'in_care') as 'in_care' | 'completed',
@@ -554,7 +560,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         firstName: input.firstName.trim(),
         lastName: input.lastName?.trim() || undefined,
         phone: input.phone?.trim() || undefined,
+        email: input.email?.trim() || undefined,
         houseName: input.houseName?.trim() || undefined,
+        monthlyRentCents: input.monthlyRentCents,
+        rentDueDay: input.rentDueDay,
         programName: input.programName?.trim() || undefined,
         treatmentStartDate: input.treatmentStartDate || undefined,
         sobrietyDate: input.sobrietyDate || undefined,
@@ -598,6 +607,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }));
     };
 
+    const updateClient: AppState['updateClient'] = async (id, fields) => {
+      if (cloud) await dbApi.updateClient(id, fields);
+      setState((s) => ({
+        ...s,
+        clients: s.clients.map((c) => (c.id === id ? { ...c, ...fields } : c)),
+      }));
+    };
+
     const timeline: TimelineEntry[] = [
       ...state.checkIns.map((c) => ({ id: c.id, kind: 'check-in' as const, date: c.date, data: c })),
       ...state.milestones.map((m) => ({ id: m.id, kind: 'milestone' as const, date: m.date, data: m })),
@@ -627,6 +644,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setClientStatus,
       setClientLevel,
       setRent,
+      updateClient,
       reloadCloud: async () => { if (cloud) await loadCloud(); },
       cloudHasIndividual: cloud ? !!individualId : true,
       timeline,

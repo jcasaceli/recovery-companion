@@ -301,7 +301,10 @@ export async function createIndividual(input: {
   firstName: string;
   lastName?: string;
   phone?: string;
+  email?: string;
   houseName?: string;
+  monthlyRentCents?: number;
+  rentDueDay?: number;
   programName?: string;
   treatmentStartDate?: string;
   sobrietyDate?: string;
@@ -314,7 +317,10 @@ export async function createIndividual(input: {
       first_name: input.firstName,
       last_name: input.lastName ?? null,
       phone: input.phone ?? null,
+      email: input.email ?? null,
       house_name: input.houseName ?? null,
+      monthly_rent_cents: input.monthlyRentCents ?? null,
+      rent_due_day: input.rentDueDay ?? null,
       program_name: input.programName ?? null,
       treatment_start_date: input.treatmentStartDate ?? null,
       sobriety_date: input.sobrietyDate ?? null,
@@ -601,6 +607,21 @@ export async function setOrgPaymentHandles(orgId: string, cashapp: string, zelle
     .from('organizations')
     .update({ cashapp_tag: cashapp || null, zelle_tag: zelle || null })
     .eq('id', orgId);
+  if (error) throw error;
+}
+
+/** Facilitator: edit a client's details. */
+export async function updateClient(
+  id: string,
+  fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string },
+) {
+  const row: any = {};
+  if (fields.firstName !== undefined) row.first_name = fields.firstName;
+  if (fields.lastName !== undefined) row.last_name = fields.lastName || null;
+  if (fields.phone !== undefined) row.phone = fields.phone || null;
+  if (fields.email !== undefined) row.email = fields.email || null;
+  if (fields.houseName !== undefined) row.house_name = fields.houseName || null;
+  const { error } = await db().from('individuals').update(row).eq('id', id);
   if (error) throw error;
 }
 

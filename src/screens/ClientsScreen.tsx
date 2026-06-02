@@ -36,6 +36,9 @@ export function ClientsScreen() {
   const [lastName, setLastName] = useState('');
   const [houseName, setHouseName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [rent, setRentValue] = useState('');
+  const [dueDay, setDueDay] = useState('');
 
   const shown = clients.filter((c) => c.status === filter);
   const counts = {
@@ -48,14 +51,20 @@ export function ClientsScreen() {
     if (!firstName.trim()) return;
     setBusy(true);
     try {
+      const rentCents = rent ? Math.round(parseFloat(rent) * 100) : undefined;
+      const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : undefined;
       await createClient({
         firstName,
         lastName: lastName || undefined,
         houseName: houseName || undefined,
         phone: phone || undefined,
+        email: email || undefined,
+        monthlyRentCents: rentCents,
+        rentDueDay: day,
         levelOfCare: 'sober_living',
       });
-      setFirstName(''); setLastName(''); setHouseName(''); setPhone(''); setAdding(false); setFilter('in_care');
+      setFirstName(''); setLastName(''); setHouseName(''); setPhone(''); setEmail(''); setRentValue(''); setDueDay('');
+      setAdding(false); setFilter('in_care');
     } catch (e: any) {
       Alert.alert('Could not add client', e?.message ?? 'Please try again.');
     } finally {
@@ -105,6 +114,9 @@ export function ClientsScreen() {
             <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={houseName} onChangeText={setHouseName} placeholder="House name (optional)" placeholderTextColor={colors.textMuted} />
             <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone (optional — to text an app invite)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email (optional)" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} value={rent} onChangeText={setRentValue} placeholder="Monthly rent (optional, e.g. 800)" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} placeholder="Rent due day 1–31 (optional)" placeholderTextColor={colors.textMuted} keyboardType="number-pad" />
             <Button title="Add" onPress={add} disabled={!firstName.trim() || busy} />
             <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
             {busy ? <ActivityIndicator color={colors.primary} /> : null}
