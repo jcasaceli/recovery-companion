@@ -1,71 +1,45 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
-import { useAuth } from '../state/auth';
-import { ClientStatus, LevelOfCare } from '../types';
-import { LEVELS_OF_CARE, LEVEL_OF_CARE_LABELS } from '../utils/format';
-import { getJoinCode } from '../services/db';
+import { ClientStatus } from '../types';
+
+function money(cents?: number) {
+  return cents ? `$${(cents / 100).toFixed(2)}` : 'No rent set';
+}
 
 export function ClientsScreen() {
-  const { clients, createClient, selectClient, setClientStatus, setClientLevel } = useAppState();
-  const auth = useAuth();
+  const { clients, createClient, setRent } = useAppState();
+  const nav = useNavigation<any>();
   const [filter, setFilter] = useState<ClientStatus>('in_care');
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // add-form fields
+  // multi-select
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  // add-form
   const [firstName, setFirstName] = useState('');
-  const [programName, setProgramName] = useState('');
   const [orgName, setOrgName] = useState('');
-  const [level, setLevel] = useState<LevelOfCare | null>(null);
-
-  // change-level modal
-  const [levelEditId, setLevelEditId] = useState<string | null>(null);
-
-  const invite = async (id: string, name: string) => {
-    try {
-      const code = await getJoinCode(id);
-      Alert.alert(
-        `Invite ${name}`,
-        `Share this join code with ${name}. They sign up as a member and enter it to link their account:\n\n${code}`,
-      );
-    } catch (e: any) {
-      Alert.alert('Could not get code', e?.message ?? 'Try again.');
-    }
-  };
 
   const shown = clients.filter((c) => c.status === filter);
   const counts = {
     in_care: clients.filter((c) => c.status === 'in_care').length,
     completed: clients.filter((c) => c.status === 'completed').length,
   };
-
-  // Group the shown clients by level of care, in canonical order, with an
-  // "Unassigned" bucket last.
-  const groups: { key: string; label: string; items: typeof shown }[] = [];
-  for (const lvl of LEVELS_OF_CARE) {
-    const items = shown.filter((c) => c.levelOfCare === lvl);
-    if (items.length) groups.push({ key: lvl, label: LEVEL_OF_CARE_LABELS[lvl], items });
-  }
-  const unassigned = shown.filter((c) => !c.levelOfCare);
-  if (unassigned.length) groups.push({ key: 'none', label: 'Unassigned', items: unassigned });
+  const selectedIds = Object.keys(selected).filter((id) => selected[id]);
 
   const add = async () => {
     if (!firstName.trim()) return;
     setBusy(true);
     try {
-      await createClient({
-        firstName,
-        programName: programName || undefined,
-        orgName: orgName || undefined,
-        levelOfCare: level || undefined,
-      });
-      setFirstName(''); setProgramName(''); setLevel(null);
-      setAdding(false); setFilter('in_care');
+      await createClient({ firstName, orgName: orgName || undefined, levelOfCare: 'sober_living' });
+      setFirstName(''); setOrgName(''); setAdding(false); setFilter('in_care');
     } catch (e: any) {
       Alert.alert('Could not add client', e?.message ?? 'Please try again.');
     } finally {
@@ -73,19 +47,19 @@ export function ClientsScreen() {
     }
   };
 
+  const toggleSel = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
+  const exitSelect = () => { setSelectMode(false); setSelected({}); };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      {/* Admin console banner — signals the facilitator/admin account */}
       <View style={styles.adminBar}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.adminTitle}>Facilitator Console</Text>
-          <Text style={styles.adminSub}>
-            {auth.profile?.fullName ? `Signed in as ${auth.profile.fullName}` : 'Manage your clients'}
-          </Text>
+          <Text style={styles.adminTitle}>Clients</Text>
+          <Text style={styles.adminSub}>Tap a client to manage · or select multiple to set rent</Text>
         </View>
-        <View style={styles.adminBadge}>
-          <Text style={styles.adminBadgeText}>ADMIN</Text>
-        </View>
+        <TouchableOpacity onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}>
+          <Text style={styles.selectToggle}>{selectMode ? 'Cancel' : 'Select'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filters}>
@@ -94,101 +68,99 @@ export function ClientsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {!adding ? (
-          <Button title="+ Add client" onPress={() => setAdding(true)} />
-        ) : (
+        {!selectMode && !adding ? <Button title="+ Add client" onPress={() => setAdding(true)} /> : null}
+
+        {adding ? (
           <Card>
-            <SectionTitle>New client</SectionTitle>
-            <Input value={firstName} onChange={setFirstName} placeholder="Client's first name" />
-            <Input value={programName} onChange={setProgramName} placeholder="Program name (optional)" />
-            <Input value={orgName} onChange={setOrgName} placeholder="Your organization (optional)" />
-            <Text style={styles.label}>Level of care</Text>
-            <View style={styles.chips}>
-              {LEVELS_OF_CARE.map((l) => (
-                <TouchableOpacity
-                  key={l}
-                  onPress={() => setLevel(l)}
-                  style={[styles.chip, level === l ? styles.chipActive : null]}
-                >
-                  <Text style={[styles.chipText, level === l ? styles.chipTextActive : null]}>
-                    {LEVEL_OF_CARE_LABELS[l]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <SectionTitle>New client (Sober Living)</SectionTitle>
+            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="Client's first name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+            <TextInput style={styles.input} value={orgName} onChangeText={setOrgName} placeholder="Your organization (optional)" placeholderTextColor={colors.textMuted} />
             <Button title="Add" onPress={add} disabled={!firstName.trim() || busy} />
-            <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
             {busy ? <ActivityIndicator color={colors.primary} /> : null}
           </Card>
-        )}
+        ) : null}
 
-        {groups.length === 0 ? (
-          <Text style={styles.empty}>
-            {filter === 'in_care' ? 'No clients in care yet.' : 'No completed clients yet.'}
-          </Text>
+        {shown.length === 0 ? (
+          <Text style={styles.empty}>{filter === 'in_care' ? 'No clients in care yet.' : 'No completed clients yet.'}</Text>
         ) : (
-          groups.map((g) => (
-            <View key={g.key}>
-              <Text style={styles.groupHeader}>{g.label} · {g.items.length}</Text>
-              {g.items.map((c) => (
-                <View key={c.id} style={styles.row}>
-                  <TouchableOpacity style={styles.rowMain} activeOpacity={0.7} onPress={() => selectClient(c.id)}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={typography.h3}>{c.firstName}</Text>
-                      <Text style={typography.caption}>
-                        {c.levelOfCare ? LEVEL_OF_CARE_LABELS[c.levelOfCare] : 'No level set'}
-                        {c.programName ? ` · ${c.programName}` : ''}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                  <View style={styles.rowActions}>
-                    <TouchableOpacity onPress={() => invite(c.id, c.firstName)} style={styles.miniBtn} hitSlop={6}>
-                      <Text style={styles.miniBtnText}>Invite</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setLevelEditId(c.id)} style={styles.miniBtn} hitSlop={6}>
-                      <Text style={styles.miniBtnText}>Level</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setClientStatus(c.id, c.status === 'in_care' ? 'completed' : 'in_care')}
-                      style={styles.miniBtn}
-                      hitSlop={6}
-                    >
-                      <Text style={styles.miniBtnText}>{c.status === 'in_care' ? 'Complete' : 'Reactivate'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
+          shown.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={styles.row}
+              activeOpacity={0.7}
+              onPress={() => (selectMode ? toggleSel(c.id) : nav.navigate('ClientProfile', { id: c.id }))}
+            >
+              {selectMode ? (
+                <Text style={styles.check}>{selected[c.id] ? '☑️' : '⬜️'}</Text>
+              ) : (
+                <View style={styles.avatar}><Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text></View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={typography.h3}>{c.firstName}</Text>
+                <Text style={typography.caption}>Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${c.rentDueDay}` : ''}</Text>
+              </View>
+              {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
 
-      {/* Change-level modal */}
-      <Modal visible={levelEditId !== null} transparent animationType="fade" onRequestClose={() => setLevelEditId(null)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setLevelEditId(null)}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Set level of care</Text>
-            {LEVELS_OF_CARE.map((l) => (
-              <TouchableOpacity
-                key={l}
-                style={styles.modalOption}
-                onPress={() => {
-                  if (levelEditId) setClientLevel(levelEditId, l);
-                  setLevelEditId(null);
-                }}
-              >
-                <Text style={styles.modalOptionText}>{LEVEL_OF_CARE_LABELS[l]}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/* Bulk action bar */}
+      {selectMode ? (
+        <View style={styles.bulkBar}>
+          <Text style={styles.bulkText}>{selectedIds.length} selected</Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            style={[styles.bulkBtn, selectedIds.length === 0 ? { opacity: 0.4 } : null]}
+            disabled={selectedIds.length === 0}
+            onPress={() => setBulkOpen(true)}
+          >
+            <Text style={styles.bulkBtnText}>Set rent for {selectedIds.length}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <BulkRentModal
+        visible={bulkOpen}
+        count={selectedIds.length}
+        onClose={() => setBulkOpen(false)}
+        onSave={async (cents, day) => {
+          for (const id of selectedIds) await setRent(id, cents, day);
+          setBulkOpen(false);
+          exitSelect();
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function BulkRentModal({ visible, count, onClose, onSave }: { visible: boolean; count: number; onClose: () => void; onSave: (cents: number, day: number | null) => Promise<void> }) {
+  const [amount, setAmount] = useState('');
+  const [dueDay, setDueDay] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!visible) return null;
+  const save = async () => {
+    const cents = Math.round(parseFloat(amount || '0') * 100);
+    if (!cents) { Alert.alert('Enter an amount'); return; }
+    const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
+    setBusy(true);
+    try { await onSave(cents, day); setAmount(''); setDueDay(''); } finally { setBusy(false); }
+  };
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.modal}>
+          <Text style={typography.h3}>Set rent for {count} client{count === 1 ? '' : 's'}</Text>
+          <View style={styles.amtRow}><Text style={styles.dollar}>$</Text>
+            <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
+          </View>
+          <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="Due day of month (1–31)" placeholderTextColor={colors.textMuted} />
+          <Button title="Apply to all selected" onPress={save} disabled={busy} />
+          <TouchableOpacity onPress={onClose} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -200,35 +172,12 @@ function FilterTab({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
-function Input({ value, onChange, placeholder }: { value: string; onChange: (s: string) => void; placeholder: string }) {
-  return (
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      autoCapitalize="words"
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  adminBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryDark,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    margin: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radius.md,
-  },
-  adminTitle: { fontSize: 20, fontWeight: '800', color: colors.textInverse },
+  adminBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryDark, padding: spacing.md, margin: spacing.md, marginBottom: spacing.sm, borderRadius: radius.md },
+  adminTitle: { fontSize: 22, fontWeight: '800', color: colors.textInverse },
   adminSub: { fontSize: 12, color: colors.primaryLight, marginTop: 2 },
-  adminBadge: { backgroundColor: colors.accent, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
-  adminBadgeText: { color: colors.textInverse, fontWeight: '800', fontSize: 12, letterSpacing: 1 },
+  selectToggle: { color: colors.textInverse, fontWeight: '700' },
   filters: { flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.sm },
   filter: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.pill, backgroundColor: colors.surface, marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
   filterActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -236,26 +185,21 @@ const styles = StyleSheet.create({
   filterTextActive: { color: colors.textInverse },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
   empty: { ...typography.bodySecondary, textAlign: 'center', marginTop: spacing.lg },
-  groupHeader: { ...typography.caption, fontWeight: '700', color: colors.primary, marginTop: spacing.md, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm + 2, marginBottom: spacing.sm, ...shadow.card },
-  rowMain: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  rowActions: { alignItems: 'flex-end' },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
-  avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 17 },
-  miniBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt, marginBottom: 4 },
-  miniBtnText: { fontSize: 11, color: colors.primary, fontWeight: '600' },
-  label: { ...typography.bodySecondary, fontWeight: '600', marginBottom: spacing.sm },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm },
-  chipActive: { backgroundColor: colors.primary },
-  chipText: { fontSize: 13, color: colors.textSecondary },
-  chipTextActive: { color: colors.textInverse, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.card },
+  check: { fontSize: 22, marginRight: spacing.md },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 18 },
+  chevron: { fontSize: 28, color: colors.textMuted, marginLeft: spacing.sm },
+  bulkBar: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  bulkText: { ...typography.body, fontWeight: '600' },
+  bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
+  bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { color: colors.textSecondary },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
-  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
-  modalTitle: { ...typography.h3, marginBottom: spacing.sm },
-  modalOption: { paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  modalOptionText: { ...typography.body },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
+  modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginVertical: spacing.sm },
+  dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },
+  amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
 });

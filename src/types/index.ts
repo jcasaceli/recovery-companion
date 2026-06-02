@@ -172,6 +172,8 @@ export interface ClientSummary {
   programName?: string;
   status: ClientStatus;
   levelOfCare?: LevelOfCare;
+  monthlyRentCents?: number;
+  rentDueDay?: number;
 }
 
 export interface Profile {

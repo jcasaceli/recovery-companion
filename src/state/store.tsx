@@ -125,6 +125,8 @@ interface AppState extends PersistedState {
   setClientStatus: (id: string, status: ClientStatus) => Promise<void>;
   /** Facilitator: change a client's level of care. */
   setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
+  /** Facilitator: set a client's monthly rent (cents) + due day (1-31). */
+  setRent: (id: string, amountCents: number | null, dueDay: number | null) => Promise<void>;
   /** Re-run the cloud bootstrap (e.g. after a member links via join code). */
   reloadCloud: () => Promise<void>;
   /** Cloud mode only: whether a client is currently open. Always true local. */
@@ -279,6 +281,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           programName: c.program_name ?? undefined,
           status: (c.status ?? 'in_care') as 'in_care' | 'completed',
           levelOfCare: c.level_of_care ?? undefined,
+          monthlyRentCents: c.monthly_rent_cents ?? undefined,
+          rentDueDay: c.rent_due_day ?? undefined,
         }));
         setState((s) => ({ ...s, onboarded: true, clients }));
         return; // no client selected yet → ClientsScreen
@@ -575,6 +579,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }));
     };
 
+    const setRent: AppState['setRent'] = async (id, amountCents, dueDay) => {
+      if (cloud) await dbApi.setMemberRent(id, amountCents, dueDay).catch(logCloud);
+      setState((s) => ({
+        ...s,
+        clients: s.clients.map((c) =>
+          c.id === id ? { ...c, monthlyRentCents: amountCents ?? undefined, rentDueDay: dueDay ?? undefined } : c,
+        ),
+      }));
+    };
+
     const timeline: TimelineEntry[] = [
       ...state.checkIns.map((c) => ({ id: c.id, kind: 'check-in' as const, date: c.date, data: c })),
       ...state.milestones.map((m) => ({ id: m.id, kind: 'milestone' as const, date: m.date, data: m })),
@@ -603,6 +617,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       backToClients,
       setClientStatus,
       setClientLevel,
+      setRent,
       reloadCloud: async () => { if (cloud) await loadCloud(); },
       cloudHasIndividual: cloud ? !!individualId : true,
       timeline,

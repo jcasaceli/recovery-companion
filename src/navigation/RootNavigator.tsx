@@ -15,6 +15,7 @@ import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { ClientsScreen } from '../screens/ClientsScreen';
+import { ClientProfileScreen } from '../screens/ClientProfileScreen';
 import { LinkMemberScreen } from '../screens/LinkMemberScreen';
 import { TasksScreen } from '../screens/TasksScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
@@ -25,7 +26,24 @@ import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen'
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
+const ClientsStackNav = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
+
+function ClientsStack() {
+  return (
+    <ClientsStackNav.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background },
+        headerShadowVisible: false,
+        headerTintColor: colors.primary,
+        headerTitleStyle: { color: colors.textPrimary },
+      }}
+    >
+      <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false }} />
+      <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Client' }} />
+    </ClientsStackNav.Navigator>
+  );
+}
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -107,7 +125,7 @@ function FacilitatorTabs() {
         },
       })}
     >
-      <FacTab.Screen name="Clients" component={ClientsScreen} />
+      <FacTab.Screen name="Clients" component={ClientsStack} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
       <FacTab.Screen name="Resources" component={ResourcesScreen} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
