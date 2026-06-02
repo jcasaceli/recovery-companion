@@ -17,8 +17,10 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
+import cron from 'node-cron';
 import { stripeRouter, stripeWebhook } from './stripe.js';
 import { notifyRouter } from './notify.js';
+import { runRentReminders } from './reminders.js';
 
 const PORT = process.env.PORT || 8787;
 // Default to the most capable model. Override with ASSISTANT_MODEL if you want
@@ -89,6 +91,23 @@ app.use('/api/stripe', stripeRouter);
 
 // Push fan-out endpoints.
 app.use('/api/notify', notifyRouter);
+
+// Manual trigger for rent reminders (handy for testing the cron logic).
+app.get('/api/reminders/run', async (_req, res) => {
+  try {
+    const result = await runRentReminders();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Daily rent reminders at 9:00 AM (server local time).
+cron.schedule('0 9 * * *', () => {
+  runRentReminders()
+    .then((r) => console.log(`[reminders] daily run: sent ${r.sent}, checked ${r.checked}`))
+    .catch((e) => console.warn('[reminders] daily run failed', e));
+});
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, hasKey: Boolean(apiKey) });

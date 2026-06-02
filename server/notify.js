@@ -28,7 +28,7 @@ async function getUser(req) {
 }
 
 /** Look up Expo push tokens for a set of profile ids. */
-async function tokensFor(profileIds) {
+export async function tokensFor(profileIds) {
   const ids = [...new Set(profileIds.filter(Boolean))];
   if (!ids.length) return [];
   const { data } = await admin.from('push_tokens').select('token').in('profile_id', ids);
@@ -36,7 +36,7 @@ async function tokensFor(profileIds) {
 }
 
 /** Send a push to each Expo token (chunked). */
-async function expoPush(tokens, title, body) {
+export async function expoPush(tokens, title, body) {
   if (!tokens.length) return;
   const messages = tokens.map((to) => ({ to, title, body, sound: 'default' }));
   for (let i = 0; i < messages.length; i += 100) {
