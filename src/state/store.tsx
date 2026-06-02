@@ -137,6 +137,9 @@ interface AppState extends PersistedState {
   updateClient: (id: string, fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string }) => Promise<void>;
   /** Re-run the cloud bootstrap (e.g. after a member links via join code). */
   reloadCloud: () => Promise<void>;
+  /** Facilitator: whether the org's $60/mo subscription is active (or trialing).
+   *  When false the console is preview-only and no real clients can be added. */
+  subscriptionActive: boolean;
   /** Cloud mode only: whether a client is currently open. Always true local. */
   cloudHasIndividual: boolean;
   /** Merged, reverse-chronological feed of all progress events */
@@ -203,6 +206,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // on-device prototype exactly as before.
   const cloud = auth.configured && auth.status === 'signedIn';
   const [individualId, setIndividualId] = useState<string | undefined>(undefined);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
 
   // Local persistence (prototype path only). When Supabase is configured the
   // cloud is authoritative — never read or write the on-device cache.
@@ -298,6 +302,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           monthlyRentCents: c.monthly_rent_cents ?? undefined,
           rentDueDay: c.rent_due_day ?? undefined,
         }));
+        // Subscription gate: only an active/trialing org can manage real clients.
+        const org: any = await dbApi.getMyOrg().catch(() => null);
+        setSubscriptionActive(!!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing'));
         setState((s) => ({ ...s, onboarded: true, clients }));
         return; // no client selected yet → ClientsScreen
       }
@@ -556,6 +563,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const createClient: AppState['createClient'] = async (input) => {
       if (!cloud) return;
+      if (!subscriptionActive) throw new Error('Subscribe ($60/mo) to add clients.');
       const orgId = await dbApi.ensureFacilitatorOrg(input.orgName?.trim() || 'My Organization');
       await dbApi.createIndividual({
         orgId,
@@ -648,10 +656,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setRent,
       updateClient,
       reloadCloud: async () => { if (cloud) await loadCloud(); },
+      subscriptionActive,
       cloudHasIndividual: cloud ? !!individualId : true,
       timeline,
     };
-  }, [state, ready, cloud, individualId]);
+  }, [state, ready, cloud, individualId, subscriptionActive]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

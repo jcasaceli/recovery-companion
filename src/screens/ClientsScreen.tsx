@@ -8,13 +8,16 @@ import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getMyOrg } from '../services/db';
 import { ClientStatus } from '../types';
+import { Paywall } from '../components/Paywall';
+import { DEMO_CLIENTS } from '../data/demo';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : 'No rent set';
 }
 
 export function ClientsScreen() {
-  const { clients, createClient, setRent } = useAppState();
+  const { clients, createClient, setRent, subscriptionActive, reloadCloud } = useAppState();
+  const locked = !subscriptionActive;
   const auth = useAuth();
   const nav = useNavigation<any>();
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
@@ -40,10 +43,12 @@ export function ClientsScreen() {
   const [rent, setRentValue] = useState('');
   const [dueDay, setDueDay] = useState('');
 
-  const shown = clients.filter((c) => c.status === filter);
+  // Preview mode shows sample residents until the org subscribes.
+  const sourceClients = locked ? DEMO_CLIENTS : clients;
+  const shown = sourceClients.filter((c) => c.status === filter);
   const counts = {
-    in_care: clients.filter((c) => c.status === 'in_care').length,
-    completed: clients.filter((c) => c.status === 'completed').length,
+    in_care: sourceClients.filter((c) => c.status === 'in_care').length,
+    completed: sourceClients.filter((c) => c.status === 'completed').length,
   };
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
 
@@ -84,12 +89,14 @@ export function ClientsScreen() {
             Admin · {auth.profile?.fullName ?? auth.profile?.email ?? ''}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}>
-          <Text style={styles.selectToggle}>{selectMode ? 'Cancel' : 'Select'}</Text>
-        </TouchableOpacity>
+        {!locked ? (
+          <TouchableOpacity onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}>
+            <Text style={styles.selectToggle}>{selectMode ? 'Cancel' : 'Select'}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      {org?.join_code ? (
+      {!locked && org?.join_code ? (
         <TouchableOpacity
           style={styles.codeBar}
           onPress={() => Alert.alert('Resident join code', `Share this one code with all your residents. They sign up as a member and enter it to join ${org?.name || 'your sober living'}:\n\n${org.join_code}`)}
@@ -105,7 +112,8 @@ export function ClientsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {!selectMode && !adding ? <Button title="+ Add client" onPress={() => setAdding(true)} /> : null}
+        {locked ? <Paywall onChanged={reloadCloud} /> : null}
+        {!locked && !selectMode && !adding ? <Button title="+ Add client" onPress={() => setAdding(true)} /> : null}
 
         {adding ? (
           <Card>
@@ -131,7 +139,13 @@ export function ClientsScreen() {
               key={c.id}
               style={styles.row}
               activeOpacity={0.7}
-              onPress={() => (selectMode ? toggleSel(c.id) : nav.navigate('ClientProfile', { id: c.id }))}
+              onPress={() =>
+                locked
+                  ? Alert.alert('Preview', 'Subscribe to add and manage your own residents. These are sample profiles.')
+                  : selectMode
+                  ? toggleSel(c.id)
+                  : nav.navigate('ClientProfile', { id: c.id })
+              }
             >
               {selectMode ? (
                 <Text style={styles.check}>{selected[c.id] ? '☑️' : '⬜️'}</Text>

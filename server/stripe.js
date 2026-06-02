@@ -310,6 +310,28 @@ export async function stripeWebhook(req, res) {
         }
         break;
       }
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        // Platform subscription lifecycle (the org's $60/mo). Connected-account
+        // rent subscriptions carry event.account — ignore those here so a
+        // resident's rent sub never touches the org's app-access status.
+        if (!event.account && supabaseAdmin) {
+          const sub = event.data.object;
+          const map = {
+            active: 'active', trialing: 'trialing', past_due: 'past_due',
+            unpaid: 'past_due', paused: 'past_due', incomplete: 'past_due',
+            canceled: 'canceled', incomplete_expired: 'canceled',
+          };
+          const status = event.type === 'customer.subscription.deleted'
+            ? 'canceled'
+            : (map[sub.status] || 'past_due');
+          await supabaseAdmin
+            .from('organizations')
+            .update({ subscription_status: status })
+            .eq('stripe_subscription_id', sub.id);
+        }
+        break;
+      }
       default:
         break;
     }

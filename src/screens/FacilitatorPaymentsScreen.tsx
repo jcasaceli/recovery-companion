@@ -8,6 +8,9 @@ import { colors, spacing, radius, typography, shadow } from '../theme';
 import * as dbApi from '../services/db';
 import { Payment, PaymentMethod } from '../types';
 import { formatDate } from '../utils/format';
+import { useAppState } from '../state/store';
+import { Paywall } from '../components/Paywall';
+import { DEMO_CLIENTS, DEMO_PAY_STATUS, DEMO_PIE } from '../data/demo';
 
 const METHODS: PaymentMethod[] = ['cash', 'cashapp', 'zelle', 'card', 'other'];
 const METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -29,8 +32,11 @@ export function FacilitatorPaymentsScreen() {
   const [recordFor, setRecordFor] = useState<any | null>(null);
   const [rentFor, setRentFor] = useState<any | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { subscriptionActive, reloadCloud } = useAppState();
+  const locked = !subscriptionActive;
 
   const load = useCallback(async () => {
+    if (locked) { setLoading(false); return; }
     try {
       const [inds, pays] = await Promise.all([dbApi.listFacilitatorIndividuals(), dbApi.listOrgPayments()]);
       setMembers((inds ?? []).filter((m: any) => (m.status ?? 'in_care') === 'in_care'));
@@ -43,6 +49,43 @@ export function FacilitatorPaymentsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Preview mode: sample analytics until the org subscribes.
+  if (locked) {
+    const statusLabel: Record<string, string> = { paid: 'Paid in full', partial: 'Partially paid', none: 'Not paid', norent: 'No rent set' };
+    const statusClr: Record<string, string> = { paid: colors.success, partial: colors.warning, none: colors.crisis, norent: colors.textMuted };
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Text style={typography.h1}>Payments</Text>
+          <Paywall onChanged={reloadCloud} />
+          <Card style={{ alignItems: 'center' }}>
+            <SectionTitle>This month (sample)</SectionTitle>
+            <PieChart
+              data={[
+                { label: 'Paid in full', value: DEMO_PIE.paid, color: colors.success },
+                { label: 'Partially paid', value: DEMO_PIE.partial, color: colors.warning },
+                { label: 'Not paid', value: DEMO_PIE.none, color: colors.crisis },
+              ]}
+            />
+          </Card>
+          <SectionTitle>Members (sample)</SectionTitle>
+          {DEMO_CLIENTS.map((c) => {
+            const st = DEMO_PAY_STATUS[c.id] ?? 'norent';
+            return (
+              <Card key={c.id}>
+                <Text style={typography.h3}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
+                <Text style={typography.caption}>
+                  Rent {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
+                </Text>
+                <Text style={[styles.statusLine, { color: statusClr[st] }]}>{statusLabel[st]}</Text>
+              </Card>
+            );
+          })}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   const period = currentPeriod();
   // Sum of CONFIRMED payments this month for a client.
