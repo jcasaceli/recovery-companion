@@ -25,6 +25,7 @@ export function AuthScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [channel, setChannel] = useState<'email' | 'sms'>('email');
+  const [orgName, setOrgName] = useState('');
   const [code, setCode] = useState('');
 
   const run = async (fn: () => Promise<void>) => {
@@ -40,7 +41,7 @@ export function AuthScreen() {
 
   const doSignUp = () =>
     run(async () => {
-      await auth.signUp({ email, password, role, fullName, phone: phone || undefined, verifyChannel: channel });
+      await auth.signUp({ email, password, role, fullName, phone: phone || undefined, verifyChannel: channel, orgName: orgName || undefined });
       setStep('verify');
       Alert.alert(
         channel === 'email' ? 'Check your email' : 'Check your texts',
@@ -90,6 +91,9 @@ export function AuthScreen() {
         {step === 'signup' && (
           <View>
             <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Your name" />
+            {role === 'facilitator' ? (
+              <Field label="Sober living name" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
+            ) : null}
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
             <Field label="Phone (for SMS verification)" value={phone} onChange={setPhone} placeholder="+1 555 555 5555" keyboardType="phone-pad" />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
@@ -113,7 +117,7 @@ export function AuthScreen() {
             <Button
               title="Create account"
               onPress={doSignUp}
-              disabled={busy || !email || !password || !fullName}
+              disabled={busy || !email || !password || !fullName || (role === 'facilitator' && !orgName.trim())}
             />
             <BackLink onPress={() => setStep('choose')} />
           </View>

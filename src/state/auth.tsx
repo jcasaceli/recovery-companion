@@ -42,6 +42,7 @@ export interface SignUpInput {
   fullName: string;
   phone?: string;
   verifyChannel: 'email' | 'sms';
+  orgName?: string;
 }
 
 interface AuthContextValue {

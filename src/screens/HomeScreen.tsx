@@ -1,9 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
-import { notifyCareTeam } from '../services/push';
+import { notifyCareTeam, notifyCare } from '../services/push';
+import { recordMeetingCheckin } from '../services/db';
+import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
@@ -18,9 +21,17 @@ import {
 
 export function HomeScreen() {
   const nav = useNavigation<any>();
-  const { lovedOne, checkIns, milestones, timeline, backToClients } = useAppState();
+  const { lovedOne, checkIns, milestones, timeline, backToClients, resetSobrietyDate } = useAppState();
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const onSobrietyDate = (event: any, selected?: Date) => {
+    setShowDatePicker(false);
+    if (event.type === 'set' && selected) {
+      resetSobrietyDate(selected.toISOString().slice(0, 10));
+    }
+  };
 
   const sober = lovedOne.sobrietyDate ? daysSince(lovedOne.sobrietyDate) : null;
   const recentMood = checkIns[0];
@@ -30,21 +41,44 @@ export function HomeScreen() {
   const sos = () => {
     Alert.alert(
       'Send SOS?',
-      `This immediately alerts ${lovedOne.firstName}'s facilitator and family supporters that you need help right now.`,
+      `This immediately alerts your facilitator that you need help right now.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send SOS',
           style: 'destructive',
-          onPress: () =>
-            notifyCareTeam({
-              title: '🆘 SOS',
-              body: `${lovedOne.firstName}'s circle needs immediate support.`,
-              audiences: ['facilitator', 'supporters', 'individual'],
-            }),
+          onPress: () => {
+            if (auth.configured) {
+              // notifyCare → member (sender) is excluded, so only facilitators get it.
+              notifyCare(lovedOne.id, '🆘 SOS', `${lovedOne.firstName} needs help right now.`);
+            } else {
+              notifyCareTeam({ title: '🆘 SOS', body: 'Immediate support needed.', audiences: ['facilitator'] });
+            }
+          },
         },
       ],
     );
+  };
+
+  const meetingCheckIn = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let lat: number | undefined, lng: number | undefined, address: string | undefined;
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({});
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        try {
+          const geo = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+          const g = geo[0];
+          if (g) address = [g.name, g.street, g.city, g.region].filter(Boolean).join(', ');
+        } catch {}
+      }
+      await recordMeetingCheckin(lovedOne.id, lat, lng, address);
+      Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
+    } catch (e: any) {
+      Alert.alert('Could not check in', e?.message ?? 'Please try again.');
+    }
   };
 
   const QUICK_LINKS: { label: string; icon: any; screen: string }[] = [
@@ -82,7 +116,7 @@ export function HomeScreen() {
       <Card style={styles.hero}>
         <Text style={styles.heroName}>{lovedOne.firstName}</Text>
         <Text style={styles.heroProgram}>
-          {PROGRAM_LABELS[lovedOne.programType]} · {lovedOne.programName}
+          {lovedOne.programName || 'Sober Living'}
         </Text>
         {sober !== null ? (
           <View style={styles.heroStat}>
@@ -98,6 +132,15 @@ export function HomeScreen() {
           <Ionicons name="card" size={40} color={colors.textInverse} />
           <Text style={styles.payRentText}>Pay rent</Text>
           <Text style={styles.payRentSub}>Card, CashApp, or Zelle · tap to pay</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Meeting check-in — records location so no signed cards needed */}
+      {!isFacilitator ? (
+        <TouchableOpacity style={styles.meetingBtn} activeOpacity={0.85} onPress={meetingCheckIn}>
+          <Ionicons name="location" size={36} color={colors.textInverse} />
+          <Text style={styles.meetingText}>I'm at a meeting</Text>
+          <Text style={styles.meetingSub}>Check in — records your location</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -118,7 +161,7 @@ export function HomeScreen() {
 
       {/* SOS */}
       <TouchableOpacity style={styles.sos} onPress={sos} activeOpacity={0.85}>
-        <Text style={styles.sosText}>🆘  Send SOS — alert my support circle now</Text>
+        <Text style={styles.sosText}>🆘  Send SOS — alert my facilitator now</Text>
       </TouchableOpacity>
 
       {/* Latest check-in */}
@@ -184,6 +227,32 @@ export function HomeScreen() {
         variant="secondary"
         onPress={() => nav.navigate('Assistant')}
       />
+
+      {/* Sobriety date — tap to set/change via a calendar */}
+      <SectionTitle>Sobriety date</SectionTitle>
+      <Card onPress={() => setShowDatePicker(true)}>
+        <View style={styles.sobrietyRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={typography.h3}>
+              {lovedOne.sobrietyDate ? formatDate(lovedOne.sobrietyDate) : 'Tap to set'}
+            </Text>
+            {lovedOne.sobrietyDate ? (
+              <Text style={typography.caption}>{sober ?? 0} days · tap to change</Text>
+            ) : (
+              <Text style={typography.caption}>Set the date you want to count from</Text>
+            )}
+          </View>
+          <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+        </View>
+      </Card>
+      {showDatePicker ? (
+        <DateTimePicker
+          value={lovedOne.sobrietyDate ? new Date(lovedOne.sobrietyDate) : new Date()}
+          mode="date"
+          maximumDate={new Date()}
+          onChange={onSobrietyDate}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -219,6 +288,17 @@ const styles = StyleSheet.create({
   },
   payRentText: { color: colors.textInverse, fontWeight: '800', fontSize: 26, marginTop: spacing.xs },
   payRentSub: { color: colors.textInverse, opacity: 0.9, fontSize: 13, marginTop: 2 },
+  meetingBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.xl + spacing.sm,
+    marginBottom: spacing.md,
+    ...shadow.card,
+  },
+  meetingText: { color: colors.textInverse, fontWeight: '800', fontSize: 26, marginTop: spacing.xs },
+  meetingSub: { color: colors.textInverse, opacity: 0.9, fontSize: 13, marginTop: 2 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   quick: {
     flex: 1,
@@ -240,6 +320,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sosText: { color: colors.crisis, fontWeight: '700', fontSize: 14 },
+  sobrietyRow: { flexDirection: 'row', alignItems: 'center' },
   hero: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,

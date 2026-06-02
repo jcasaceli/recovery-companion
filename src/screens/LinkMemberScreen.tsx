@@ -5,7 +5,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { Button } from '../components/ui';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { redeemJoinCode } from '../services/db';
+import { redeemOrgCode } from '../services/db';
 
 /** Shown to a signed-in member who isn't linked to a sober living yet. They
  *  enter the join code their facilitator gave them to connect their account. */
@@ -19,7 +19,7 @@ export function LinkMemberScreen() {
     if (!code.trim()) return;
     setBusy(true);
     try {
-      await redeemJoinCode(code);
+      await redeemOrgCode(code);
       await reloadCloud(); // pulls in the linked record → app proceeds
     } catch (e: any) {
       Alert.alert('Could not link', e?.message ?? 'Check the code and try again.');

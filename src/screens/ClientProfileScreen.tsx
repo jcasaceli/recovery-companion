@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
-import { getJoinCode } from '../services/db';
+import { listMeetingCheckins } from '../services/db';
+import { formatDateTime } from '../utils/format';
 
 export function ClientProfileScreen() {
   const route = useRoute<any>();
@@ -14,6 +15,13 @@ export function ClientProfileScreen() {
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
+  const [checkins, setCheckins] = useState<any[]>([]);
+  const [showMeetings, setShowMeetings] = useState(false);
+
+  useEffect(() => {
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
+  }, [id]);
 
   if (!client) {
     return <Screen><Text style={typography.body}>Client not found.</Text></Screen>;
@@ -27,15 +35,6 @@ export function ClientProfileScreen() {
       Alert.alert('Saved', `${client.firstName}'s rent was updated.`);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
-    }
-  };
-
-  const invite = async () => {
-    try {
-      const code = await getJoinCode(id);
-      Alert.alert(`Invite ${client.firstName}`, `Share this join code. They sign up as a member and enter it to link their account:\n\n${code}`);
-    } catch (e: any) {
-      Alert.alert('Could not get code', e?.message ?? 'Try again.');
     }
   };
 
@@ -67,12 +66,21 @@ export function ClientProfileScreen() {
         />
       </Card>
 
-      <SectionTitle>Member account</SectionTitle>
-      <Card>
-        <Text style={[typography.bodySecondary, { marginBottom: spacing.sm }]}>
-          Invite {client.firstName} to their own account to view progress and pay rent.
+      <SectionTitle>Meetings this week</SectionTitle>
+      <Card onPress={() => setShowMeetings((v) => !v)}>
+        <Text style={styles.meetingCount}>{checkins.length}</Text>
+        <Text style={typography.bodySecondary}>
+          meeting check-in{checkins.length === 1 ? '' : 's'} in the last 7 days
+          {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} locations` : ''}
         </Text>
-        <Button title="Show invite code" variant="secondary" onPress={invite} />
+        {showMeetings
+          ? checkins.map((c) => (
+              <View key={c.id} style={styles.checkinRow}>
+                <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
+                <Text style={typography.caption}>{formatDateTime(c.createdAt)}</Text>
+              </View>
+            ))
+          : null}
       </Card>
 
       <View style={{ height: spacing.md }} />
@@ -89,4 +97,7 @@ const styles = StyleSheet.create({
   amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
   note: { ...typography.caption, textAlign: 'center', marginTop: spacing.sm },
+  meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
+  checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
 });
+

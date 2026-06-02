@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
+import { useAuth } from '../state/auth';
+import { getMyOrg } from '../services/db';
 import { ClientStatus } from '../types';
 
 function money(cents?: number) {
@@ -13,7 +15,13 @@ function money(cents?: number) {
 
 export function ClientsScreen() {
   const { clients, createClient, setRent } = useAppState();
+  const auth = useAuth();
   const nav = useNavigation<any>();
+  const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
+
+  useEffect(() => {
+    getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
+  }, []);
   const [filter, setFilter] = useState<ClientStatus>('in_care');
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,13 +62,25 @@ export function ClientsScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.adminBar}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.adminTitle}>Clients</Text>
-          <Text style={styles.adminSub}>Tap a client to manage · or select multiple to set rent</Text>
+          <Text style={styles.adminTitle}>{org?.name || 'My Sober Living'}</Text>
+          <Text style={styles.adminSub}>
+            Admin · {auth.profile?.fullName ?? auth.profile?.email ?? ''}
+          </Text>
         </View>
         <TouchableOpacity onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}>
           <Text style={styles.selectToggle}>{selectMode ? 'Cancel' : 'Select'}</Text>
         </TouchableOpacity>
       </View>
+
+      {org?.join_code ? (
+        <TouchableOpacity
+          style={styles.codeBar}
+          onPress={() => Alert.alert('Resident join code', `Share this one code with all your residents. They sign up as a member and enter it to join ${org?.name || 'your sober living'}:\n\n${org.join_code}`)}
+        >
+          <Text style={styles.codeText}>Resident join code: <Text style={styles.codeStrong}>{org.join_code}</Text></Text>
+          <Text style={styles.codeHint}>tap for details · one code for everyone</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <View style={styles.filters}>
         <FilterTab label={`In Care (${counts.in_care})`} active={filter === 'in_care'} onPress={() => setFilter('in_care')} />
@@ -178,6 +198,10 @@ const styles = StyleSheet.create({
   adminTitle: { fontSize: 22, fontWeight: '800', color: colors.textInverse },
   adminSub: { fontSize: 12, color: colors.primaryLight, marginTop: 2 },
   selectToggle: { color: colors.textInverse, fontWeight: '700' },
+  codeBar: { backgroundColor: colors.accentLight, borderRadius: radius.md, marginHorizontal: spacing.md, marginBottom: spacing.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  codeText: { ...typography.body, color: colors.textPrimary },
+  codeStrong: { fontWeight: '800', letterSpacing: 1 },
+  codeHint: { ...typography.caption },
   filters: { flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.sm },
   filter: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.pill, backgroundColor: colors.surface, marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
   filterActive: { backgroundColor: colors.primary, borderColor: colors.primary },

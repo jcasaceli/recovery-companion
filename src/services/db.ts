@@ -46,6 +46,8 @@ export interface SignUpInput {
   phone?: string;
   /** Which channel the user chose to verify with. */
   verifyChannel: 'email' | 'sms';
+  /** Sober-living name (required for facilitators). */
+  orgName?: string;
 }
 
 /**
@@ -66,6 +68,7 @@ export async function signUp(input: SignUpInput) {
         full_name: input.fullName,
         phone: input.phone ?? null,
         verify_channel: input.verifyChannel,
+        org_name: input.orgName ?? null,
       },
     },
   });
@@ -223,6 +226,44 @@ export async function redeemJoinCode(code: string): Promise<string> {
   const { data, error } = await db().rpc('redeem_join_code', { p_code: code.trim() });
   if (error) throw error;
   return data as string;
+}
+
+/** Member: redeem the ORG join code (one per sober living) → creates their record. */
+export async function redeemOrgCode(code: string): Promise<string> {
+  const { data, error } = await db().rpc('redeem_org_code', { p_code: code.trim() });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Member: record a meeting check-in with current location. */
+export async function recordMeetingCheckin(
+  individualId: string,
+  latitude?: number,
+  longitude?: number,
+  address?: string,
+) {
+  const { error } = await db().from('meeting_checkins').insert({
+    individual_id: individualId,
+    latitude: latitude ?? null,
+    longitude: longitude ?? null,
+    address: address ?? null,
+  });
+  if (error) throw error;
+}
+
+/** Meeting check-ins for a client (optionally since an ISO datetime). */
+export async function listMeetingCheckins(individualId: string, sinceISO?: string) {
+  let q = db().from('meeting_checkins').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
+  if (sinceISO) q = q.gte('created_at', sinceISO);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    latitude: r.latitude ?? undefined,
+    longitude: r.longitude ?? undefined,
+    address: r.address ?? undefined,
+    createdAt: r.created_at,
+  }));
 }
 
 /** Facilitator onboarding: ensure the facilitator has an org (create if none). */
