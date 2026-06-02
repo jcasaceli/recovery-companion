@@ -44,6 +44,9 @@ export interface LovedOne {
   /** ISO date string of recovery start, if applicable */
   sobrietyDate?: string;
   careTeam: Provider[];
+  /** Rent (cloud) — shown to the member on Home/Pay rent. */
+  monthlyRentCents?: number;
+  rentDueDay?: number;
 }
 
 /** 1 = really struggling … 5 = thriving */

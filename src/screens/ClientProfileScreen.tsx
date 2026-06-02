@@ -41,13 +41,22 @@ export function ClientProfileScreen() {
     getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
   }, [id]);
 
+  const inviteMsg = () => {
+    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
+    return `Hi ${client?.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
+  };
   const textInvite = () => {
     if (!client?.phone) return;
-    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
-    const msg = `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
     const sep = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(msg)}`).catch(() =>
+    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() =>
       Alert.alert('Could not open Messages', 'Try texting them the join code manually.'),
+    );
+  };
+  const emailInvite = () => {
+    if (!client?.email) return;
+    const subject = `Join ${org?.name || 'our sober living'} on Recovery Companion`;
+    Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() =>
+      Alert.alert('Could not open email', 'Try emailing them the join code manually.'),
     );
   };
 
@@ -88,13 +97,19 @@ export function ClientProfileScreen() {
         <Button title="Save details" onPress={saveDetails} disabled={!ef.firstName.trim()} />
       </Card>
 
-      {client.phone ? (
+      {client.phone || client.email ? (
         <Card>
           <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
           <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-            Text {client.firstName} a link + your join code to download and join.
+            Send {client.firstName} your join code to download and join.
           </Text>
-          <Button title="📲 Text invite to download" variant="secondary" onPress={textInvite} />
+          {client.phone ? (
+            <>
+              <Button title="📲 Text invite" variant="secondary" onPress={textInvite} />
+              <View style={{ height: spacing.sm }} />
+            </>
+          ) : null}
+          {client.email ? <Button title="✉️ Email invite" variant="secondary" onPress={emailInvite} /> : null}
         </Card>
       ) : null}
 

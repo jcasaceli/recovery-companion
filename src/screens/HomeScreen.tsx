@@ -131,7 +131,11 @@ export function HomeScreen() {
         <TouchableOpacity style={styles.payRent} activeOpacity={0.85} onPress={() => nav.navigate('Payments')}>
           <Ionicons name="card" size={40} color={colors.textInverse} />
           <Text style={styles.payRentText}>Pay rent</Text>
-          <Text style={styles.payRentSub}>Card, CashApp, or Zelle · tap to pay</Text>
+          <Text style={styles.payRentSub}>
+            {lovedOne.monthlyRentCents
+              ? `$${(lovedOne.monthlyRentCents / 100).toFixed(0)}/mo${lovedOne.rentDueDay ? ` · due the ${lovedOne.rentDueDay}` : ''} · tap to pay`
+              : 'Card, CashApp, or Zelle · tap to pay'}
+          </Text>
         </TouchableOpacity>
       ) : null}
 

@@ -256,6 +256,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         treatmentStartDate: r.treatment_start_date ?? today(),
         sobrietyDate: r.sobriety_date ?? undefined,
         careTeam: [],
+        monthlyRentCents: r.monthly_rent_cents ?? undefined,
+        rentDueDay: r.rent_due_day ?? undefined,
       },
       communityAccess: r.community_access ?? false,
       checkIns: (checkIns ?? []).map((c: any) => ({
