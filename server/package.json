@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Backend proxy for Recovery Companion — holds the Anthropic API key server-side and forwards chat to Claude.",
   "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js"

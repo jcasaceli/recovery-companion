@@ -78,7 +78,14 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
 const app = express();
-app.use(cors()); // tighten the origin allowlist before production
+// CORS: lock to specific origins in production via ALLOWED_ORIGINS (comma-sep).
+// Native mobile requests have no Origin, so they're unaffected; this protects
+// against rogue web origins. Default (unset) is permissive for local dev.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(cors(ALLOWED_ORIGINS.length ? { origin: ALLOWED_ORIGINS } : {}));
 
 // Stripe webhook needs the RAW body for signature verification — mount it
 // BEFORE express.json() so the body isn't parsed.
@@ -111,6 +118,19 @@ cron.schedule('0 9 * * *', () => {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, hasKey: Boolean(apiKey) });
+});
+
+// Landing page Stripe returns to after Checkout / Connect onboarding. Set
+// PUBLIC_RETURN_URL to "<this server>/return" once deployed.
+app.get('/return', (_req, res) => {
+  res
+    .set('Content-Type', 'text/html')
+    .send(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All set</title><style>body{font-family:-apple-system,system-ui,sans-serif;background:#F7F5F1;color:#2B2B2B;
+display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;text-align:center;padding:24px}
+.card{background:#fff;border-radius:20px;padding:32px;max-width:360px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+h1{color:#3E8E7E;font-size:22px}p{color:#6B6B6B;line-height:1.5}</style></head>
+<body><div class="card"><h1>✅ All set</h1><p>You can close this window and return to the Recovery Companion app.</p></div></body></html>`);
 });
 
 app.post('/api/assistant', async (req, res) => {
