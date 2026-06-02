@@ -28,6 +28,7 @@ export function FacilitatorPaymentsScreen() {
   const [loading, setLoading] = useState(true);
   const [recordFor, setRecordFor] = useState<any | null>(null);
   const [rentFor, setRentFor] = useState<any | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -85,26 +86,51 @@ export function FacilitatorPaymentsScreen() {
         ) : (
           members.map((m) => {
             const pay = paidThisMonth(m.id);
+            const expanded = expandedId === m.id;
+            const history = payments.filter((p) => p.individualId === m.id);
             return (
-              <Card key={m.id} style={styles.memberRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.h3}>{m.first_name}</Text>
-                  <Text style={typography.caption}>
-                    Rent {money(m.monthly_rent_cents)}
-                    {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ' · no due day set'}
-                  </Text>
-                  <Text style={[styles.statusLine, { color: pay ? (pay.onTime === false ? colors.warning : colors.success) : colors.crisis }]}>
-                    {pay ? (pay.onTime === false ? 'Paid late this month' : 'Paid on time this month') : 'Not paid this month'}
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
-                    <Text style={styles.recordBtnText}>Record</Text>
+              <Card key={m.id}>
+                <View style={styles.memberRow}>
+                  <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
+                    <Text style={typography.h3}>{m.first_name}</Text>
+                    <Text style={typography.caption}>
+                      Rent {money(m.monthly_rent_cents)}
+                      {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ' · no due day set'}
+                    </Text>
+                    <Text style={[styles.statusLine, { color: pay ? (pay.onTime === false ? colors.warning : colors.success) : colors.crisis }]}>
+                      {pay ? (pay.onTime === false ? 'Paid late this month' : 'Paid on time this month') : 'Not paid this month'}
+                    </Text>
+                    <Text style={styles.expandHint}>
+                      {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
-                    <Text style={styles.rentBtnText}>Set rent</Text>
-                  </TouchableOpacity>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
+                      <Text style={styles.recordBtnText}>Record</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
+                      <Text style={styles.rentBtnText}>Set rent</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+
+                {expanded ? (
+                  <View style={styles.history}>
+                    {history.length === 0 ? (
+                      <Text style={typography.bodySecondary}>No payments recorded yet.</Text>
+                    ) : (
+                      history.map((p) => (
+                        <View key={p.id} style={styles.histRow}>
+                          <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
+                          <Text style={typography.caption}>
+                            {formatDate(p.paidAt)}
+                            {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                ) : null}
               </Card>
             );
           })
@@ -262,6 +288,9 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
   memberRow: { flexDirection: 'row', alignItems: 'center' },
   statusLine: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
+  history: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   recordBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginBottom: 6 },
   recordBtnText: { color: colors.textInverse, fontWeight: '700', fontSize: 13 },
   rentBtn: { paddingHorizontal: spacing.md, paddingVertical: 4 },
