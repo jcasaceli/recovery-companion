@@ -1,15 +1,21 @@
 {
   "expo": {
-    "name": "recovery-companion",
+    "name": "Recovery Companion",
     "slug": "recovery-companion",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.recoverycompanion.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.recoverycompanion.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -23,7 +29,27 @@
     },
     "plugins": [
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Recovery Companion uses your location only when you tap “I’m at a meeting” to record where you checked in."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Recovery Companion needs photo access so you can import a schedule from a picture.",
+          "cameraPermission": "Recovery Companion needs camera access so you can add a photo to a post or schedule."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Recovery Companion needs calendar access to add your meetings and appointments."
+        }
+      ],
+      "expo-notifications"
     ]
   }
 }
