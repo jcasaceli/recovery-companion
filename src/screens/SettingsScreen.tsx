@@ -38,10 +38,19 @@ export function SettingsScreen() {
   }, [isFacilitator]);
 
   const saveHandles = async () => {
-    if (!orgId) return;
+    let id = orgId;
+    if (!id) {
+      const o: any = await getMyOrg().catch(() => null);
+      id = o?.id ?? null;
+      if (id) setOrgId(id);
+    }
+    if (!id) {
+      Alert.alert('One sec', 'Still loading your organization — try again in a moment.');
+      return;
+    }
     try {
-      await setOrgPaymentHandles(orgId, cashapp.trim(), zelle.trim());
-      Alert.alert('Saved', 'Your CashApp and Zelle details were updated.');
+      await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim());
+      Alert.alert('Saved ✅', 'Your CashApp and Zelle details were saved. Members will see them on the Pay rent screen.');
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }

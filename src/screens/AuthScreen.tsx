@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, typography } from '../theme';
 import { Button } from '../components/ui';
@@ -62,7 +62,13 @@ export function AuthScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
         <Text style={styles.emoji}>🌱</Text>
         <Text style={styles.title}>Recovery Companion</Text>
 
@@ -150,6 +156,7 @@ export function AuthScreen() {
 
         {busy ? <ActivityIndicator style={{ marginTop: spacing.lg }} color={colors.primary} /> : null}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -186,7 +193,7 @@ function BackLink({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
   emoji: { fontSize: 48, textAlign: 'center', marginTop: spacing.lg },
   title: { ...typography.h1, textAlign: 'center', marginBottom: spacing.lg },
   lead: { ...typography.bodySecondary, marginBottom: spacing.md },

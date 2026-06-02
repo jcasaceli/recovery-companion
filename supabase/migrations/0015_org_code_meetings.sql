@@ -3,6 +3,10 @@
 
 alter table organizations add column if not exists join_code text unique;
 
+-- Backfill a join code for any existing orgs (created before this feature).
+update organizations set join_code = upper(substr(md5(gen_random_uuid()::text), 1, 6))
+where join_code is null;
+
 -- Recreate the signup trigger to ALSO create the facilitator's organization
 -- (named from signup) with a join code + owner membership.
 create or replace function handle_new_user()
