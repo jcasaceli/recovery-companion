@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,10 +21,20 @@ import {
 
 export function HomeScreen() {
   const nav = useNavigation<any>();
-  const { lovedOne, checkIns, milestones, timeline, backToClients, resetSobrietyDate } = useAppState();
+  const { lovedOne, checkIns, milestones, timeline, backToClients, resetSobrietyDate, addNote } = useAppState();
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertText, setAlertText] = useState('');
+
+  const sendAlert = () => {
+    if (!alertText.trim()) return;
+    addNote(alertText.trim(), 'facilitators'); // visible to the facilitator only
+    setAlertText('');
+    setAlertOpen(false);
+    Alert.alert('Sent to your facilitator', 'They’ll see this on your profile.');
+  };
 
   const onSobrietyDate = (event: any, selected?: Date) => {
     setShowDatePicker(false);
@@ -167,6 +177,35 @@ export function HomeScreen() {
       <TouchableOpacity style={styles.sos} onPress={sos} activeOpacity={0.85}>
         <Text style={styles.sosText}>🆘  Send SOS — alert my facilitator now</Text>
       </TouchableOpacity>
+
+      {/* Flag a message for the facilitator */}
+      {!isFacilitator ? (
+        <TouchableOpacity style={styles.flagBtn} onPress={() => setAlertOpen(true)} activeOpacity={0.8}>
+          <Ionicons name="flag-outline" size={18} color={colors.primary} />
+          <Text style={styles.flagText}>Message my facilitator</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <Modal visible={alertOpen} transparent animationType="fade" onRequestClose={() => setAlertOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.h3}>Message your facilitator</Text>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Only your facilitator will see this.</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={alertText}
+              onChangeText={setAlertText}
+              placeholder="What's going on?"
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+            <Button title="Send" onPress={sendAlert} disabled={!alertText.trim()} />
+            <TouchableOpacity onPress={() => setAlertOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Latest check-in */}
       <SectionTitle>Latest check-in</SectionTitle>
@@ -324,6 +363,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sosText: { color: colors.crisis, fontWeight: '700', fontSize: 14 },
+  flagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, marginBottom: spacing.md },
+  flagText: { color: colors.primary, fontWeight: '600', marginLeft: spacing.xs },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  modalInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: 'top', fontSize: 15, color: colors.textPrimary, marginBottom: spacing.md },
   sobrietyRow: { flexDirection: 'row', alignItems: 'center' },
   hero: {
     backgroundColor: colors.primary,

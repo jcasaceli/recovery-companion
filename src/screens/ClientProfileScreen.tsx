@@ -4,72 +4,75 @@ import { useRoute } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
-import { listMeetingCheckins, getMyOrg } from '../services/db';
+import { listMeetingCheckins, getMyOrg, listMyPayments, listNotes } from '../services/db';
 import { formatDateTime } from '../utils/format';
+
+function money(cents?: number) {
+  return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
+}
+function currentPeriod() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export function ClientProfileScreen() {
   const route = useRoute<any>();
   const { id } = route.params;
-  const { clients, setRent, setClientStatus, selectClient, updateClient } = useAppState();
+  const { clients, setRent, setClientStatus } = useAppState();
   const client = clients.find((c) => c.id === id);
-
-  const [ef, setEf] = useState({
-    firstName: client?.firstName ?? '',
-    lastName: client?.lastName ?? '',
-    houseName: client?.houseName ?? '',
-    phone: client?.phone ?? '',
-    email: client?.email ?? '',
-  });
-  const saveDetails = async () => {
-    try {
-      await updateClient(id, ef);
-      Alert.alert('Saved ✅', 'Client details updated.');
-    } catch (e: any) {
-      Alert.alert('Could not save', e?.message ?? 'Try again.');
-    }
-  };
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
   const [checkins, setCheckins] = useState<any[]>([]);
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
+  const [paidThisMonth, setPaidThisMonth] = useState(0);
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
+    listMyPayments(id).then((pays: any[]) => {
+      const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
+      setPaidThisMonth(sum);
+    }).catch(() => {});
+    // Alerts the client flagged specifically for the facilitator.
+    listNotes(id).then((ns) => setAlerts(ns.filter((n) => n.visibility === 'facilitators'))).catch(() => {});
   }, [id]);
-
-  const inviteMsg = () => {
-    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
-    return `Hi ${client?.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
-  };
-  const textInvite = () => {
-    if (!client?.phone) return;
-    const sep = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() =>
-      Alert.alert('Could not open Messages', 'Try texting them the join code manually.'),
-    );
-  };
-  const emailInvite = () => {
-    if (!client?.email) return;
-    const subject = `Join ${org?.name || 'our sober living'} on Recovery Companion`;
-    Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() =>
-      Alert.alert('Could not open email', 'Try emailing them the join code manually.'),
-    );
-  };
 
   if (!client) {
     return <Screen><Text style={typography.body}>Client not found.</Text></Screen>;
   }
+
+  const rent = client.monthlyRentCents || 0;
+  const rentStatus = rent <= 0 ? 'No rent set'
+    : paidThisMonth >= rent ? `Paid in full (${money(paidThisMonth)})`
+    : paidThisMonth > 0 ? `Partial: ${money(paidThisMonth)} of ${money(rent)}`
+    : `Not paid (${money(rent)} due)`;
+  const rentColor = rent <= 0 ? colors.textMuted : paidThisMonth >= rent ? colors.success : paidThisMonth > 0 ? colors.warning : colors.crisis;
+
+  const inviteMsg = () => {
+    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
+    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
+  };
+  const textInvite = () => {
+    if (!client.phone) return;
+    const sep = Platform.OS === 'ios' ? '&' : '?';
+    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open Messages'));
+  };
+  const emailInvite = () => {
+    if (!client.email) return;
+    const subject = `Join ${org?.name || 'our sober living'} on Recovery Companion`;
+    Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open email'));
+  };
 
   const saveRent = async () => {
     const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
     const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
     try {
       await setRent(id, cents, day);
-      Alert.alert('Saved', `${client.firstName}'s rent was updated.`);
+      Alert.alert('Saved ✅', `${client.firstName}'s rent was updated.`);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
@@ -82,40 +85,24 @@ export function ClientProfileScreen() {
         subtitle={client.houseName || 'Sober Living'}
       />
 
-      <SectionTitle>Details</SectionTitle>
-      <Card>
-        <Text style={styles.label}>First name</Text>
-        <TextInput style={styles.input} value={ef.firstName} onChangeText={(t) => setEf({ ...ef, firstName: t })} placeholderTextColor={colors.textMuted} autoCapitalize="words" />
-        <Text style={styles.label}>Last name</Text>
-        <TextInput style={styles.input} value={ef.lastName} onChangeText={(t) => setEf({ ...ef, lastName: t })} placeholderTextColor={colors.textMuted} autoCapitalize="words" />
-        <Text style={styles.label}>House name</Text>
-        <TextInput style={styles.input} value={ef.houseName} onChangeText={(t) => setEf({ ...ef, houseName: t })} placeholderTextColor={colors.textMuted} />
-        <Text style={styles.label}>Phone</Text>
-        <TextInput style={styles.input} value={ef.phone} onChangeText={(t) => setEf({ ...ef, phone: t })} placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-        <Text style={styles.label}>Email</Text>
-        <TextInput style={styles.input} value={ef.email} onChangeText={(t) => setEf({ ...ef, email: t })} placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
-        <Button title="Save details" onPress={saveDetails} disabled={!ef.firstName.trim()} />
-      </Card>
-
-      {client.phone || client.email ? (
-        <Card>
-          <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
-          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-            Send {client.firstName} your join code to download and join.
-          </Text>
-          {client.phone ? (
-            <>
-              <Button title="📲 Text invite" variant="secondary" onPress={textInvite} />
-              <View style={{ height: spacing.sm }} />
-            </>
-          ) : null}
-          {client.email ? <Button title="✉️ Email invite" variant="secondary" onPress={emailInvite} /> : null}
+      {/* Alerts the client flagged for the facilitator */}
+      {alerts.length ? (
+        <Card style={{ borderWidth: 1, borderColor: colors.crisis }}>
+          <Text style={[typography.body, { fontWeight: '700', color: colors.crisis }]}>⚠️ Alerts from {client.firstName}</Text>
+          {alerts.map((a) => (
+            <View key={a.id} style={styles.alertRow}>
+              <Text style={typography.body}>{a.body}</Text>
+              <Text style={typography.caption}>{formatDateTime(a.createdAt)}</Text>
+            </View>
+          ))}
         </Card>
       ) : null}
 
+      {/* Rent — facilitator-set, with this month's payment status */}
       <SectionTitle>Rent</SectionTitle>
       <Card>
-        <Text style={styles.label}>Monthly rent</Text>
+        <Text style={[styles.statusLine, { color: rentColor }]}>{rentStatus} this month</Text>
+        <Text style={[styles.label, { marginTop: spacing.sm }]}>Monthly rent (you set this)</Text>
         <View style={styles.amtRow}>
           <Text style={styles.dollar}>$</Text>
           <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
@@ -125,18 +112,7 @@ export function ClientProfileScreen() {
         <Button title="Save rent" onPress={saveRent} />
       </Card>
 
-      <SectionTitle>Status</SectionTitle>
-      <Card>
-        <Text style={[typography.body, { marginBottom: spacing.sm }]}>
-          Currently: <Text style={{ fontWeight: '700' }}>{client.status === 'in_care' ? 'In Care' : 'Completed'}</Text>
-        </Text>
-        <Button
-          title={client.status === 'in_care' ? 'Mark as completed' : 'Reactivate (In Care)'}
-          variant="secondary"
-          onPress={() => setClientStatus(id, client.status === 'in_care' ? 'completed' : 'in_care')}
-        />
-      </Card>
-
+      {/* Meetings attended this week */}
       <SectionTitle>Meetings this week</SectionTitle>
       <Card onPress={() => setShowMeetings((v) => !v)}>
         <Text style={styles.meetingCount}>{checkins.length}</Text>
@@ -154,21 +130,47 @@ export function ClientProfileScreen() {
           : null}
       </Card>
 
-      <View style={{ height: spacing.md }} />
-      <Button title={`Open ${client.firstName}'s full view`} onPress={() => selectClient(id)} />
-      <Text style={styles.note}>Opens the full client app (check-ins, tasks, notes, messages).</Text>
+      {/* Status */}
+      <SectionTitle>Status</SectionTitle>
+      <Card>
+        <Text style={[typography.body, { marginBottom: spacing.sm }]}>
+          Currently: <Text style={{ fontWeight: '700' }}>{client.status === 'in_care' ? 'In Care' : 'Completed'}</Text>
+        </Text>
+        <Button
+          title={client.status === 'in_care' ? 'Mark as completed' : 'Reactivate (In Care)'}
+          variant="secondary"
+          onPress={() => setClientStatus(id, client.status === 'in_care' ? 'completed' : 'in_care')}
+        />
+      </Card>
+
+      {/* Invite */}
+      {client.phone || client.email ? (
+        <Card>
+          <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
+          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+            Send {client.firstName} your join code to download and join.
+          </Text>
+          {client.phone ? (
+            <>
+              <Button title="📲 Text invite" variant="secondary" onPress={textInvite} />
+              <View style={{ height: spacing.sm }} />
+            </>
+          ) : null}
+          {client.email ? <Button title="✉️ Email invite" variant="secondary" onPress={emailInvite} /> : null}
+        </Card>
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   label: { ...typography.caption, marginBottom: spacing.xs },
+  statusLine: { fontSize: 16, fontWeight: '700' },
   amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.md },
   dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },
   amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
-  note: { ...typography.caption, textAlign: 'center', marginTop: spacing.sm },
   meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  alertRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
 });
-
