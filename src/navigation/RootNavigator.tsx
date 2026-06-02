@@ -20,6 +20,7 @@ import { CommunityScreen } from '../screens/CommunityScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
 import { PaymentsScreen } from '../screens/PaymentsScreen';
+import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -82,6 +83,7 @@ export function RootNavigator() {
 
 const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Clients: { active: 'people', inactive: 'people-outline' },
+  Payments: { active: 'card', inactive: 'card-outline' },
   Resources: { active: 'heart', inactive: 'heart-outline' },
   Account: { active: 'person-circle', inactive: 'person-circle-outline' },
 };
@@ -101,6 +103,7 @@ function FacilitatorTabs() {
       })}
     >
       <FacTab.Screen name="Clients" component={ClientsScreen} />
+      <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
       <FacTab.Screen name="Resources" component={ResourcesScreen} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
     </FacTab.Navigator>

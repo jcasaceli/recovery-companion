@@ -141,6 +141,20 @@ export type AppRole = 'individual' | 'supporter' | 'facilitator';
 
 export type ClientStatus = 'in_care' | 'completed';
 
+export type PaymentMethod = 'card' | 'cashapp' | 'zelle' | 'cash' | 'other';
+
+export interface Payment {
+  id: string;
+  individualId: string;
+  memberName?: string;
+  amountCents: number;
+  method: PaymentMethod;
+  onTime?: boolean;
+  periodMonth?: string;
+  /** ISO datetime string */
+  paidAt: string;
+}
+
 export type LevelOfCare =
   | 'detox'
   | 'residential'

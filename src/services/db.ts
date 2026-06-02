@@ -20,6 +20,8 @@ import {
   Meeting,
   SobrietyReset,
   MoodLevel,
+  Payment,
+  PaymentMethod,
 } from '../types';
 
 function db() {
@@ -510,6 +512,119 @@ export async function toggleLike(postId: string, like: boolean) {
   } else {
     await db().from('post_likes').delete().eq('post_id', postId).eq('profile_id', u.user.id);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Payments + org settings (CashApp/Zelle), rent settings
+// ---------------------------------------------------------------------------
+
+/** Facilitator: their org row (for CashApp/Zelle + settings). */
+export async function getMyOrg() {
+  const { data: m } = await db().from('org_members').select('org_id').limit(1).maybeSingle();
+  if (!m) return null;
+  const { data } = await db().from('organizations').select('*').eq('id', m.org_id).maybeSingle();
+  return data;
+}
+
+export async function setOrgPaymentHandles(orgId: string, cashapp: string, zelle: string) {
+  const { error } = await db()
+    .from('organizations')
+    .update({ cashapp_tag: cashapp || null, zelle_tag: zelle || null })
+    .eq('id', orgId);
+  if (error) throw error;
+}
+
+/** Facilitator: set a member's monthly rent + due day. */
+export async function setMemberRent(individualId: string, amountCents: number | null, dueDay: number | null) {
+  const { error } = await db()
+    .from('individuals')
+    .update({ monthly_rent_cents: amountCents, rent_due_day: dueDay })
+    .eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Record a payment (facilitator manual entry, or member-reported CashApp/Zelle). */
+export async function recordPayment(p: {
+  individualId: string;
+  orgId?: string;
+  amountCents: number;
+  method: PaymentMethod;
+  onTime?: boolean;
+  periodMonth?: string;
+  paidAt?: string;
+}) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('payments').insert({
+    individual_id: p.individualId,
+    org_id: p.orgId ?? null,
+    amount_cents: p.amountCents,
+    method: p.method,
+    on_time: p.onTime ?? null,
+    period_month: p.periodMonth ?? null,
+    source: 'manual',
+    paid_at: p.paidAt ?? new Date().toISOString(),
+    created_by: u.user?.id ?? null,
+  });
+  if (error) throw error;
+}
+
+/** Facilitator: all payments across their clients (newest first). */
+export async function listOrgPayments(): Promise<Payment[]> {
+  const { data, error } = await db()
+    .from('payments')
+    .select('*, individuals:individual_id(first_name)')
+    .order('paid_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPayment);
+}
+
+/** Member: their own payment history. */
+export async function listMyPayments(individualId: string): Promise<Payment[]> {
+  const { data, error } = await db()
+    .from('payments')
+    .select('*')
+    .eq('individual_id', individualId)
+    .order('paid_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPayment);
+}
+
+/** Member: rent + org payment handles for the Pay rent screen (null if not linked). */
+export async function getResidentContext() {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return null;
+  const { data: ind } = await db()
+    .from('individuals')
+    .select('id, org_id, monthly_rent_cents, rent_due_day')
+    .eq('profile_id', u.user.id)
+    .maybeSingle();
+  if (!ind) return null;
+  const { data: org } = await db()
+    .from('organizations')
+    .select('cashapp_tag, zelle_tag, stripe_account_id')
+    .eq('id', ind.org_id)
+    .maybeSingle();
+  return {
+    individualId: ind.id,
+    rentCents: ind.monthly_rent_cents ?? undefined,
+    dueDay: ind.rent_due_day ?? undefined,
+    cashapp: org?.cashapp_tag ?? undefined,
+    zelle: org?.zelle_tag ?? undefined,
+    stripeConnected: !!org?.stripe_account_id,
+  };
+}
+
+function mapPayment(r: any): Payment {
+  return {
+    id: r.id,
+    individualId: r.individual_id,
+    memberName: r.individuals?.first_name,
+    amountCents: r.amount_cents,
+    method: r.method,
+    onTime: r.on_time ?? undefined,
+    periodMonth: r.period_month ?? undefined,
+    paidAt: r.paid_at,
+  };
 }
 
 // ---------------------------------------------------------------------------

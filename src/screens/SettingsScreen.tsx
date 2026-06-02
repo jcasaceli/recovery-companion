@@ -6,6 +6,7 @@ import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { PROGRAM_LABELS, formatDate, formatDateTime } from '../utils/format';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
+import { getMyOrg, setOrgPaymentHandles } from '../services/db';
 
 export function SettingsScreen() {
   const {
@@ -23,12 +24,28 @@ export function SettingsScreen() {
   const [dateInput, setDateInput] = useState(lovedOne.sobrietyDate ?? '');
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [cashapp, setCashapp] = useState('');
+  const [zelle, setZelle] = useState('');
 
   useEffect(() => {
     if (isFacilitator) {
       getConnectStatus().then(setConnect).catch(() => setConnect(null));
+      getMyOrg().then((o: any) => {
+        if (o) { setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); }
+      }).catch(() => {});
     }
   }, [isFacilitator]);
+
+  const saveHandles = async () => {
+    if (!orgId) return;
+    try {
+      await setOrgPaymentHandles(orgId, cashapp.trim(), zelle.trim());
+      Alert.alert('Saved', 'Your CashApp and Zelle details were updated.');
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    }
+  };
 
   const onboard = async () => {
     setConnectBusy(true);
@@ -90,6 +107,15 @@ export function SettingsScreen() {
               disabled={connectBusy}
             />
             {connectBusy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
+          </Card>
+          <Card>
+            <Text style={[typography.body, { fontWeight: '600' }]}>CashApp & Zelle</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              Members can pay you directly with these. Shown to them on the Pay rent screen.
+            </Text>
+            <TextInput style={styles.input} value={cashapp} onChangeText={setCashapp} placeholder="CashApp tag (e.g. $YourTag)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
+            <TextInput style={styles.input} value={zelle} onChangeText={setZelle} placeholder="Zelle email or phone" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
+            <Button title="Save CashApp / Zelle" variant="secondary" onPress={saveHandles} />
           </Card>
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>

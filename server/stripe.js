@@ -181,6 +181,12 @@ stripeRouter.post('/rent/checkout', async (req, res) => {
         success_url: RETURN_URL,
         cancel_url: RETURN_URL,
         customer_email: user.email || undefined,
+        metadata: {
+          kind: 'rent',
+          individual_id: found.individual.id,
+          org_id: found.org.id,
+          amount_cents: String(amount),
+        },
       },
       { stripeAccount: connectedAccount },
     );
@@ -244,7 +250,25 @@ export async function stripeWebhook(req, res) {
       }
       case 'checkout.session.completed': {
         const s = event.data.object;
-        if (supabaseAdmin && s.metadata?.org_id) {
+        if (supabaseAdmin && s.metadata?.kind === 'rent' && s.metadata.individual_id) {
+          // Record a card rent payment. Compute on-time from the member's due day.
+          const { data: ind } = await supabaseAdmin
+            .from('individuals')
+            .select('rent_due_day')
+            .eq('id', s.metadata.individual_id)
+            .maybeSingle();
+          const now = new Date();
+          const onTime = ind?.rent_due_day ? now.getUTCDate() <= ind.rent_due_day : null;
+          await supabaseAdmin.from('payments').insert({
+            individual_id: s.metadata.individual_id,
+            org_id: s.metadata.org_id ?? null,
+            amount_cents: Number(s.metadata.amount_cents) || s.amount_total || 0,
+            method: 'card',
+            source: 'stripe',
+            on_time: onTime,
+            period_month: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+          });
+        } else if (supabaseAdmin && s.metadata?.org_id) {
           // Platform subscription activated.
           await supabaseAdmin
             .from('organizations')
