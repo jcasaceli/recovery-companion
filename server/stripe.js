@@ -103,11 +103,20 @@ stripeRouter.post('/connect/onboard', async (req, res) => {
     const org = await facilitatorOrg(user.id);
     if (!org) return res.status(400).json({ error: 'No organization found for this user.' });
 
+    const CAPS = { card_payments: { requested: true }, transfers: { requested: true } };
     let accountId = org.stripe_account_id;
     if (!accountId) {
-      const account = await stripe.accounts.create({ type: 'express' });
+      // Request card_payments + transfers so the account can accept rent charges.
+      const account = await stripe.accounts.create({ type: 'express', capabilities: CAPS });
       accountId = account.id;
       await supabaseAdmin.from('organizations').update({ stripe_account_id: accountId }).eq('id', org.id);
+    } else {
+      // Ensure capabilities are requested on accounts created before this fix.
+      try {
+        await stripe.accounts.update(accountId, { capabilities: CAPS });
+      } catch (e) {
+        console.warn('[stripe] capability update', e.message);
+      }
     }
 
     const link = await stripe.accountLinks.create({
