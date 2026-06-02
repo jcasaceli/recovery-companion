@@ -40,7 +40,7 @@ import {
   ClientStatus,
   LevelOfCare,
 } from '../types';
-import { notifyCareTeam, NotifyAudience } from '../services/push';
+import { notifyCareTeam, notifyCare, notifyCommunity, NotifyAudience } from '../services/push';
 import { useAuth } from './auth';
 import * as dbApi from '../services/db';
 import {
@@ -431,11 +431,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, tasks: [task, ...s.tasks] }));
-      notifyCareTeam({
-        title: 'New task added',
-        body: `"${task.title}" was shared with ${state.lovedOne.firstName}.`,
-        audiences: TASK_NOTE_AUDIENCES,
-      });
+      if (cloud && individualId) {
+        notifyCare(individualId, 'New task added', `"${task.title}" was shared.`);
+      } else {
+        notifyCareTeam({ title: 'New task added', body: `"${task.title}" was shared with ${state.lovedOne.firstName}.`, audiences: TASK_NOTE_AUDIENCES });
+      }
     };
 
     const toggleTask = (taskId: string) => {
@@ -458,11 +458,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, notes: [note, ...s.notes] }));
-      notifyCareTeam({
-        title: 'New note added',
-        body: `A note about ${state.lovedOne.firstName} was shared.`,
-        audiences: TASK_NOTE_AUDIENCES,
-      });
+      if (cloud && individualId) {
+        notifyCare(individualId, 'New note added', 'A new note was shared.');
+      } else {
+        notifyCareTeam({ title: 'New note added', body: `A note about ${state.lovedOne.firstName} was shared.`, audiences: TASK_NOTE_AUDIENCES });
+      }
     };
 
     // Resets are LOGGED for the facilitator only and never announced to the
@@ -503,6 +503,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         likedByMe: false,
       };
       setState((s) => ({ ...s, posts: [post, ...s.posts] }));
+      if (cloud) notifyCommunity('New community post', 'Someone shared in the community.');
     };
 
     const togglePostLike = (postId: string) => {

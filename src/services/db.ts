@@ -664,6 +664,14 @@ function mapPayment(r: any): Payment {
 // Push tokens
 // ---------------------------------------------------------------------------
 
+/** Member: opt in/out of community-post push alerts (stored on profile). */
+export async function setCommunityNotify(on: boolean) {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return;
+  const { error } = await db().from('profiles').update({ community_notify: on }).eq('id', u.user.id);
+  if (error) throw error;
+}
+
 export async function savePushToken(token: string, platform: string) {
   const { data: u } = await db().auth.getUser();
   if (!u.user) return;

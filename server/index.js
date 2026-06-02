@@ -18,6 +18,7 @@ import express from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
 import { stripeRouter, stripeWebhook } from './stripe.js';
+import { notifyRouter } from './notify.js';
 
 const PORT = process.env.PORT || 8787;
 // Default to the most capable model. Override with ASSISTANT_MODEL if you want
@@ -85,6 +86,9 @@ app.use(express.json({ limit: '1mb' }));
 
 // Stripe JSON endpoints (onboarding, rent checkout, platform subscription).
 app.use('/api/stripe', stripeRouter);
+
+// Push fan-out endpoints.
+app.use('/api/notify', notifyRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, hasKey: Boolean(apiKey) });

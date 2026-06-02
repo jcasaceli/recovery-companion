@@ -7,6 +7,7 @@ import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { formatDateTime } from '../utils/format';
+import { setCommunityNotify } from '../services/db';
 
 const NOTIFY_KEY = 'community-notify';
 
@@ -39,6 +40,7 @@ export function CommunityScreen() {
   const toggleNotify = async (v: boolean) => {
     setNotify(v);
     AsyncStorage.setItem(NOTIFY_KEY, v ? '1' : '0').catch(() => {});
+    setCommunityNotify(v).catch(() => {}); // server uses this to fan out posts
     if (v) {
       // Make sure we have permission so new-post alerts can be delivered.
       await Notifications.requestPermissionsAsync().catch(() => {});

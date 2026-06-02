@@ -95,8 +95,9 @@ export function HomeScreen() {
       {/* Prominent Pay rent button for members */}
       {!isFacilitator ? (
         <TouchableOpacity style={styles.payRent} activeOpacity={0.85} onPress={() => nav.navigate('Payments')}>
-          <Ionicons name="card" size={26} color={colors.textInverse} />
+          <Ionicons name="card" size={40} color={colors.textInverse} />
           <Text style={styles.payRentText}>Pay rent</Text>
+          <Text style={styles.payRentSub}>Card, CashApp, or Zelle · tap to pay</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -208,16 +209,16 @@ const styles = StyleSheet.create({
   backToClients: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.xs },
   backToClientsText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
   payRent: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accent,
     borderRadius: radius.lg,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.xl + spacing.sm,
     marginBottom: spacing.md,
     ...shadow.card,
   },
-  payRentText: { color: colors.textInverse, fontWeight: '800', fontSize: 20, marginLeft: spacing.sm },
+  payRentText: { color: colors.textInverse, fontWeight: '800', fontSize: 26, marginTop: spacing.xs },
+  payRentSub: { color: colors.textInverse, opacity: 0.9, fontSize: 13, marginTop: 2 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   quick: {
     flex: 1,

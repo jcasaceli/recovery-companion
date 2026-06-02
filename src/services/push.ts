@@ -19,6 +19,37 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { BACKEND_URL } from '../config';
+import { supabase } from './supabase';
+
+async function authToken(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+/** Notify a member's care team (member + facilitators) via the backend. */
+export async function notifyCare(individualId: string, title: string, body: string) {
+  if (!BACKEND_URL) return;
+  const t = await authToken();
+  if (!t) return;
+  fetch(`${BACKEND_URL}/api/notify/care`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ individualId, title, body }),
+  }).catch(() => {});
+}
+
+/** Notify everyone who opted into community alerts. */
+export async function notifyCommunity(title: string, body: string) {
+  if (!BACKEND_URL) return;
+  const t = await authToken();
+  if (!t) return;
+  fetch(`${BACKEND_URL}/api/notify/community`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ title, body }),
+  }).catch(() => {});
+}
 
 // Show notifications while the app is foregrounded too.
 Notifications.setNotificationHandler({

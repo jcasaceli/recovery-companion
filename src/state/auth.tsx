@@ -13,9 +13,25 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import * as dbApi from '../services/db';
+import { registerForPushNotificationsAsync } from '../services/push';
 import { AppRole, Profile } from '../types';
+
+let pushRegistered = false;
+async function registerPush() {
+  if (pushRegistered) return;
+  try {
+    const token = await registerForPushNotificationsAsync();
+    if (token) {
+      await dbApi.savePushToken(token, Platform.OS);
+      pushRegistered = true;
+    }
+  } catch {
+    /* best effort */
+  }
+}
 
 type Status = 'local' | 'loading' | 'signedOut' | 'signedIn';
 
@@ -63,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailVerified: row.email_verified ?? false,
           phoneVerified: row.phone_verified ?? false,
         });
+        registerPush(); // save this device's push token for fan-out
         return;
       }
       // No profile row. Right after signup the trigger may lag a beat — retry

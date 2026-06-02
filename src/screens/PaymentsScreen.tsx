@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, Alert, ActivityIndicator, Linking } 
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { startRentCheckout } from '../services/payments';
+import { notifyCare } from '../services/push';
 import * as dbApi from '../services/db';
 import { PaymentMethod } from '../types';
 
@@ -61,6 +62,7 @@ export function PaymentsScreen() {
         periodMonth: currentPeriod(),
         status: 'reported', // facilitator confirms it was received
       });
+      notifyCare(ctx.individualId, 'Payment reported', `A ${method} payment was reported for confirmation.`);
       Alert.alert('Reported', `Your ${method === 'cashapp' ? 'CashApp' : 'Zelle'} payment was reported to your facilitator. They'll confirm once it's received.`);
     } catch (e: any) {
       Alert.alert('Could not record', e?.message ?? 'Try again.');
