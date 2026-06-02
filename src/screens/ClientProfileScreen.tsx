@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
-import { listMeetingCheckins, getMyOrg, listMyPayments, listNotes } from '../services/db';
+import { listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote } from '../services/db';
 import { formatDateTime } from '../utils/format';
 
 function money(cents?: number) {
@@ -40,6 +40,20 @@ export function ClientProfileScreen() {
     // Alerts the client flagged specifically for the facilitator.
     listNotes(id).then((ns) => setAlerts(ns.filter((n) => n.visibility === 'facilitators'))).catch(() => {});
   }, [id]);
+
+  const dismissAlert = (noteId: string) => {
+    Alert.alert('Dismiss alert?', 'This removes it from the client’s profile.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Dismiss',
+        style: 'destructive',
+        onPress: async () => {
+          setAlerts((a) => a.filter((x) => x.id !== noteId)); // optimistic
+          try { await deleteNote(noteId); } catch { /* will reappear on next load if it failed */ }
+        },
+      },
+    ]);
+  };
 
   if (!client) {
     return <Screen><Text style={typography.body}>Client not found.</Text></Screen>;
@@ -91,8 +105,13 @@ export function ClientProfileScreen() {
           <Text style={[typography.body, { fontWeight: '700', color: colors.crisis }]}>⚠️ Alerts from {client.firstName}</Text>
           {alerts.map((a) => (
             <View key={a.id} style={styles.alertRow}>
-              <Text style={typography.body}>{a.body}</Text>
-              <Text style={typography.caption}>{formatDateTime(a.createdAt)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>{a.body}</Text>
+                <Text style={typography.caption}>{formatDateTime(a.createdAt)}</Text>
+              </View>
+              <TouchableOpacity onPress={() => dismissAlert(a.id)} style={styles.dismissBtn} hitSlop={8}>
+                <Text style={styles.dismissText}>Dismiss</Text>
+              </TouchableOpacity>
             </View>
           ))}
         </Card>
@@ -172,5 +191,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
   meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
-  alertRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 });

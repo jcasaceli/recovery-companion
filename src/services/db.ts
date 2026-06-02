@@ -425,6 +425,12 @@ export async function listNotes(individualId: string): Promise<Note[]> {
   return (data ?? []).map(mapNote);
 }
 
+/** Facilitator: dismiss (delete) a note/alert. */
+export async function deleteNote(noteId: string) {
+  const { error } = await db().from('notes').delete().eq('id', noteId);
+  if (error) throw error;
+}
+
 export async function addNote(
   individualId: string,
   body: string,
