@@ -33,7 +33,9 @@ export function ClientsScreen() {
 
   // add-form
   const [firstName, setFirstName] = useState('');
-  const [orgName, setOrgName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [houseName, setHouseName] = useState('');
+  const [phone, setPhone] = useState('');
 
   const shown = clients.filter((c) => c.status === filter);
   const counts = {
@@ -46,8 +48,14 @@ export function ClientsScreen() {
     if (!firstName.trim()) return;
     setBusy(true);
     try {
-      await createClient({ firstName, orgName: orgName || undefined, levelOfCare: 'sober_living' });
-      setFirstName(''); setOrgName(''); setAdding(false); setFilter('in_care');
+      await createClient({
+        firstName,
+        lastName: lastName || undefined,
+        houseName: houseName || undefined,
+        phone: phone || undefined,
+        levelOfCare: 'sober_living',
+      });
+      setFirstName(''); setLastName(''); setHouseName(''); setPhone(''); setAdding(false); setFilter('in_care');
     } catch (e: any) {
       Alert.alert('Could not add client', e?.message ?? 'Please try again.');
     } finally {
@@ -93,8 +101,10 @@ export function ClientsScreen() {
         {adding ? (
           <Card>
             <SectionTitle>New client (Sober Living)</SectionTitle>
-            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="Client's first name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
-            <TextInput style={styles.input} value={orgName} onChangeText={setOrgName} placeholder="Your organization (optional)" placeholderTextColor={colors.textMuted} />
+            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+            <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+            <TextInput style={styles.input} value={houseName} onChangeText={setHouseName} placeholder="House name (optional)" placeholderTextColor={colors.textMuted} />
+            <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone (optional — to text an app invite)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
             <Button title="Add" onPress={add} disabled={!firstName.trim() || busy} />
             <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
             {busy ? <ActivityIndicator color={colors.primary} /> : null}
@@ -117,8 +127,10 @@ export function ClientsScreen() {
                 <View style={styles.avatar}><Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text></View>
               )}
               <View style={{ flex: 1 }}>
-                <Text style={typography.h3}>{c.firstName}</Text>
-                <Text style={typography.caption}>Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${c.rentDueDay}` : ''}</Text>
+                <Text style={typography.h3}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
+                <Text style={typography.caption}>
+                  {c.houseName ? `${c.houseName} · ` : ''}Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${c.rentDueDay}` : ''}
+                </Text>
               </View>
               {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
             </TouchableOpacity>

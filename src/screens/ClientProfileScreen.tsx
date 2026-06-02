@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
-import { listMeetingCheckins } from '../services/db';
+import { listMeetingCheckins, getMyOrg } from '../services/db';
 import { formatDateTime } from '../utils/format';
 
 export function ClientProfileScreen() {
@@ -17,11 +17,23 @@ export function ClientProfileScreen() {
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
   const [checkins, setCheckins] = useState<any[]>([]);
   const [showMeetings, setShowMeetings] = useState(false);
+  const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
 
   useEffect(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
+    getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
   }, [id]);
+
+  const textInvite = () => {
+    if (!client?.phone) return;
+    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
+    const msg = `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Recovery Companion app to track your progress and pay rent.${code}`;
+    const sep = Platform.OS === 'ios' ? '&' : '?';
+    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(msg)}`).catch(() =>
+      Alert.alert('Could not open Messages', 'Try texting them the join code manually.'),
+    );
+  };
 
   if (!client) {
     return <Screen><Text style={typography.body}>Client not found.</Text></Screen>;
@@ -40,7 +52,20 @@ export function ClientProfileScreen() {
 
   return (
     <Screen>
-      <ScreenTitle title={client.firstName} subtitle="Sober Living" />
+      <ScreenTitle
+        title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
+        subtitle={client.houseName || 'Sober Living'}
+      />
+
+      {client.phone ? (
+        <Card>
+          <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
+          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+            Text {client.firstName} a link + your join code to download and join.
+          </Text>
+          <Button title="📲 Text invite to download" variant="secondary" onPress={textInvite} />
+        </Card>
+      ) : null}
 
       <SectionTitle>Rent</SectionTitle>
       <Card>

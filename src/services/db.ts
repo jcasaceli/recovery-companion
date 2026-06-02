@@ -299,6 +299,9 @@ export async function ensureFacilitatorOrg(name: string): Promise<string> {
 export async function createIndividual(input: {
   orgId: string;
   firstName: string;
+  lastName?: string;
+  phone?: string;
+  houseName?: string;
   programName?: string;
   treatmentStartDate?: string;
   sobrietyDate?: string;
@@ -309,6 +312,9 @@ export async function createIndividual(input: {
     .insert({
       org_id: input.orgId,
       first_name: input.firstName,
+      last_name: input.lastName ?? null,
+      phone: input.phone ?? null,
+      house_name: input.houseName ?? null,
       program_name: input.programName ?? null,
       treatment_start_date: input.treatmentStartDate ?? null,
       sobriety_date: input.sobrietyDate ?? null,

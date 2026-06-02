@@ -169,6 +169,9 @@ export type LevelOfCare =
 export interface ClientSummary {
   id: string;
   firstName: string;
+  lastName?: string;
+  phone?: string;
+  houseName?: string;
   programName?: string;
   status: ClientStatus;
   levelOfCare?: LevelOfCare;

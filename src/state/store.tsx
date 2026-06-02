@@ -111,6 +111,9 @@ interface AppState extends PersistedState {
   /** Facilitator: create a client (individual) under their org, then load it. */
   createClient: (input: {
     firstName: string;
+    lastName?: string;
+    phone?: string;
+    houseName?: string;
     programName?: string;
     treatmentStartDate?: string;
     sobrietyDate?: string;
@@ -278,6 +281,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const clients = list.map((c: any) => ({
           id: c.id,
           firstName: c.first_name,
+          lastName: c.last_name ?? undefined,
+          phone: c.phone ?? undefined,
+          houseName: c.house_name ?? undefined,
           programName: c.program_name ?? undefined,
           status: (c.status ?? 'in_care') as 'in_care' | 'completed',
           levelOfCare: c.level_of_care ?? undefined,
@@ -546,6 +552,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       await dbApi.createIndividual({
         orgId,
         firstName: input.firstName.trim(),
+        lastName: input.lastName?.trim() || undefined,
+        phone: input.phone?.trim() || undefined,
+        houseName: input.houseName?.trim() || undefined,
         programName: input.programName?.trim() || undefined,
         treatmentStartDate: input.treatmentStartDate || undefined,
         sobrietyDate: input.sobrietyDate || undefined,
