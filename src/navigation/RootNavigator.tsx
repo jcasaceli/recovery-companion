@@ -23,6 +23,8 @@ import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
 import { PaymentsScreen } from '../screens/PaymentsScreen';
 import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen';
+import { AgreementViewScreen } from '../screens/AgreementViewScreen';
+import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -41,6 +43,7 @@ function ClientsStack() {
     >
       <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false }} />
       <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Client' }} />
+      <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
     </ClientsStackNav.Navigator>
   );
 }
@@ -155,6 +158,8 @@ function MainStack() {
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
       <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay rent' }} />
+      <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
+      <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </RootStack.Navigator>
   );

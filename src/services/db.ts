@@ -251,6 +251,98 @@ export async function recordMeetingCheckin(
   if (error) throw error;
 }
 
+// ── Membership agreements ────────────────────────────────────────────────────
+
+export interface Agreement {
+  id: string;
+  individualId: string;
+  title: string;
+  documentData?: string;       // base64 data URI of the uploaded document photo
+  status: 'pending' | 'signed';
+  signaturePaths?: string[];   // SVG path strings making up the signature
+  signerName?: string;
+  signedAt?: string;
+  createdAt: string;
+}
+
+function mapAgreement(r: any): Agreement {
+  return {
+    id: r.id,
+    individualId: r.individual_id,
+    title: r.title,
+    documentData: r.document_data ?? undefined,
+    status: (r.status ?? 'pending') as 'pending' | 'signed',
+    signaturePaths: r.signature_paths ?? undefined,
+    signerName: r.signer_name ?? undefined,
+    signedAt: r.signed_at ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+/** Facilitator: upload a membership agreement (document photo) for a resident. */
+export async function createAgreement(input: {
+  orgId?: string;
+  individualId: string;
+  title: string;
+  documentData?: string;
+}) {
+  const { error } = await db().from('agreements').insert({
+    org_id: input.orgId ?? null,
+    individual_id: input.individualId,
+    title: input.title,
+    document_data: input.documentData ?? null,
+  });
+  if (error) throw error;
+}
+
+// Light columns for lists (excludes the large document_data blob).
+const AGREEMENT_LIST_COLS = 'id,individual_id,title,status,signature_paths,signer_name,signed_at,created_at';
+
+/** Agreements for a given resident (facilitator view, or self if it's the member). */
+export async function listAgreements(individualId: string): Promise<Agreement[]> {
+  const { data, error } = await db()
+    .from('agreements')
+    .select(AGREEMENT_LIST_COLS)
+    .eq('individual_id', individualId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapAgreement);
+}
+
+/** Full agreement including the document image (for the view/sign screen). */
+export async function getAgreement(id: string): Promise<Agreement | null> {
+  const { data, error } = await db().from('agreements').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? mapAgreement(data) : null;
+}
+
+/** Member: agreements assigned to me (resolves my individual record first). */
+export async function listMyAgreements(): Promise<Agreement[]> {
+  const me = await resolveMyIndividual();
+  if (!me) return [];
+  return listAgreements(me.individualId);
+}
+
+/** Member: sign an agreement. Stores the signature strokes + name + timestamp. */
+export async function signAgreement(id: string, signaturePaths: string[], signerName: string) {
+  const { error } = await db()
+    .from('agreements')
+    .update({
+      signature_paths: signaturePaths,
+      signer_name: signerName,
+      signed_at: new Date().toISOString(),
+      status: 'signed',
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Facilitator: remove an agreement. */
+export async function deleteAgreement(id: string) {
+  const { error } = await db().from('agreements').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** Meeting check-ins for a client (optionally since an ISO datetime). */
 export async function listMeetingCheckins(individualId: string, sinceISO?: string) {
   let q = db().from('meeting_checkins').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });

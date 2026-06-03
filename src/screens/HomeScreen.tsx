@@ -96,6 +96,7 @@ export function HomeScreen() {
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
+    { label: 'Agreements', icon: 'document-text-outline', screen: 'Agreements' },
   ];
 
   return (

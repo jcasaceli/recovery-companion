@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator } from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
-import { listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote } from '../services/db';
-import { formatDateTime } from '../utils/format';
+import {
+  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
+  listAgreements, createAgreement, deleteAgreement, Agreement,
+} from '../services/db';
+import { formatDateTime, formatDate } from '../utils/format';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -25,14 +29,22 @@ export function ClientProfileScreen() {
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
   const [checkins, setCheckins] = useState<any[]>([]);
   const [showMeetings, setShowMeetings] = useState(false);
-  const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
+  const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [agreements, setAgreements] = useState<Agreement[]>([]);
+  const [pendingDoc, setPendingDoc] = useState<string | null>(null); // base64 data URI awaiting a title
+  const [docTitle, setDocTitle] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const nav = useNavigation<any>();
+
+  const loadAgreements = () => listAgreements(id).then(setAgreements).catch(() => {});
 
   useEffect(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
-    getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
+    getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
+    loadAgreements();
     listMyPayments(id).then((pays: any[]) => {
       const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
       setPaidThisMonth(sum);
@@ -92,6 +104,53 @@ export function ClientProfileScreen() {
     }
   };
 
+  const pickFrom = async (source: 'camera' | 'library') => {
+    const perm = source === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Alert.alert('Permission needed', `Allow ${source === 'camera' ? 'camera' : 'photo'} access to add the document.`);
+      return;
+    }
+    const opts: ImagePicker.ImagePickerOptions = { quality: 0.3, base64: true, allowsEditing: false };
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync(opts)
+      : await ImagePicker.launchImageLibraryAsync(opts);
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    setPendingDoc(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    setDocTitle('Membership Agreement');
+  };
+
+  const uploadAgreement = () => {
+    Alert.alert('Add membership agreement', 'Add a photo of the signed-paper agreement, or pick one from your library.', [
+      { text: 'Take photo', onPress: () => pickFrom('camera') },
+      { text: 'Choose from library', onPress: () => pickFrom('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const saveAgreement = async () => {
+    if (!pendingDoc || !docTitle.trim()) return;
+    setUploading(true);
+    try {
+      await createAgreement({ orgId: org?.id, individualId: id, title: docTitle.trim(), documentData: pendingDoc });
+      setPendingDoc(null); setDocTitle('');
+      loadAgreements();
+      Alert.alert('Sent ✅', `${client.firstName} can now review and sign “${docTitle.trim()}”.`);
+    } catch (e: any) {
+      Alert.alert('Could not upload', e?.message ?? 'Try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAgreement = (a: Agreement) => {
+    Alert.alert('Delete agreement?', `Remove “${a.title}”? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteAgreement(a.id).catch(() => {}); loadAgreements(); } },
+    ]);
+  };
+
   return (
     <Screen>
       <ScreenTitle
@@ -149,6 +208,53 @@ export function ClientProfileScreen() {
           : null}
       </Card>
 
+      {/* Membership agreements */}
+      <SectionTitle>Membership agreements</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Upload an agreement for {client.firstName} to review and sign. Signed copies appear here.
+        </Text>
+        <Button title="📄 Upload agreement" onPress={uploadAgreement} />
+        {agreements.length ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {agreements.map((a) => (
+              <TouchableOpacity
+                key={a.id}
+                style={styles.agreementRow}
+                activeOpacity={0.7}
+                onPress={() => nav.navigate('AgreementView', { id: a.id })}
+                onLongPress={() => removeAgreement(a)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>{a.title}</Text>
+                  <Text style={[typography.caption, { color: a.status === 'signed' ? colors.success : colors.warning }]}>
+                    {a.status === 'signed' ? `✓ Signed by ${a.signerName ?? 'resident'}${a.signedAt ? ` · ${formatDate(a.signedAt)}` : ''}` : '⏳ Awaiting signature'}
+                  </Text>
+                </View>
+                <Text style={styles.chevronSm}>›</Text>
+              </TouchableOpacity>
+            ))}
+            <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press to delete.</Text>
+          </View>
+        ) : null}
+      </Card>
+
+      {/* Title prompt after picking a document */}
+      <Modal visible={!!pendingDoc} transparent animationType="fade" onRequestClose={() => setPendingDoc(null)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Name this agreement</Text>
+            {pendingDoc ? <Image source={{ uri: pendingDoc }} style={styles.docPreview} resizeMode="contain" /> : null}
+            <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Membership Agreement 2026" placeholderTextColor={colors.textMuted} />
+            <Button title={uploading ? 'Sending…' : 'Send to resident'} onPress={saveAgreement} disabled={uploading || !docTitle.trim()} />
+            {uploading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} /> : null}
+            <TouchableOpacity onPress={() => setPendingDoc(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Status */}
       <SectionTitle>Status</SectionTitle>
       <Card>
@@ -194,4 +300,9 @@ const styles = StyleSheet.create({
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  agreementRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  chevronSm: { fontSize: 22, color: colors.textMuted, marginLeft: spacing.sm },
+  docPreview: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, marginVertical: spacing.sm },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
+  modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
 });
