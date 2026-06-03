@@ -8,6 +8,7 @@ import { useAppState } from '../state/store';
 import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
+  listUATests, createUATest, deleteUATest, UATest, UAResult,
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
 
@@ -40,11 +41,50 @@ export function ClientProfileScreen() {
 
   const loadAgreements = () => listAgreements(id).then(setAgreements).catch(() => {});
 
+  const [uaTests, setUaTests] = useState<UATest[]>([]);
+  const [uaOpen, setUaOpen] = useState(false);
+  const [uaDate, setUaDate] = useState(new Date().toISOString().slice(0, 10));
+  const [uaResult, setUaResult] = useState<UAResult>('negative');
+  const [uaSubstances, setUaSubstances] = useState('');
+  const [uaNotes, setUaNotes] = useState('');
+  const [uaSaving, setUaSaving] = useState(false);
+  const loadUA = () => listUATests(id).then(setUaTests).catch(() => {});
+
+  const saveUA = async () => {
+    setUaSaving(true);
+    try {
+      await createUATest({
+        orgId: org?.id, individualId: id, testedAt: uaDate, result: uaResult,
+        substances: uaResult === 'positive' ? uaSubstances.trim() || undefined : undefined,
+        notes: uaNotes.trim() || undefined,
+      });
+      setUaOpen(false); setUaResult('negative'); setUaSubstances(''); setUaNotes('');
+      setUaDate(new Date().toISOString().slice(0, 10));
+      loadUA();
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    } finally {
+      setUaSaving(false);
+    }
+  };
+
+  const removeUA = (t: UATest) => {
+    Alert.alert('Delete UA result?', `${t.testedAt} · ${t.result}. This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteUATest(t.id).catch(() => {}); loadUA(); } },
+    ]);
+  };
+
+  const UA_COLOR: Record<UAResult, string> = {
+    negative: colors.success, positive: colors.crisis, refused: colors.warning, pending: colors.textMuted,
+  };
+
   useEffect(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     loadAgreements();
+    loadUA();
     listMyPayments(id).then((pays: any[]) => {
       const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
       setPaidThisMonth(sum);
@@ -208,6 +248,61 @@ export function ClientProfileScreen() {
           : null}
       </Card>
 
+      {/* UA / drug-test logs */}
+      <SectionTitle>UA / drug tests</SectionTitle>
+      <Card>
+        <Button title="➕ Log a UA result" onPress={() => setUaOpen(true)} />
+        {uaTests.length ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {uaTests.map((t) => (
+              <TouchableOpacity key={t.id} style={styles.uaRow} activeOpacity={0.7} onLongPress={() => removeUA(t)}>
+                <View style={[styles.uaDot, { backgroundColor: UA_COLOR[t.result] }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>
+                    {formatDate(t.testedAt)} · <Text style={{ fontWeight: '700', color: UA_COLOR[t.result] }}>{t.result.toUpperCase()}</Text>
+                  </Text>
+                  {t.substances ? <Text style={typography.caption}>Detected: {t.substances}</Text> : null}
+                  {t.notes ? <Text style={typography.caption}>{t.notes}</Text> : null}
+                </View>
+              </TouchableOpacity>
+            ))}
+            <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press a result to delete.</Text>
+          </View>
+        ) : (
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>No tests logged yet.</Text>
+        )}
+      </Card>
+
+      <Modal visible={uaOpen} transparent animationType="fade" onRequestClose={() => setUaOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Log UA · {client.firstName}</Text>
+            <Text style={[styles.label, { marginTop: spacing.sm }]}>Test date (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} value={uaDate} onChangeText={setUaDate} placeholder="2026-06-03" placeholderTextColor={colors.textMuted} />
+            <Text style={styles.label}>Result</Text>
+            <View style={styles.uaChips}>
+              {(['negative', 'positive', 'refused', 'pending'] as UAResult[]).map((r) => (
+                <TouchableOpacity key={r} onPress={() => setUaResult(r)} style={[styles.uaChip, uaResult === r ? { backgroundColor: UA_COLOR[r] } : null]}>
+                  <Text style={[styles.uaChipText, uaResult === r ? { color: colors.textInverse, fontWeight: '700' } : null]}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {uaResult === 'positive' ? (
+              <>
+                <Text style={styles.label}>Substances detected</Text>
+                <TextInput style={styles.input} value={uaSubstances} onChangeText={setUaSubstances} placeholder="e.g. THC, Opioids" placeholderTextColor={colors.textMuted} />
+              </>
+            ) : null}
+            <Text style={styles.label}>Notes (optional)</Text>
+            <TextInput style={styles.input} value={uaNotes} onChangeText={setUaNotes} placeholder="Observed collection, etc." placeholderTextColor={colors.textMuted} />
+            <Button title={uaSaving ? 'Saving…' : 'Save result'} onPress={saveUA} disabled={uaSaving} />
+            <TouchableOpacity onPress={() => setUaOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Membership agreements */}
       <SectionTitle>Membership agreements</SectionTitle>
       <Card>
@@ -305,4 +400,9 @@ const styles = StyleSheet.create({
   docPreview: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, marginVertical: spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  uaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  uaDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
+  uaChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  uaChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm },
+  uaChipText: { fontSize: 13, color: colors.textSecondary, textTransform: 'capitalize' },
 });

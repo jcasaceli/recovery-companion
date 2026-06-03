@@ -21,6 +21,7 @@ import cron from 'node-cron';
 import { stripeRouter, stripeWebhook } from './stripe.js';
 import { notifyRouter } from './notify.js';
 import { accountRouter } from './account.js';
+import { managersRouter } from './managers.js';
 import { runRentReminders } from './reminders.js';
 
 const PORT = process.env.PORT || 8787;
@@ -100,6 +101,7 @@ app.use('/api/stripe', stripeRouter);
 // Push fan-out endpoints.
 app.use('/api/notify', notifyRouter);
 app.use('/api/account', accountRouter);
+app.use('/api/managers', managersRouter);
 
 // Manual trigger for rent reminders (handy for testing the cron logic).
 app.get('/api/reminders/run', async (_req, res) => {

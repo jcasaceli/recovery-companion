@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
@@ -7,6 +7,7 @@ import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
 import { getMyOrg, setOrgPaymentHandles } from '../services/db';
 import { deleteAccount } from '../services/account';
+import { listManagers, addManager, removeManager, Manager } from '../services/managers';
 
 export function SettingsScreen() {
   const { resetApp } = useAppState();
@@ -20,14 +21,56 @@ export function SettingsScreen() {
   const [zelle, setZelle] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  // Owner vs house manager: the owner is the profile that created the org.
+  const [isOwner, setIsOwner] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [managers, setManagers] = useState<Manager[]>([]);
+  const [priceConfigured, setPriceConfigured] = useState(true);
+  const [mgrOpen, setMgrOpen] = useState(false);
+  const [mgrName, setMgrName] = useState('');
+  const [mgrEmail, setMgrEmail] = useState('');
+  const [mgrBusy, setMgrBusy] = useState(false);
+  const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
+
+  const loadManagers = () => listManagers()
+    .then((r) => { setManagers(r.managers); setPriceConfigured(r.priceConfigured); })
+    .catch(() => {});
+
   useEffect(() => {
     if (isFacilitator) {
       getConnectStatus().then(setConnect).catch(() => setConnect(null));
       getMyOrg().then((o: any) => {
-        if (o) { setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); }
+        if (o) {
+          setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setOrgName(o.name ?? '');
+          const owner = !!o.created_by && o.created_by === auth.session?.user?.id;
+          setIsOwner(owner);
+          if (owner) loadManagers();
+        }
       }).catch(() => {});
     }
   }, [isFacilitator]);
+
+  const addMgr = async () => {
+    if (!mgrName.trim() || !mgrEmail.trim()) return;
+    setMgrBusy(true);
+    try {
+      const r = await addManager(mgrName.trim(), mgrEmail.trim());
+      setNewCreds({ email: r.email, password: r.password });
+      setMgrOpen(false); setMgrName(''); setMgrEmail('');
+      loadManagers();
+    } catch (e: any) {
+      Alert.alert('Could not add manager', e?.message ?? 'Try again.');
+    } finally {
+      setMgrBusy(false);
+    }
+  };
+
+  const removeMgr = (m: Manager) => {
+    Alert.alert('Remove house manager?', `${m.name ?? m.email} will lose access and their $25/mo seat will be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => { await removeManager(m.id).catch(() => {}); loadManagers(); } },
+    ]);
+  };
 
   const saveHandles = async () => {
     let id = orgId;
@@ -113,7 +156,17 @@ export function SettingsScreen() {
     <Screen>
       <ScreenTitle title="Settings" />
 
-      {isFacilitator ? (
+      {isFacilitator && !isOwner ? (
+        <Card style={{ borderWidth: 1, borderColor: colors.primary }}>
+          <Text style={[typography.body, { fontWeight: '600' }]}>House manager</Text>
+          <Text style={[typography.caption, { marginTop: 2 }]}>
+            You're a house manager{orgName ? ` for ${orgName}` : ''}. You can manage residents, UAs,
+            payments, and agreements. Billing is handled by the owner.
+          </Text>
+        </Card>
+      ) : null}
+
+      {isOwner ? (
         <>
           <SectionTitle>Payments</SectionTitle>
           <Card>
@@ -148,6 +201,31 @@ export function SettingsScreen() {
             </Text>
             <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
           </Card>
+
+          <SectionTitle>House managers</SectionTitle>
+          <Card>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+              Add staff who can manage residents, UAs, payments, and agreements — but not billing.
+              Each house manager is +$25/month.
+            </Text>
+            {managers.map((m) => (
+              <View key={m.id} style={styles.mgrRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>{m.name || m.email}</Text>
+                  {m.name ? <Text style={typography.caption}>{m.email}</Text> : null}
+                </View>
+                <TouchableOpacity onPress={() => removeMgr(m)} hitSlop={8}>
+                  <Text style={{ color: colors.crisis, fontWeight: '600' }}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <Button title="➕ Add house manager (+$25/mo)" variant="secondary" onPress={() => setMgrOpen(true)} />
+            {!priceConfigured ? (
+              <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.warning }]}>
+                Note: the $25/mo seat price isn't configured yet, so managers won't be auto-billed until it's set up.
+              </Text>
+            ) : null}
+          </Card>
         </>
       ) : null}
 
@@ -181,6 +259,43 @@ export function SettingsScreen() {
         <Button title="Start over (clear data)" variant="secondary" onPress={confirmReset} />
       )}
       <Text style={styles.version}>Sober Living Companion · preview build</Text>
+
+      {/* Add house manager */}
+      <Modal visible={mgrOpen} transparent animationType="fade" onRequestClose={() => setMgrOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Add house manager</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              We'll create their login and show you a temporary password to share. +$25/month.
+            </Text>
+            <TextInput style={styles.input} value={mgrName} onChangeText={setMgrName} placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+            <TextInput style={styles.input} value={mgrEmail} onChangeText={setMgrEmail} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+            <Button title={mgrBusy ? 'Creating…' : 'Create manager (+$25/mo)'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
+            <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* One-time temp-password reveal */}
+      <Modal visible={!!newCreds} transparent animationType="fade" onRequestClose={() => setNewCreds(null)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Manager created ✅</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              Share these with your house manager. The password won't be shown again — they can change it after signing in.
+            </Text>
+            <View style={styles.credBox}>
+              <Text style={styles.credLabel}>Email</Text>
+              <Text selectable style={styles.credValue}>{newCreds?.email}</Text>
+              <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
+              <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
+            </View>
+            <Button title="Done" onPress={() => setNewCreds(null)} />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -197,4 +312,10 @@ const styles = StyleSheet.create({
   version: { ...typography.caption, textAlign: 'center', marginTop: spacing.lg, color: colors.textMuted },
   deleteBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
   deleteText: { color: colors.crisis, fontWeight: '600' },
+  mgrRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider, marginBottom: spacing.sm },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
+  modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  credBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  credLabel: { ...typography.caption, color: colors.textMuted },
+  credValue: { ...typography.body, fontWeight: '700' },
 });

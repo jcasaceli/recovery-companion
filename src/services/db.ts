@@ -251,6 +251,74 @@ export async function recordMeetingCheckin(
   if (error) throw error;
 }
 
+// ── UA / drug-test logs ──────────────────────────────────────────────────────
+
+export type UAResult = 'negative' | 'positive' | 'refused' | 'pending';
+export interface UATest {
+  id: string;
+  individualId: string;
+  testedAt: string;       // 'YYYY-MM-DD'
+  result: UAResult;
+  substances?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+function mapUA(r: any): UATest {
+  return {
+    id: r.id,
+    individualId: r.individual_id,
+    testedAt: r.tested_at,
+    result: (r.result ?? 'negative') as UAResult,
+    substances: r.substances ?? undefined,
+    notes: r.notes ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+/** Facilitator/manager: log a UA (drug test) result for a resident. */
+export async function createUATest(input: {
+  orgId?: string;
+  individualId: string;
+  testedAt?: string;
+  result: UAResult;
+  substances?: string;
+  notes?: string;
+}) {
+  const { error } = await db().from('ua_tests').insert({
+    org_id: input.orgId ?? null,
+    individual_id: input.individualId,
+    tested_at: input.testedAt ?? new Date().toISOString().slice(0, 10),
+    result: input.result,
+    substances: input.substances ?? null,
+    notes: input.notes ?? null,
+  });
+  if (error) throw error;
+}
+
+/** UA history for a resident (facilitator view, or the resident's own). */
+export async function listUATests(individualId: string): Promise<UATest[]> {
+  const { data, error } = await db()
+    .from('ua_tests')
+    .select('*')
+    .eq('individual_id', individualId)
+    .order('tested_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapUA);
+}
+
+/** Resident: my own UA history. */
+export async function listMyUATests(): Promise<UATest[]> {
+  const me = await resolveMyIndividual();
+  if (!me) return [];
+  return listUATests(me.individualId);
+}
+
+export async function deleteUATest(id: string) {
+  const { error } = await db().from('ua_tests').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Membership agreements ────────────────────────────────────────────────────
 
 export interface Agreement {
