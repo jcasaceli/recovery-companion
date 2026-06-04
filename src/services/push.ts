@@ -51,21 +51,24 @@ export async function notifyCommunity(title: string, body: string) {
   }).catch(() => {});
 }
 
-// Show notifications while the app is foregrounded too.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Show notifications while the app is foregrounded too. (Native only.)
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 /**
  * Ask for permission and return this device's Expo push token (or null if
  * unavailable, e.g. a simulator). Safe to call on every app start.
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  if (Platform.OS === 'web') return null; // no native push on web
   if (!Device.isDevice) return null; // push tokens require a physical device
 
   const { status: existing } = await Notifications.getPermissionsAsync();
