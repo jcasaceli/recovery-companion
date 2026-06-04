@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert, TextInput, TouchableOpacity } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
@@ -25,19 +24,6 @@ export function ScheduleScreen() {
     setTitle(''); setTime(''); setLocation(''); setAdding(false);
   };
 
-  // Photo import (OCR stubbed): add example events so the flow is demoable.
-  const importFromPhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Camera needed', 'Allow camera access to photograph a schedule.'); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
-    if (result.canceled) return;
-    const today = new Date().toISOString().slice(0, 10);
-    addScheduleEvents([
-      { title: 'Group session', date: today, startTime: '10:00', endTime: '11:00', location: 'Room 2', source: 'photo', createdByName: 'You' },
-      { title: 'Individual counseling', date: today, startTime: '14:00', source: 'photo', createdByName: 'You' },
-    ]);
-    Alert.alert('Schedule imported (demo)', 'In production the photo is read automatically. For now I added two example events.');
-  };
 
   const addToCalendar = async (e: ScheduleEvent) => {
     try {
@@ -74,11 +60,7 @@ export function ScheduleScreen() {
       <Card>
         <SectionTitle>Add an event</SectionTitle>
         {!adding ? (
-          <>
-            <Button title="+ Add manually" onPress={() => setAdding(true)} />
-            <View style={{ height: spacing.sm }} />
-            <Button title="📷 Import from a photo" variant="secondary" onPress={importFromPhoto} />
-          </>
+          <Button title="+ Add an event" onPress={() => setAdding(true)} />
         ) : (
           <>
             <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Event title (e.g. NA meeting)" placeholderTextColor={colors.textMuted} />

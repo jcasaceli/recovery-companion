@@ -750,6 +750,7 @@ export async function listPosts() {
   if (error) throw error;
   return (data ?? []).map((p: any) => ({
     id: p.id,
+    authorId: p.author_id ?? undefined,
     authorName: p.profiles?.full_name ?? 'Member',
     authorRole: p.profiles?.role ?? 'individual',
     text: p.body,
@@ -758,6 +759,17 @@ export async function listPosts() {
     likes: p.post_likes?.length ?? 0,
     likedByMe: (p.post_likes ?? []).some((l: any) => l.profile_id === u.user?.id),
   }));
+}
+
+/** Report a community post as objectionable (content moderation). */
+export async function reportPost(postId: string, reason?: string) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('content_reports').insert({
+    post_id: postId,
+    reporter_id: u.user?.id,
+    reason: reason ?? null,
+  });
+  if (error) throw error;
 }
 
 export async function createPost(body: string, imagePath?: string) {

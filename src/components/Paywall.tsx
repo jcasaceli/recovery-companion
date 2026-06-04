@@ -43,13 +43,21 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
           <Text key={p} style={styles.perk}>✓ {p}</Text>
         ))}
       </View>
-      <Button title="Subscribe — $60/mo" onPress={subscribe} disabled={busy} />
-      {busy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
-      <Text style={styles.fine}>
-        {Platform.OS === 'ios'
-          ? 'Secure checkout opens in your browser. Rent paid by your residents goes 100% to you.'
-          : 'Secure checkout. Rent paid by your residents goes 100% to you.'}
-      </Text>
+      {Platform.OS === 'ios' ? (
+        // Apple disallows unlocking app features via outside payment, so on iOS
+        // we don't sell/link the subscription in-app — it's managed on the web.
+        <Text style={styles.fine}>
+          Your account isn't active yet. Activate your subscription from the web
+          dashboard at soberlivingcompanion.com, then sign in here to manage your
+          residents.
+        </Text>
+      ) : (
+        <>
+          <Button title="Subscribe — $60/mo" onPress={subscribe} disabled={busy} />
+          {busy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
+          <Text style={styles.fine}>Secure checkout. Rent paid by your residents goes 100% to you.</Text>
+        </>
+      )}
     </Card>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Switch, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
@@ -7,9 +7,10 @@ import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { formatDateTime } from '../utils/format';
-import { setCommunityNotify } from '../services/db';
+import { setCommunityNotify, reportPost } from '../services/db';
 
 const NOTIFY_KEY = 'community-notify';
+const BLOCKED_KEY = 'community-blocked';
 
 /** Renders post text with @mentions highlighted. */
 function PostText({ text }: { text: string }) {
@@ -32,10 +33,38 @@ export function CommunityScreen() {
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [notify, setNotify] = useState(false);
+  const [blocked, setBlocked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIFY_KEY).then((v) => setNotify(v === '1')).catch(() => {});
+    AsyncStorage.getItem(BLOCKED_KEY).then((v) => { if (v) setBlocked(new Set(JSON.parse(v))); }).catch(() => {});
   }, []);
+
+  const persistBlocked = (s: Set<string>) => {
+    setBlocked(new Set(s));
+    AsyncStorage.setItem(BLOCKED_KEY, JSON.stringify([...s])).catch(() => {});
+  };
+
+  const moderate = (post: { id: string; authorId?: string; authorName: string }) => {
+    Alert.alert('Post options', undefined, [
+      {
+        text: 'Report post',
+        onPress: () => {
+          reportPost(post.id).catch(() => {});
+          Alert.alert('Reported', 'Thanks. Our team reviews reported content within 24 hours.');
+        },
+      },
+      {
+        text: `Block ${post.authorName}`,
+        style: 'destructive',
+        onPress: () => {
+          if (post.authorId) { const s = new Set(blocked); s.add(post.authorId); persistBlocked(s); }
+          else Alert.alert("Can't block", 'This is sample content.');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   const toggleNotify = async (v: boolean) => {
     setNotify(v);
@@ -65,6 +94,11 @@ export function CommunityScreen() {
     <Screen>
       <ScreenTitle title="Community" subtitle="Share your journey & support each other" />
 
+      <Text style={styles.guidelines}>
+        Be respectful. Harassment, hate, and other objectionable content aren't allowed.
+        Tap ⋯ on any post to report it or block the person.
+      </Text>
+
       <Card style={styles.notifyRow}>
         <View style={{ flex: 1 }}>
           <Text style={typography.body}>🔔 Notify me of new posts</Text>
@@ -93,16 +127,19 @@ export function CommunityScreen() {
         </View>
       </Card>
 
-      {posts.map((p) => (
+      {posts.filter((p) => !(p.authorId && blocked.has(p.authorId))).map((p) => (
         <Card key={p.id}>
           <View style={styles.postHeader}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{p.authorName.charAt(0)}</Text>
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.author}>{p.authorName}</Text>
               <Text style={typography.caption}>{formatDateTime(p.createdAt)}</Text>
             </View>
+            <TouchableOpacity onPress={() => moderate(p)} hitSlop={10} style={styles.moreBtn}>
+              <Text style={styles.moreText}>⋯</Text>
+            </TouchableOpacity>
           </View>
           {p.text ? <PostText text={p.text} /> : null}
           {p.imageUri ? <Image source={{ uri: p.imageUri }} style={styles.postImage} /> : null}
@@ -116,6 +153,9 @@ export function CommunityScreen() {
 }
 
 const styles = StyleSheet.create({
+  guidelines: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
+  moreBtn: { paddingHorizontal: spacing.sm },
+  moreText: { fontSize: 22, color: colors.textMuted, fontWeight: '700' },
   notifyRow: { flexDirection: 'row', alignItems: 'center' },
   input: {
     backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md,

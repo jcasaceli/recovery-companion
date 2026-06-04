@@ -250,6 +250,8 @@ export interface SobrietyReset {
 
 export interface CommunityPost {
   id: string;
+  /** Author's profile id (for blocking). Optional on demo/local posts. */
+  authorId?: string;
   authorName: string;
   authorRole: AppRole;
   text: string;

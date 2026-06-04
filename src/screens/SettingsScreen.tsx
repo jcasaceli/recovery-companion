@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
@@ -199,7 +199,13 @@ export function SettingsScreen() {
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               $60/month to use Sober Living Companion for your sober living.
             </Text>
-            <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
+            {Platform.OS === 'ios' ? (
+              <Text style={typography.caption}>
+                Manage your subscription from the web dashboard at soberlivingcompanion.com.
+              </Text>
+            ) : (
+              <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
+            )}
           </Card>
 
           <SectionTitle>House managers</SectionTitle>
@@ -219,8 +225,14 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            <Button title="➕ Add house manager (+$25/mo)" variant="secondary" onPress={() => setMgrOpen(true)} />
-            {!priceConfigured ? (
+            {Platform.OS === 'ios' ? (
+              <Text style={typography.caption}>
+                Add or remove house managers from the web dashboard at soberlivingcompanion.com.
+              </Text>
+            ) : (
+              <Button title="➕ Add house manager (+$25/mo)" variant="secondary" onPress={() => setMgrOpen(true)} />
+            )}
+            {Platform.OS !== 'ios' && !priceConfigured ? (
               <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.warning }]}>
                 Note: the $25/mo seat price isn't configured yet, so managers won't be auto-billed until it's set up.
               </Text>
