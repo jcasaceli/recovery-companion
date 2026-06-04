@@ -261,6 +261,7 @@ export interface UATest {
   result: UAResult;
   substances?: string;
   notes?: string;
+  dismissed: boolean;
   createdAt: string;
 }
 
@@ -272,6 +273,7 @@ function mapUA(r: any): UATest {
     result: (r.result ?? 'negative') as UAResult,
     substances: r.substances ?? undefined,
     notes: r.notes ?? undefined,
+    dismissed: !!r.dismissed,
     createdAt: r.created_at,
   };
 }
@@ -317,6 +319,28 @@ export async function listMyUATests(): Promise<UATest[]> {
 export async function deleteUATest(id: string) {
   const { error } = await db().from('ua_tests').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** Facilitator/manager: clear the positive-UA flag for a resident. */
+export async function dismissUAFlags(individualId: string) {
+  const { error } = await db()
+    .from('ua_tests')
+    .update({ dismissed: true })
+    .eq('individual_id', individualId)
+    .eq('result', 'positive')
+    .eq('dismissed', false);
+  if (error) throw error;
+}
+
+/** Individual IDs that currently have an active positive-UA flag (for badges). */
+export async function listFlaggedIndividualIds(): Promise<string[]> {
+  const { data, error } = await db()
+    .from('ua_tests')
+    .select('individual_id')
+    .eq('result', 'positive')
+    .eq('dismissed', false);
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((r: any) => r.individual_id)));
 }
 
 // ── Membership agreements ────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { useAppState } from '../state/store';
 import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
-  listUATests, createUATest, deleteUATest, UATest, UAResult,
+  listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
 
@@ -77,6 +77,14 @@ export function ClientProfileScreen() {
 
   const UA_COLOR: Record<UAResult, string> = {
     negative: colors.success, positive: colors.crisis, refused: colors.warning, pending: colors.textMuted,
+  };
+  const hasPositiveFlag = uaTests.some((t) => t.result === 'positive' && !t.dismissed);
+
+  const dismissFlag = () => {
+    Alert.alert('Dismiss positive-UA flag?', 'This clears the flag for this resident. The test stays in their history.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Dismiss flag', onPress: async () => { await dismissUAFlags(id).catch(() => {}); loadUA(); } },
+    ]);
   };
 
   useEffect(() => {
@@ -213,6 +221,17 @@ export function ClientProfileScreen() {
               </TouchableOpacity>
             </View>
           ))}
+        </Card>
+      ) : null}
+
+      {/* Positive UA flag — facilitators/managers only */}
+      {hasPositiveFlag ? (
+        <Card style={{ borderWidth: 1, borderColor: colors.crisis, backgroundColor: '#FDECEC' }}>
+          <Text style={[typography.body, { fontWeight: '700', color: colors.crisis }]}>🚩 Positive UA result</Text>
+          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+            {client.firstName} has a flagged dirty test. Only you and house managers see this.
+          </Text>
+          <Button title="Dismiss flag" variant="secondary" onPress={dismissFlag} />
         </Card>
       ) : null}
 

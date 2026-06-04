@@ -74,7 +74,9 @@ async function syncManagerSeats(org) {
 }
 
 function tempPassword() {
-  return 'Mgr-' + Math.random().toString(36).slice(2, 8) + 'A9!';
+  // Short + easy to type: a word + 4 digits (e.g. "Sober4821").
+  const n = 1000 + Math.floor(Math.random() * 9000);
+  return `Sober${n}`;
 }
 
 export const managersRouter = Router();

@@ -142,8 +142,12 @@ async function main() {
     await admin.from('agreements').insert({
       org_id: org.id, individual_id: ids.Marcus, title: 'Membership Agreement 2026',
       document_data: AGREEMENT_DOC, status: 'signed', created_by: fac.id,
-      signer_name: 'Marcus Reed', signed_at: new Date(now - 3 * 86400000).toISOString(),
-      signature_paths: ['M30,110 C50,40 80,40 95,95 C110,150 140,40 165,95', 'M180,70 L240,70'],
+      signer_name: 'Marcus Reed', signed_at: '2026-05-15T15:30:00.000Z',
+      // A flowing, signature-like scribble.
+      signature_paths: [
+        'M20,82 C34,32 54,32 60,76 C64,108 80,108 88,70 C95,36 110,36 120,80 C128,114 150,58 166,74 C186,94 202,40 216,70 C228,94 250,54 276,70',
+        'M28,100 C110,118 190,108 272,94',
+      ],
     });
     console.log('  added agreements (1 pending for member, 1 signed)');
   } else {

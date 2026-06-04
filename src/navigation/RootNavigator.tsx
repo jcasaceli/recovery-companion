@@ -34,6 +34,7 @@ const RootStack = createNativeStackNavigator();
 function ClientsStack() {
   return (
     <ClientsStackNav.Navigator
+      initialRouteName="ClientsList"
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
         headerShadowVisible: false,
@@ -117,6 +118,7 @@ const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
 function FacilitatorTabs() {
   return (
     <FacTab.Navigator
+      initialRouteName="Clients"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primaryDark,

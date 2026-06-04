@@ -6,7 +6,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -22,8 +22,10 @@ export function ClientsScreen() {
   const nav = useNavigation<any>();
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
 
+  const [flagged, setFlagged] = useState<Set<string>>(new Set());
   useEffect(() => {
     getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
+    listFlaggedIndividualIds().then((ids) => setFlagged(new Set(ids))).catch(() => {});
   }, []);
   const [filter, setFilter] = useState<ClientStatus>('in_care');
   const [adding, setAdding] = useState(false);
@@ -153,7 +155,9 @@ export function ClientsScreen() {
                 <View style={styles.avatar}><Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text></View>
               )}
               <View style={{ flex: 1 }}>
-                <Text style={typography.h3}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
+                <Text style={typography.h3}>
+                  {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}
+                </Text>
                 <Text style={typography.caption}>
                   {c.houseName ? `${c.houseName} · ` : ''}Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${c.rentDueDay}` : ''}
                 </Text>
