@@ -15,9 +15,13 @@ export function SignaturePad({
   onChange: (paths: string[]) => void;
   height?: number;
 }) {
-  const [strokes, setStrokes] = useState<string[]>([]);
-  const [, force] = useState(0);
+  // Strokes live in a ref (not state) so we can notify the parent from the
+  // event handler — never from inside a setState updater, which runs during
+  // render and would trigger "cannot update a component while rendering".
+  const strokesRef = useRef<string[]>([]);
   const current = useRef('');
+  const [, force] = useState(0);
+  const rerender = () => force((n) => n + 1);
 
   const responder = useMemo(
     () =>
@@ -27,35 +31,33 @@ export function SignaturePad({
         onPanResponderGrant: (e) => {
           const { locationX, locationY } = e.nativeEvent;
           current.current = `M${locationX.toFixed(1)},${locationY.toFixed(1)}`;
-          force((n) => n + 1);
+          rerender();
         },
         onPanResponderMove: (e) => {
           const { locationX, locationY } = e.nativeEvent;
           current.current += ` L${locationX.toFixed(1)},${locationY.toFixed(1)}`;
-          force((n) => n + 1);
+          rerender();
         },
         onPanResponderRelease: () => {
           if (current.current) {
-            setStrokes((s) => {
-              const next = [...s, current.current];
-              onChange(next);
-              return next;
-            });
+            strokesRef.current = [...strokesRef.current, current.current];
+            current.current = '';
+            onChange(strokesRef.current);
+            rerender();
           }
-          current.current = '';
         },
       }),
     [onChange],
   );
 
   const clear = () => {
-    setStrokes([]);
+    strokesRef.current = [];
     current.current = '';
     onChange([]);
-    force((n) => n + 1);
+    rerender();
   };
 
-  const all = current.current ? [...strokes, current.current] : strokes;
+  const all = current.current ? [...strokesRef.current, current.current] : strokesRef.current;
 
   return (
     <View>
