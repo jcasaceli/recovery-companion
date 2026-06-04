@@ -222,11 +222,16 @@ stripeRouter.post('/platform/subscribe', async (req, res) => {
     const org = await facilitatorOrg(user.id);
     if (!org) return res.status(400).json({ error: 'No organization found.' });
 
+    // Allow the caller (e.g. the website signup flow) to come back to a specific
+    // page after checkout so it can continue onboarding (add house managers).
+    const successUrl = (req.body && req.body.successUrl) || RETURN_URL;
+    const cancelUrl = (req.body && req.body.cancelUrl) || RETURN_URL;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: process.env.STRIPE_PLATFORM_PRICE_ID, quantity: 1 }],
-      success_url: RETURN_URL,
-      cancel_url: RETURN_URL,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       customer_email: user.email || undefined,
       metadata: { org_id: org.id },
     });
