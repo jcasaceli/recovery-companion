@@ -99,18 +99,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
+    let cancelled = false;
+    (async () => {
+      // Cross-subdomain handoff: the marketing site (soberlivingcompanion.com)
+      // signs the user in on its own origin, then redirects here with the
+      // tokens in the URL hash. localStorage is per-origin, so we adopt that
+      // session explicitly. Web only.
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+        try {
+          const p = new URLSearchParams(window.location.hash.slice(1));
+          const access_token = p.get('access_token');
+          const refresh_token = p.get('refresh_token');
+          if (access_token && refresh_token && supabase) {
+            await supabase.auth.setSession({ access_token, refresh_token });
+          }
+        } catch (e) {
+          console.warn('[auth] hash session adopt failed', e);
+        }
+        try { window.history.replaceState(null, '', window.location.pathname + window.location.search); } catch {}
+      }
+      const { data } = await supabase!.auth.getSession();
+      if (cancelled) return;
       setSession(data.session);
       setStatus(data.session ? 'signedIn' : 'signedOut');
       if (data.session) loadProfile();
-    });
+    })();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       setStatus(s ? 'signedIn' : 'signedOut');
       if (s) loadProfile();
       else setProfile(null);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
 
   const value = useMemo<AuthContextValue>(
