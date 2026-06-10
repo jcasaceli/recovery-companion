@@ -241,14 +241,6 @@ export function SettingsScreen() {
         </>
       ) : null}
 
-      <SectionTitle>About the assistant</SectionTitle>
-      <Card>
-        <Text style={typography.bodySecondary}>
-          Companion is an AI assistant — not a doctor, therapist, or counselor.
-          For clinical questions, use the Messages tab to reach the care team. In
-          an emergency, call 911 or 988.
-        </Text>
-      </Card>
 
       <View style={{ height: spacing.md }} />
       {auth.configured && auth.status === 'signedIn' ? (

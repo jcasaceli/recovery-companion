@@ -265,12 +265,6 @@ export function HomeScreen() {
       {/* Quick actions */}
       <View style={{ height: spacing.sm }} />
       <Button title="🌙 Do tonight's review" onPress={() => nav.navigate('NightlyReview')} />
-      <View style={{ height: spacing.sm }} />
-      <Button
-        title="Ask Companion a question"
-        variant="secondary"
-        onPress={() => nav.navigate('Assistant')}
-      />
 
       {/* Sobriety date — tap to set/change via a calendar */}
       <SectionTitle>Sobriety date</SectionTitle>

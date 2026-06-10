@@ -9,7 +9,6 @@ import { useAuth } from '../state/auth';
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { NightlyReviewScreen } from '../screens/NightlyReviewScreen';
-import { AssistantScreen } from '../screens/AssistantScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
@@ -54,7 +53,6 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Home: { active: 'home', inactive: 'home-outline' },
   NightlyReview: { active: 'moon', inactive: 'moon-outline' },
-  Assistant: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
   Messages: { active: 'mail', inactive: 'mail-outline' },
   Resources: { active: 'heart', inactive: 'heart-outline' },
 };
@@ -75,7 +73,6 @@ function Tabs({ navigation }: any) {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="NightlyReview" component={NightlyReviewScreen} options={{ tabBarLabel: 'Nightly Review' }} />
-      <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="Messages" component={MessagesScreen} />
       <Tab.Screen name="Resources" component={ResourcesScreen} />
     </Tab.Navigator>
