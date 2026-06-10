@@ -264,7 +264,7 @@ export function HomeScreen() {
 
       {/* Quick actions */}
       <View style={{ height: spacing.sm }} />
-      <Button title="Check in on today" onPress={() => nav.navigate('Progress')} />
+      <Button title="🌙 Do tonight's review" onPress={() => nav.navigate('NightlyReview')} />
       <View style={{ height: spacing.sm }} />
       <Button
         title="Ask Companion a question"

@@ -251,6 +251,53 @@ export async function recordMeetingCheckin(
   if (error) throw error;
 }
 
+// ── Care-team announcements ──────────────────────────────────────────────────
+
+export interface CareTeamMember { name: string; role: string }
+export interface Announcement { id: string; authorName?: string; body: string; createdAt: string }
+
+/** The facilitator + house managers for the caller's org (members & staff). */
+export async function getCareTeam(): Promise<CareTeamMember[]> {
+  const { data, error } = await db().rpc('get_care_team');
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    name: r.name,
+    role: r.is_owner ? 'Facilitator (Admin)' : 'House manager',
+  }));
+}
+
+/** Broadcast messages from the care team (newest first). */
+export async function listAnnouncements(): Promise<Announcement[]> {
+  const { data, error } = await db()
+    .from('announcements')
+    .select('id,author_name,body,created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    authorName: r.author_name ?? undefined,
+    body: r.body,
+    createdAt: r.created_at,
+  }));
+}
+
+/** Facilitator/manager: post an announcement to everyone in the org. */
+export async function postAnnouncement(orgId: string, body: string, authorName?: string) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('announcements').insert({
+    org_id: orgId,
+    author_id: u.user?.id,
+    author_name: authorName ?? null,
+    body,
+  });
+  if (error) throw error;
+}
+
+export async function deleteAnnouncement(id: string) {
+  const { error } = await db().from('announcements').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── UA / drug-test logs ──────────────────────────────────────────────────────
 
 export type UAResult = 'negative' | 'positive' | 'refused' | 'pending';

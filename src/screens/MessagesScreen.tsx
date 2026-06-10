@@ -1,260 +1,130 @@
-import React, { useRef, useState, useLayoutEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { Screen, ScreenTitle, Card } from '../components/ui';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { useAppState } from '../state/store';
+import { useAuth } from '../state/auth';
+import {
+  getCareTeam, listAnnouncements, postAnnouncement, deleteAnnouncement,
+  getMyOrg, CareTeamMember, Announcement,
+} from '../services/db';
 import { formatDateTime } from '../utils/format';
 
-const Stack = createNativeStackNavigator();
-
 export function MessagesScreen() {
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTintColor: colors.primary,
-        headerTitleStyle: { color: colors.textPrimary },
-      }}
-    >
-      <Stack.Screen
-        name="ThreadList"
-        component={ThreadListScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Conversation"
-        component={ConversationScreen}
-        options={{ title: '' }}
-      />
-    </Stack.Navigator>
-  );
-}
+  const auth = useAuth();
+  const isStaff = auth.profile?.role === 'facilitator'; // facilitator (admin) or house manager
 
-function ThreadListScreen() {
-  const nav = useNavigation<any>();
-  const { threads } = useAppState();
+  const [team, setTeam] = useState<CareTeamMember[]>([]);
+  const [posts, setPosts] = useState<Announcement[]>([]);
+  const [org, setOrg] = useState<{ id: string; name?: string } | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    getCareTeam().then(setTeam).catch(() => {});
+    listAnnouncements().then(setPosts).catch(() => {});
+    if (isStaff) getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name })).catch(() => {});
+  }, [isStaff]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || !org) return;
+    setBusy(true);
+    try {
+      await postAnnouncement(org.id, body, auth.profile?.fullName ?? undefined);
+      setDraft('');
+      listAnnouncements().then(setPosts).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message ?? 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (a: Announcement) => {
+    Alert.alert('Delete message?', 'This removes it for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteAnnouncement(a.id).catch(() => {}); listAnnouncements().then(setPosts).catch(() => {}); } },
+    ]);
+  };
 
   return (
     <Screen>
-      <ScreenTitle title="Messages" subtitle="Your loved one's care team" />
-      {threads.length === 0 ? (
+      <ScreenTitle
+        title="Messages"
+        subtitle={isStaff ? `Message everyone in ${org?.name || 'your sober living'}` : 'Your care team'}
+      />
+
+      {/* Care team */}
+      <Card>
+        <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.sm }]}>👥 Your care team</Text>
+        {team.length === 0 ? (
+          <Text style={typography.bodySecondary}>No care team yet.</Text>
+        ) : (
+          team.map((m, i) => (
+            <View key={i} style={styles.teamRow}>
+              <View style={styles.avatar}><Text style={styles.avatarText}>{m.name.charAt(0).toUpperCase()}</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>{m.name}</Text>
+                <Text style={typography.caption}>{m.role}</Text>
+              </View>
+            </View>
+          ))
+        )}
+      </Card>
+
+      {/* Staff: compose a broadcast */}
+      {isStaff ? (
         <Card>
-          <Text style={typography.h3}>No care team yet</Text>
-          <Text style={[typography.bodySecondary, { marginTop: 4 }]}>
-            Once your loved one's providers are connected, you'll be able to message
-            them here. In the meantime, the Resources tab has support lines you can
-            reach any time.
+          <Text style={[typography.body, { fontWeight: '600' }]}>Send a message to everyone</Text>
+          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+            All residents in your sober living will see this. Residents can read but can't reply.
           </Text>
+          <TextInput
+            style={styles.input}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Write an announcement…"
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <Button title={busy ? 'Sending…' : 'Send to everyone'} onPress={send} disabled={busy || !draft.trim()} />
         </Card>
       ) : null}
-      {threads.map((t) => {
-        const last = t.messages[t.messages.length - 1];
-        const unread = t.messages.some((m) => m.senderType === 'provider' && !m.read);
-        return (
-          <Card
-            key={t.id}
-            onPress={() => nav.navigate('Conversation', { threadId: t.id })}
-            style={styles.threadCard}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{t.providerName.charAt(0)}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.threadHeader}>
-                <Text style={typography.h3}>{t.providerName}</Text>
-                {unread ? <View style={styles.unreadDot} /> : null}
-              </View>
-              <Text style={typography.caption}>{t.providerRole}</Text>
-              {last ? (
-                <Text numberOfLines={1} style={[typography.bodySecondary, { marginTop: 4 }]}>
-                  {last.senderType === 'parent' ? 'You: ' : ''}
-                  {last.text}
-                </Text>
-              ) : null}
-            </View>
-          </Card>
-        );
-      })}
 
-      <Text style={styles.note}>
-        Messages are not monitored 24/7. In an emergency, call 911 or 988.
-      </Text>
+      <SectionTitle>{isStaff ? 'Sent messages' : 'Messages from your care team'}</SectionTitle>
+      {posts.length === 0 ? (
+        <Card>
+          <Text style={typography.bodySecondary}>
+            {isStaff ? 'No messages yet. Send your first announcement above.' : 'No messages yet. Updates from your care team will appear here.'}
+          </Text>
+        </Card>
+      ) : (
+        posts.map((a) => (
+          <Card key={a.id} onLongPress={isStaff ? () => remove(a) : undefined}>
+            <Text style={typography.body}>{a.body}</Text>
+            <Text style={[typography.caption, { marginTop: spacing.xs }]}>
+              {a.authorName ? `${a.authorName} · ` : ''}{formatDateTime(a.createdAt)}
+            </Text>
+          </Card>
+        ))
+      )}
+
+      {!isStaff ? (
+        <Text style={styles.note}>Only your care team can post here. In an emergency, call 911 or 988.</Text>
+      ) : (
+        <Text style={styles.note}>Long-press a sent message to delete it.</Text>
+      )}
     </Screen>
   );
 }
 
-function ConversationScreen() {
-  const route = useRoute<any>();
-  const nav = useNavigation<any>();
-  const { threadId } = route.params;
-  const { threads, sendProviderMessage, markThreadRead } = useAppState();
-  const thread = threads.find((t) => t.id === threadId);
-  const [draft, setDraft] = useState('');
-  const scrollRef = useRef<ScrollView>(null);
-
-  useLayoutEffect(() => {
-    if (thread) {
-      nav.setOptions({ title: thread.providerName });
-      markThreadRead(thread.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]);
-
-  if (!thread) {
-    return (
-      <Screen>
-        <Text style={typography.body}>Conversation not found.</Text>
-      </Screen>
-    );
-  }
-
-  const send = () => {
-    const text = draft.trim();
-    if (!text) return;
-    sendProviderMessage(thread.id, text);
-    setDraft('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-  };
-
-  return (
-    <SafeAreaView style={styles.convScreen} edges={['bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.convMessages}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-        >
-          {thread.messages.map((m) => (
-            <View
-              key={m.id}
-              style={[
-                styles.msgBubble,
-                m.senderType === 'parent' ? styles.msgUser : styles.msgProvider,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.msgText,
-                  m.senderType === 'parent' ? { color: colors.textInverse } : null,
-                ]}
-              >
-                {m.text}
-              </Text>
-              <Text
-                style={[
-                  styles.msgTime,
-                  m.senderType === 'parent' ? { color: colors.primaryLight } : null,
-                ]}
-              >
-                {formatDateTime(m.timestamp)}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            placeholder={`Message ${thread.providerName}…`}
-            placeholderTextColor={colors.textMuted}
-            value={draft}
-            onChangeText={setDraft}
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !draft.trim() ? { opacity: 0.4 } : null]}
-            onPress={send}
-            disabled={!draft.trim()}
-          >
-            <Text style={styles.sendBtnText}>Send</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
 const styles = StyleSheet.create({
-  threadCard: { flexDirection: 'row', alignItems: 'center' },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 18 },
-  threadHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
-  note: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
-  convScreen: { flex: 1, backgroundColor: colors.background },
-  convMessages: { padding: spacing.md },
-  msgBubble: {
-    maxWidth: '82%',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  msgUser: {
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: radius.sm,
-  },
-  msgProvider: {
-    backgroundColor: colors.surface,
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: radius.sm,
-  },
-  msgText: { ...typography.body, lineHeight: 21 },
-  msgTime: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    maxHeight: 120,
-    fontSize: 15,
-    color: colors.textPrimary,
-    marginRight: spacing.sm,
-  },
-  sendBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-  },
-  sendBtnText: { color: colors.textInverse, fontWeight: '600', fontSize: 15 },
+  teamRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  avatarText: { color: colors.textInverse, fontWeight: '700' },
+  input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, minHeight: 70, textAlignVertical: 'top', marginBottom: spacing.sm },
+  note: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: spacing.md },
 });

@@ -8,7 +8,7 @@ import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
-import { ProgressScreen } from '../screens/ProgressScreen';
+import { NightlyReviewScreen } from '../screens/NightlyReviewScreen';
 import { AssistantScreen } from '../screens/AssistantScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { ResourcesScreen } from '../screens/ResourcesScreen';
@@ -53,7 +53,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Home: { active: 'home', inactive: 'home-outline' },
-  Progress: { active: 'trending-up', inactive: 'trending-up-outline' },
+  NightlyReview: { active: 'moon', inactive: 'moon-outline' },
   Assistant: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
   Messages: { active: 'mail', inactive: 'mail-outline' },
   Resources: { active: 'heart', inactive: 'heart-outline' },
@@ -74,7 +74,7 @@ function Tabs({ navigation }: any) {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
+      <Tab.Screen name="NightlyReview" component={NightlyReviewScreen} options={{ tabBarLabel: 'Nightly Review' }} />
       <Tab.Screen name="Assistant" component={AssistantScreen} />
       <Tab.Screen name="Messages" component={MessagesScreen} />
       <Tab.Screen name="Resources" component={ResourcesScreen} />
@@ -111,6 +111,7 @@ export function RootNavigator() {
 const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Clients: { active: 'people', inactive: 'people-outline' },
   Payments: { active: 'card', inactive: 'card-outline' },
+  Messages: { active: 'megaphone', inactive: 'megaphone-outline' },
   Resources: { active: 'heart', inactive: 'heart-outline' },
   Account: { active: 'person-circle', inactive: 'person-circle-outline' },
 };
@@ -132,6 +133,7 @@ function FacilitatorTabs() {
     >
       <FacTab.Screen name="Clients" component={ClientsStack} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
+      <FacTab.Screen name="Messages" component={MessagesScreen} />
       <FacTab.Screen name="Resources" component={ResourcesScreen} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
     </FacTab.Navigator>
