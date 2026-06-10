@@ -60,7 +60,7 @@ notifyRouter.post('/care', async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
-    const { individualId, title, body } = req.body || {};
+    const { individualId, title, body, kind } = req.body || {};
     if (!individualId) return res.status(400).json({ error: 'individualId required' });
 
     const { data: ind } = await admin
@@ -74,7 +74,16 @@ notifyRouter.post('/care', async (req, res) => {
     if (ind.profile_id) recipients.push(ind.profile_id);
     if (ind.org_id) {
       const { data: mems } = await admin.from('org_members').select('profile_id').eq('org_id', ind.org_id);
-      (mems ?? []).forEach((m) => recipients.push(m.profile_id));
+      let staff = (mems ?? []).map((m) => m.profile_id);
+      // Routine resident activity (check-ins, payment reports) respects each
+      // staff member's "notify me about resident activity" toggle. SOS / alerts
+      // always go through.
+      if (kind === 'activity' && staff.length) {
+        const { data: prefs } = await admin.from('profiles').select('id, notify_member_activity').in('id', staff);
+        const muted = new Set((prefs ?? []).filter((p) => p.notify_member_activity === false).map((p) => p.id));
+        staff = staff.filter((id) => !muted.has(id));
+      }
+      staff.forEach((id) => recipients.push(id));
     }
     const targets = recipients.filter((id) => id !== user.id);
     const tokens = await tokensFor(targets);

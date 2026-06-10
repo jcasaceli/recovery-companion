@@ -28,14 +28,14 @@ async function authToken(): Promise<string | null> {
 }
 
 /** Notify a member's care team (member + facilitators) via the backend. */
-export async function notifyCare(individualId: string, title: string, body: string) {
+export async function notifyCare(individualId: string, title: string, body: string, kind?: 'activity' | 'sos' | 'alert') {
   if (!BACKEND_URL) return;
   const t = await authToken();
   if (!t) return;
   fetch(`${BACKEND_URL}/api/notify/care`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-    body: JSON.stringify({ individualId, title, body }),
+    body: JSON.stringify({ individualId, title, body, kind }),
   }).catch(() => {});
 }
 

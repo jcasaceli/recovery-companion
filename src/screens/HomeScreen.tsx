@@ -14,6 +14,7 @@ import { TimelineEntry, CheckIn, Milestone, TreatmentSession } from '../types';
 import {
   daysSince,
   formatDate,
+  ordinal,
   MOOD_EMOJI,
   MOOD_LABELS,
   PROGRAM_LABELS,
@@ -106,6 +107,7 @@ export function HomeScreen() {
       }
       await recordMeetingCheckin(lovedOne.id, lat, lng, address);
       loadCheckins();
+      notifyCare(lovedOne.id, 'Meeting check-in', `${lovedOne.firstName} checked in at a meeting${address ? ` (${address})` : ''}.`, 'activity');
       Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
     } catch (e: any) {
       Alert.alert('Could not check in', e?.message ?? 'Please try again.');
@@ -165,7 +167,7 @@ export function HomeScreen() {
           <Text style={styles.payRentText}>Pay rent</Text>
           <Text style={styles.payRentSub}>
             {lovedOne.monthlyRentCents
-              ? `$${(lovedOne.monthlyRentCents / 100).toFixed(0)}/mo${lovedOne.rentDueDay ? ` · due the ${lovedOne.rentDueDay}` : ''} · tap to pay`
+              ? `$${(lovedOne.monthlyRentCents / 100).toFixed(0)}/mo${lovedOne.rentDueDay ? ` · due the ${ordinal(lovedOne.rentDueDay)}` : ''} · tap to pay`
               : 'Card, CashApp, or Zelle · tap to pay'}
           </Text>
         </TouchableOpacity>

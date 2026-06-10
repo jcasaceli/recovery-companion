@@ -251,6 +251,23 @@ export async function recordMeetingCheckin(
   if (error) throw error;
 }
 
+// ── Notification preferences (facilitator/manager) ───────────────────────────
+
+/** Whether the current staff user wants routine resident-activity pushes. */
+export async function getNotifyMemberActivity(): Promise<boolean> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return true;
+  const { data } = await db().from('profiles').select('notify_member_activity').eq('id', u.user.id).maybeSingle();
+  return data ? data.notify_member_activity !== false : true;
+}
+
+export async function setNotifyMemberActivity(on: boolean) {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return;
+  const { error } = await db().from('profiles').update({ notify_member_activity: on }).eq('id', u.user.id);
+  if (error) throw error;
+}
+
 // ── Care-team announcements ──────────────────────────────────────────────────
 
 export interface CareTeamMember { name: string; role: string }

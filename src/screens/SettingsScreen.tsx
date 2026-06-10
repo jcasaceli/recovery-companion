@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
@@ -7,6 +7,7 @@ import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
 import { getMyOrg, setOrgPaymentHandles } from '../services/db';
 import { deleteAccount } from '../services/account';
+import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
 
 export function SettingsScreen() {
@@ -31,6 +32,9 @@ export function SettingsScreen() {
   const [mgrEmail, setMgrEmail] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
   const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
+  const [notifyActivity, setNotifyActivity] = useState(true);
+
+  const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
 
   const loadManagers = () => listManagers()
     .then((r) => { setManagers(r.managers); setPriceConfigured(r.priceConfigured); })
@@ -39,6 +43,7 @@ export function SettingsScreen() {
   useEffect(() => {
     if (isFacilitator) {
       getConnectStatus().then(setConnect).catch(() => setConnect(null));
+      getNotifyMemberActivity().then(setNotifyActivity).catch(() => {});
       getMyOrg().then((o: any) => {
         if (o) {
           setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setOrgName(o.name ?? '');
@@ -164,6 +169,22 @@ export function SettingsScreen() {
             payments, and agreements. Billing is handled by the owner.
           </Text>
         </Card>
+      ) : null}
+
+      {isFacilitator ? (
+        <>
+          <SectionTitle>Notifications</SectionTitle>
+          <Card style={styles.switchRow}>
+            <View style={{ flex: 1, paddingRight: spacing.md }}>
+              <Text style={[typography.body, { fontWeight: '600' }]}>Resident activity alerts</Text>
+              <Text style={typography.caption}>
+                Get a push when residents check in at meetings or report a payment. SOS and resident
+                messages always come through.
+              </Text>
+            </View>
+            <Switch value={notifyActivity} onValueChange={toggleNotify} trackColor={{ true: colors.primary }} />
+          </Card>
+        </>
       ) : null}
 
       {isOwner ? (
@@ -317,6 +338,7 @@ const styles = StyleSheet.create({
   deleteBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
   deleteText: { color: colors.crisis, fontWeight: '600' },
   mgrRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider, marginBottom: spacing.sm },
+  switchRow: { flexDirection: 'row', alignItems: 'center' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   credBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },

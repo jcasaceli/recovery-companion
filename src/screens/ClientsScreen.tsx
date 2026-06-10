@@ -10,6 +10,7 @@ import { getMyOrg, listFlaggedIndividualIds } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
+import { ordinal } from '../utils/format';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : 'No rent set';
@@ -159,7 +160,7 @@ export function ClientsScreen() {
                   {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}
                 </Text>
                 <Text style={typography.caption}>
-                  {c.houseName ? `${c.houseName} · ` : ''}Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${c.rentDueDay}` : ''}
+                  {c.houseName ? `${c.houseName} · ` : ''}Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
                 </Text>
               </View>
               {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
