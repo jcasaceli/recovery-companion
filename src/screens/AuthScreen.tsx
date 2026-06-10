@@ -17,6 +17,7 @@ export function AuthScreen() {
   const auth = useAuth();
   const [step, setStep] = useState<Step>('choose');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   // shared fields
   const [role, setRole] = useState<AppRole>('individual');
@@ -29,11 +30,13 @@ export function AuthScreen() {
   const [code, setCode] = useState('');
 
   const run = async (fn: () => Promise<void>) => {
+    setError('');
     setBusy(true);
     try {
       await fn();
     } catch (e: any) {
-      Alert.alert('Something went wrong', e?.message ?? 'Please try again.');
+      // Inline error — works on web (Alert.alert is a no-op there) and native.
+      setError(e?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -41,7 +44,7 @@ export function AuthScreen() {
 
   const doSignUp = () =>
     run(async () => {
-      await auth.signUp({ email, password, role, fullName, phone: phone || undefined, verifyChannel: channel, orgName: orgName || undefined });
+      await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: phone || undefined, verifyChannel: channel, orgName: orgName || undefined });
       setStep('verify');
       Alert.alert(
         channel === 'email' ? 'Check your email' : 'Check your texts',
@@ -58,7 +61,7 @@ export function AuthScreen() {
       // onAuthStateChange will flip the app to the signed-in state.
     });
 
-  const doSignIn = () => run(() => auth.signIn(email, password));
+  const doSignIn = () => run(() => auth.signIn(email.trim().toLowerCase(), password));
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -71,6 +74,8 @@ export function AuthScreen() {
       >
         <Text style={styles.emoji}>🌱</Text>
         <Text style={styles.title}>Sober Living Companion</Text>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {step === 'choose' && (
           <View>
@@ -210,4 +215,5 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: colors.primary },
   link: { alignItems: 'center', paddingVertical: spacing.md },
   linkText: { color: colors.primary, fontWeight: '600' },
+  error: { color: colors.crisis, backgroundColor: '#FCECEA', borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md, textAlign: 'center', fontWeight: '600' },
 });
