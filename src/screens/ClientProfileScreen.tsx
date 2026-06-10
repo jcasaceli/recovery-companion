@@ -88,8 +88,7 @@ export function ClientProfileScreen() {
   };
 
   useEffect(() => {
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    listMeetingCheckins(id, weekAgo).then(setCheckins).catch(() => {});
+    listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     loadAgreements();
     loadUA();
@@ -249,13 +248,13 @@ export function ClientProfileScreen() {
         <Button title="Save rent" onPress={saveRent} />
       </Card>
 
-      {/* Meetings attended this week */}
-      <SectionTitle>Meetings this week</SectionTitle>
+      {/* All meeting check-ins */}
+      <SectionTitle>Meeting check-ins</SectionTitle>
       <Card onPress={() => setShowMeetings((v) => !v)}>
         <Text style={styles.meetingCount}>{checkins.length}</Text>
         <Text style={typography.bodySecondary}>
-          meeting check-in{checkins.length === 1 ? '' : 's'} in the last 7 days
-          {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} locations` : ''}
+          total check-in{checkins.length === 1 ? '' : 's'} · {checkins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
+          {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} all` : ''}
         </Text>
         {showMeetings
           ? checkins.map((c) => (

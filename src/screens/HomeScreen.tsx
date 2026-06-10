@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins } from '../services/db';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
@@ -25,8 +25,28 @@ export function HomeScreen() {
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateModal, setDateModal] = useState(false);
+  const [dateText, setDateText] = useState('');
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertText, setAlertText] = useState('');
+  const [myCheckins, setMyCheckins] = useState<any[]>([]);
+  const [showCheckins, setShowCheckins] = useState(false);
+
+  const loadCheckins = useCallback(() => {
+    if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
+  }, [lovedOne.id]);
+  useFocusEffect(useCallback(() => { loadCheckins(); }, [loadCheckins]));
+
+  const openSobriety = () => {
+    if (Platform.OS === 'web') { setDateText(lovedOne.sobrietyDate || ''); setDateModal(true); }
+    else setShowDatePicker(true);
+  };
+  const saveDateText = () => {
+    const d = dateText.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { Alert.alert('Enter the date as YYYY-MM-DD'); return; }
+    resetSobrietyDate(d);
+    setDateModal(false);
+  };
 
   const sendAlert = () => {
     if (!alertText.trim()) return;
@@ -85,6 +105,7 @@ export function HomeScreen() {
         } catch {}
       }
       await recordMeetingCheckin(lovedOne.id, lat, lng, address);
+      loadCheckins();
       Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
     } catch (e: any) {
       Alert.alert('Could not check in', e?.message ?? 'Please try again.');
@@ -157,6 +178,36 @@ export function HomeScreen() {
           <Text style={styles.meetingText}>I'm at a meeting</Text>
           <Text style={styles.meetingSub}>Check in — records your location</Text>
         </TouchableOpacity>
+      ) : null}
+
+      {/* Member's own meeting check-in history */}
+      {!isFacilitator ? (
+        <Card onPress={() => setShowCheckins((v) => !v)}>
+          <View style={styles.sobrietyRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={typography.h3}>My meeting check-ins</Text>
+              <Text style={typography.caption}>
+                {myCheckins.length} total · {myCheckins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
+                {myCheckins.length ? ` · tap to ${showCheckins ? 'hide' : 'view'}` : ''}
+              </Text>
+            </View>
+            <Ionicons name="checkmark-done-outline" size={24} color={colors.primary} />
+          </View>
+          {showCheckins ? (
+            myCheckins.length === 0 ? (
+              <Text style={[typography.caption, { marginTop: spacing.sm }]}>No check-ins yet. Tap “I'm at a meeting” when you arrive.</Text>
+            ) : (
+              <View style={{ marginTop: spacing.sm }}>
+                {myCheckins.map((c) => (
+                  <View key={c.id} style={styles.checkinRow}>
+                    <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
+                    <Text style={typography.caption}>{formatDate(c.createdAt)}</Text>
+                  </View>
+                ))}
+              </View>
+            )
+          ) : null}
+        </Card>
       ) : null}
 
       {/* Quick links */}
@@ -268,7 +319,7 @@ export function HomeScreen() {
 
       {/* Sobriety date — tap to set/change via a calendar */}
       <SectionTitle>Sobriety date</SectionTitle>
-      <Card onPress={() => setShowDatePicker(true)}>
+      <Card onPress={openSobriety}>
         <View style={styles.sobrietyRow}>
           <View style={{ flex: 1 }}>
             <Text style={typography.h3}>
@@ -291,6 +342,28 @@ export function HomeScreen() {
           onChange={onSobrietyDate}
         />
       ) : null}
+
+      {/* Web fallback: the native date picker doesn't work in a browser */}
+      <Modal visible={dateModal} transparent animationType="fade" onRequestClose={() => setDateModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.h3}>Set your sobriety date</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Enter the date you’re counting from.</Text>
+            <TextInput
+              style={styles.dateInput}
+              value={dateText}
+              onChangeText={setDateText}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+            />
+            <Button title="Save" onPress={saveDateText} />
+            <TouchableOpacity onPress={() => setDateModal(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -363,6 +436,8 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   modalInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: 'top', fontSize: 15, color: colors.textPrimary, marginBottom: spacing.md },
+  dateInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
+  checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   sobrietyRow: { flexDirection: 'row', alignItems: 'center' },
   hero: {
     backgroundColor: colors.primary,
