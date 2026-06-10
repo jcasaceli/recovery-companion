@@ -13,6 +13,19 @@ const ROLES: { value: AppRole; label: string; blurb: string }[] = [
 
 type Step = 'choose' | 'signin' | 'signup' | 'verify';
 
+/** Turn raw auth errors into friendly, human messages. */
+function friendlyAuthError(raw?: string): string {
+  const m = (raw || '').toLowerCase();
+  if (m.includes('invalid login credentials')) return 'The email or password you entered is incorrect. Please double-check and try again.';
+  if (m.includes('email not confirmed')) return 'Please confirm your email address first, then sign in.';
+  if (m.includes('already registered') || m.includes('already been registered') || m.includes('already exists')) return 'An account with this email already exists — try signing in instead.';
+  if (m.includes('failed to fetch') || m.includes('network')) return "Couldn't connect. Please check your internet connection and try again.";
+  if (m.includes('too many') || m.includes('rate limit')) return 'Too many attempts. Please wait a minute and try again.';
+  if (m.includes('password should be') || m.includes('at least 6')) return 'Your password is too short — please use at least 8 characters.';
+  if (m.includes('unable to validate email') || m.includes('invalid email')) return 'That email address doesn’t look right. Please check it and try again.';
+  return raw || 'Something went wrong. Please try again.';
+}
+
 export function AuthScreen() {
   const auth = useAuth();
   const [step, setStep] = useState<Step>('choose');
@@ -36,7 +49,7 @@ export function AuthScreen() {
       await fn();
     } catch (e: any) {
       // Inline error — works on web (Alert.alert is a no-op there) and native.
-      setError(e?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyAuthError(e?.message));
     } finally {
       setBusy(false);
     }
