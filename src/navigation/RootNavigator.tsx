@@ -22,6 +22,7 @@ import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
 import { PaymentsScreen } from '../screens/PaymentsScreen';
 import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen';
+import { DashboardScreen } from '../screens/DashboardScreen';
 import { AgreementViewScreen } from '../screens/AgreementViewScreen';
 import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
 
@@ -106,17 +107,17 @@ export function RootNavigator() {
 }
 
 const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
+  Dashboard: { active: 'grid', inactive: 'grid-outline' },
   Clients: { active: 'people', inactive: 'people-outline' },
   Payments: { active: 'card', inactive: 'card-outline' },
   Messages: { active: 'megaphone', inactive: 'megaphone-outline' },
-  Resources: { active: 'heart', inactive: 'heart-outline' },
   Account: { active: 'person-circle', inactive: 'person-circle-outline' },
 };
 
 function FacilitatorTabs() {
   return (
     <FacTab.Navigator
-      initialRouteName="Clients"
+      initialRouteName="Dashboard"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primaryDark,
@@ -128,10 +129,10 @@ function FacilitatorTabs() {
         },
       })}
     >
+      <FacTab.Screen name="Dashboard" component={DashboardScreen} />
       <FacTab.Screen name="Clients" component={ClientsStack} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
       <FacTab.Screen name="Messages" component={MessagesScreen} />
-      <FacTab.Screen name="Resources" component={ResourcesScreen} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
     </FacTab.Navigator>
   );

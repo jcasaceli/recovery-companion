@@ -465,6 +465,26 @@ export async function listAgreements(individualId: string): Promise<Agreement[]>
   return (data ?? []).map(mapAgreement);
 }
 
+/** All agreements across the facilitator's org (for the dashboard). */
+export async function listOrgAgreements(): Promise<Agreement[]> {
+  const { data, error } = await db()
+    .from('agreements')
+    .select(AGREEMENT_LIST_COLS)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapAgreement);
+}
+
+/** All meeting check-ins across the org since a given ISO datetime (dashboard). */
+export async function listOrgCheckins(sinceISO: string): Promise<{ individualId: string; createdAt: string }[]> {
+  const { data, error } = await db()
+    .from('meeting_checkins')
+    .select('individual_id, created_at')
+    .gte('created_at', sinceISO);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ individualId: r.individual_id, createdAt: r.created_at }));
+}
+
 /** Full agreement including the document image (for the view/sign screen). */
 export async function getAgreement(id: string): Promise<Agreement | null> {
   const { data, error } = await db().from('agreements').select('*').eq('id', id).maybeSingle();
