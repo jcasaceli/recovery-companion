@@ -43,9 +43,9 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
           <Text key={p} style={styles.perk}>✓ {p}</Text>
         ))}
       </View>
-      {Platform.OS === 'ios' ? (
-        // Apple disallows unlocking app features via outside payment, so on iOS
-        // we don't sell/link the subscription in-app — it's managed on the web.
+      {Platform.OS !== 'web' ? (
+        // Apple & Google both require their billing to unlock app features, so in
+        // the native apps we don't sell/link the subscription — it's web-managed.
         <Text style={styles.fine}>
           Your account isn't active yet. Activate your subscription from the web
           dashboard at soberlivingcompanion.com, then sign in here to manage your

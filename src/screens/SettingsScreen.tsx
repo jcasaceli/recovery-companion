@@ -220,7 +220,7 @@ export function SettingsScreen() {
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               $60/month to use Sober Living Companion for your sober living.
             </Text>
-            {Platform.OS === 'ios' ? (
+            {Platform.OS !== 'web' ? (
               <Text style={typography.caption}>
                 Manage your subscription from the web dashboard at soberlivingcompanion.com.
               </Text>
@@ -246,14 +246,14 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            {Platform.OS === 'ios' ? (
+            {Platform.OS !== 'web' ? (
               <Text style={typography.caption}>
                 Add or remove house managers from the web dashboard at soberlivingcompanion.com.
               </Text>
             ) : (
               <Button title="➕ Add house manager (+$25/mo)" variant="secondary" onPress={() => setMgrOpen(true)} />
             )}
-            {Platform.OS !== 'ios' && !priceConfigured ? (
+            {Platform.OS === 'web' && !priceConfigured ? (
               <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.warning }]}>
                 Note: the $25/mo seat price isn't configured yet, so managers won't be auto-billed until it's set up.
               </Text>
