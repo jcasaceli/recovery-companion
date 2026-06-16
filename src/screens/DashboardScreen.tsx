@@ -10,9 +10,11 @@ import {
   listFacilitatorIndividuals, listOrgPayments, listOrgAgreements,
   listFlaggedIndividualIds, listOrgCheckins, getMyOrg, Agreement,
   listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
+  listOrgPasses, reviewPass, Pass, setPassesEnabled, getMyHouseScope,
 } from '../services/db';
 import { Payment } from '../types';
-import { formatDate, houseEventWhen } from '../utils/format';
+import { notifyCare } from '../services/push';
+import { formatDate, houseEventWhen, to12h } from '../utils/format';
 import { DateField, TimeField } from '../components/PickerFields';
 
 function money(cents = 0) { return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
@@ -28,9 +30,11 @@ export function DashboardScreen() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [flags, setFlags] = useState<string[]>([]);
   const [checkins, setCheckins] = useState<{ individualId: string; createdAt: string }[]>([]);
-  const [org, setOrg] = useState<{ name?: string } | null>(null);
+  const [org, setOrg] = useState<{ id?: string; name?: string; passesEnabled?: boolean } | null>(null);
   const [houses, setHouses] = useState<House[]>([]);
   const [events, setEvents] = useState<HouseEvent[]>([]);
+  const [passes, setPasses] = useState<Pass[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Add-house-meeting modal
@@ -44,10 +48,13 @@ export function DashboardScreen() {
   const [evtBusy, setEvtBusy] = useState(false);
 
   const loadEvents = () => { listHouses().then(setHouses).catch(() => {}); listHouseEvents().then(setEvents).catch(() => {}); };
+  const loadPasses = () => { listOrgPasses('pending').then(setPasses).catch(() => {}); };
 
   const load = useCallback(() => {
     if (!subscriptionActive) { setLoading(false); return; }
     loadEvents();
+    loadPasses();
+    getMyHouseScope().then((s) => setIsOwner(s.isOwner)).catch(() => {});
     Promise.all([
       listFacilitatorIndividuals(), listOrgPayments(), listOrgAgreements(),
       listFlaggedIndividualIds(), listOrgCheckins(WEEK_AGO()), getMyOrg(),
@@ -57,7 +64,7 @@ export function DashboardScreen() {
       setAgreements(ags ?? []);
       setFlags(fl ?? []);
       setCheckins(ci ?? []);
-      setOrg(o ? { name: o.name } : null);
+      setOrg(o ? { id: o.id, name: o.name, passesEnabled: !!o.passes_enabled } : null);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [subscriptionActive]);
@@ -83,6 +90,35 @@ export function DashboardScreen() {
     ]);
   };
   const houseName = (id: string) => houses.find((h) => h.id === id)?.name ?? 'House';
+
+  const decide = (p: Pass, status: 'approved' | 'denied') => {
+    const act = status === 'approved' ? 'Approve' : 'Deny';
+    Alert.alert(`${act} pass?`, `${act} ${p.memberName ?? 'this member'}’s ${p.type === 'overnight' ? 'overnight' : 'multi-day'} pass?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: act, style: status === 'denied' ? 'destructive' : 'default',
+        onPress: async () => {
+          try {
+            await reviewPass(p.id, status);
+            notifyCare(p.individualId, `Pass ${status}`, `Your ${p.type === 'overnight' ? 'overnight' : 'multi-day'} pass was ${status}.`, 'alert');
+          } catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }
+          loadPasses();
+        },
+      },
+    ]);
+  };
+
+  const togglePasses = async (next: boolean) => {
+    if (!org?.id) return;
+    setOrg({ ...org, passesEnabled: next });
+    try { await setPassesEnabled(org.id, next); }
+    catch (e: any) { setOrg({ ...org, passesEnabled: !next }); Alert.alert('Could not change', e?.message ?? 'Try again.'); }
+  };
+
+  const passWhen = (p: Pass) =>
+    p.type === 'overnight'
+      ? `Overnight · ${formatDate(p.startDate)}${p.returnTime ? ` · back by ${to12h(p.returnTime)}` : ''}`
+      : `${formatDate(p.startDate)} → ${formatDate(p.endDate)}${p.returnTime ? ` · back by ${to12h(p.returnTime)}` : ''}`;
 
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
 
@@ -134,6 +170,7 @@ export function DashboardScreen() {
           <Stat label="Pending agreements" value={String(pendingAgs.length)} color={pendingAgs.length ? colors.warning : colors.textSecondary} />
           <Stat label="Meetings (wk)" value={String(checkins.length)} />
           <Stat label="UA flags" value={String(flags.length)} color={flags.length ? colors.crisis : colors.textSecondary} />
+          <Stat label="Pass requests" value={String(passes.length)} color={passes.length ? colors.warning : colors.textSecondary} />
         </View>
 
         {/* Rent collection */}
@@ -192,7 +229,46 @@ export function DashboardScreen() {
           </>
         ) : null}
 
-        {/* Recent payments */}
+        {/* Pass requests */}
+        <SectionTitle>Pass requests</SectionTitle>
+        <Card>
+          {isOwner ? (
+            <View style={styles.evtSwitch}>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>Allow pass requests</Text>
+                <Text style={typography.caption}>When on, every member can request overnight & multi-day passes.</Text>
+              </View>
+              <Switch value={!!org?.passesEnabled} onValueChange={togglePasses} trackColor={{ true: colors.primary }} />
+            </View>
+          ) : null}
+          {passes.length === 0 ? (
+            <Text style={[typography.bodySecondary, isOwner ? { marginTop: spacing.sm } : null]}>No pending pass requests.</Text>
+          ) : (
+            passes.map((p) => (
+              <View key={p.id} style={styles.passCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>{p.memberName ?? 'Member'}</Text>
+                  <Text style={[typography.caption, { color: colors.warning, fontWeight: '700' }]}>
+                    {p.type === 'overnight' ? 'OVERNIGHT' : 'MULTI-DAY'}
+                  </Text>
+                </View>
+                <Text style={typography.caption}>{passWhen(p)}</Text>
+                {p.destination ? <Text style={typography.caption}>📍 {p.destination}</Text> : null}
+                {p.reason ? <Text style={typography.caption}>📝 {p.reason}</Text> : null}
+                {p.contactPhone ? <Text style={typography.caption}>📞 {p.contactPhone}</Text> : null}
+                <View style={styles.passBtns}>
+                  <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.success }]} onPress={() => decide(p, 'approved')}>
+                    <Text style={styles.passBtnText}>Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.crisis }]} onPress={() => decide(p, 'denied')}>
+                    <Text style={styles.passBtnText}>Deny</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
+
         {/* House meetings */}
         <SectionTitle>House meetings</SectionTitle>
         <Card>
@@ -299,4 +375,8 @@ const styles = StyleSheet.create({
   evtChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   evtChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
   evtSwitch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: spacing.sm },
+  passCard: { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm, marginTop: spacing.sm },
+  passBtns: { flexDirection: 'row', marginTop: spacing.sm },
+  passBtn: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, marginRight: spacing.sm },
+  passBtnText: { color: colors.textInverse, fontWeight: '700' },
 });

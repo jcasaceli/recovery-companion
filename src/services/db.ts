@@ -321,6 +321,111 @@ export async function deleteHouseEvent(id: string) {
   if (error) throw error;
 }
 
+// ── Pass forms (overnight / multi-day) ───────────────────────────────────────
+
+export type PassType = 'overnight' | 'multi_day';
+export type PassStatus = 'pending' | 'approved' | 'denied';
+
+export interface Pass {
+  id: string;
+  individualId: string;
+  houseId?: string;
+  memberName?: string;
+  type: PassType;
+  startDate: string;        // YYYY-MM-DD
+  endDate: string;          // YYYY-MM-DD
+  returnTime?: string;      // "HH:MM"
+  destination?: string;
+  reason?: string;
+  contactPhone?: string;
+  status: PassStatus;
+  reviewedAt?: string;
+  reviewNote?: string;
+  createdAt: string;
+}
+
+function mapPass(r: any): Pass {
+  const ind = r.individuals;
+  return {
+    id: r.id, individualId: r.individual_id, houseId: r.house_id ?? undefined,
+    memberName: ind ? `${ind.first_name}${ind.last_name ? ` ${ind.last_name}` : ''}` : undefined,
+    type: r.type, startDate: r.start_date, endDate: r.end_date,
+    returnTime: r.return_time ?? undefined, destination: r.destination ?? undefined,
+    reason: r.reason ?? undefined, contactPhone: r.contact_phone ?? undefined,
+    status: r.status, reviewedAt: r.reviewed_at ?? undefined, reviewNote: r.review_note ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+/** Whether the caller's org has the pass feature enabled (member-readable). */
+export async function getPassesEnabled(): Promise<boolean> {
+  const me = await resolveMyIndividual();
+  const orgId = me?.record?.org_id;
+  if (!orgId) return false;
+  const { data } = await db().from('organizations').select('passes_enabled').eq('id', orgId).maybeSingle();
+  return !!data?.passes_enabled;
+}
+
+/** Owner: turn the pass feature on (all members) or off (no members). */
+export async function setPassesEnabled(orgId: string, enabled: boolean) {
+  const { error } = await db().from('organizations').update({ passes_enabled: enabled }).eq('id', orgId);
+  if (error) throw error;
+}
+
+/** Member: submit a pass request. */
+export async function submitPass(input: {
+  type: PassType; startDate: string; endDate: string; returnTime?: string;
+  destination?: string; reason?: string; contactPhone?: string;
+}) {
+  const me = await resolveMyIndividual();
+  if (!me) throw new Error('We couldn’t find your member record.');
+  const { error } = await db().from('passes').insert({
+    org_id: me.record.org_id, individual_id: me.individualId, house_id: me.record.house_id ?? null,
+    type: input.type, start_date: input.startDate, end_date: input.endDate,
+    return_time: input.returnTime ?? null, destination: input.destination ?? null,
+    reason: input.reason ?? null, contact_phone: input.contactPhone ?? null,
+  });
+  if (error) throw error;
+  return { individualId: me.individualId, firstName: me.record.first_name as string | undefined };
+}
+
+/** Member: their own pass requests, newest first. */
+export async function listMyPasses(): Promise<Pass[]> {
+  const me = await resolveMyIndividual();
+  if (!me) return [];
+  const { data, error } = await db()
+    .from('passes').select('*').eq('individual_id', me.individualId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPass);
+}
+
+/** Staff: pass requests across the org (RLS scopes to org), newest first. */
+export async function listOrgPasses(status?: PassStatus): Promise<Pass[]> {
+  let q = db().from('passes')
+    .select('*, individuals(first_name,last_name)')
+    .order('created_at', { ascending: false });
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(mapPass);
+}
+
+/** Staff: approve or deny a pass, recording who reviewed it and when. */
+export async function reviewPass(id: string, status: 'approved' | 'denied', note?: string) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('passes').update({
+    status, review_note: note ?? null, reviewed_by: u.user?.id, reviewed_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Member: cancel their own (pending) request. */
+export async function cancelPass(id: string) {
+  const { error } = await db().from('passes').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string }

@@ -25,6 +25,7 @@ import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen'
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AgreementViewScreen } from '../screens/AgreementViewScreen';
 import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
+import { PassesScreen } from '../screens/PassesScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -160,6 +161,7 @@ function MainStack() {
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
       <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay membership fee' }} />
+      <RootStack.Screen name="Passes" component={PassesScreen} options={{ title: 'Passes' }} />
       <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />

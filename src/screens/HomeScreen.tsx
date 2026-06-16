@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -36,13 +36,17 @@ export function HomeScreen() {
   const [myCheckins, setMyCheckins] = useState<any[]>([]);
   const [showCheckins, setShowCheckins] = useState(false);
   const [houseEvents, setHouseEvents] = useState<HouseEvent[]>([]);
+  const [passesEnabled, setPassesEnabled] = useState(false);
 
   const loadCheckins = useCallback(() => {
     if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
   }, [lovedOne.id]);
   useFocusEffect(useCallback(() => {
     loadCheckins();
-    if (!isFacilitator) listHouseEvents().then(setHouseEvents).catch(() => {});
+    if (!isFacilitator) {
+      listHouseEvents().then(setHouseEvents).catch(() => {});
+      getPassesEnabled().then(setPassesEnabled).catch(() => {});
+    }
   }, [loadCheckins, isFacilitator]));
 
   const confirmDeleteCheckin = (c: any) => {
@@ -138,6 +142,7 @@ export function HomeScreen() {
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
     { label: 'Agreements', icon: 'document-text-outline', screen: 'Agreements' },
+    ...(passesEnabled ? [{ label: 'Passes', icon: 'bed-outline' as any, screen: 'Passes' }] : []),
   ];
 
   return (
