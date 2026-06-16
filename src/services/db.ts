@@ -426,6 +426,102 @@ export async function cancelPass(id: string) {
   if (error) throw error;
 }
 
+// ── Curfew GPS check-ins ─────────────────────────────────────────────────────
+
+export interface Curfew {
+  individualId: string;
+  enabled: boolean;
+  times: string[];          // ["HH:MM", ...]
+  updatedAt?: string;
+}
+
+export interface CurfewCheckin {
+  id: string;
+  individualId: string;
+  checkedAt: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+}
+
+function mapCurfew(r: any): Curfew {
+  return {
+    individualId: r.individual_id, enabled: !!r.enabled,
+    times: Array.isArray(r.times) ? r.times : [], updatedAt: r.updated_at,
+  };
+}
+function mapCurfewCheckin(r: any): CurfewCheckin {
+  return {
+    id: r.id, individualId: r.individual_id, checkedAt: r.checked_at,
+    latitude: r.latitude ?? undefined, longitude: r.longitude ?? undefined, address: r.address ?? undefined,
+  };
+}
+
+/** Staff: read a member's curfew config (null if never set). */
+export async function getCurfew(individualId: string): Promise<Curfew | null> {
+  const { data, error } = await db().from('curfews').select('*').eq('individual_id', individualId).maybeSingle();
+  if (error) throw error;
+  return data ? mapCurfew(data) : null;
+}
+
+/** Staff: enable/disable curfew for a member and set the check-in times. */
+export async function setCurfew(individualId: string, input: { enabled: boolean; times: string[] }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('curfews').upsert({
+    individual_id: individualId, enabled: input.enabled,
+    times: input.times, created_by: u.user?.id, updated_at: new Date().toISOString(),
+  }, { onConflict: 'individual_id' });
+  if (error) throw error;
+}
+
+/** Member: read their own curfew (null if none / disabled handled by caller). */
+export async function getMyCurfew(): Promise<Curfew | null> {
+  const me = await resolveMyIndividual();
+  if (!me) return null;
+  const { data } = await db().from('curfews').select('*').eq('individual_id', me.individualId).maybeSingle();
+  return data ? mapCurfew(data) : null;
+}
+
+/** Member: log a curfew check-in with their GPS location. */
+export async function recordCurfewCheckin(input: { latitude?: number; longitude?: number; address?: string }) {
+  const me = await resolveMyIndividual();
+  if (!me) throw new Error('We couldn’t find your member record.');
+  const { error } = await db().from('curfew_checkins').insert({
+    individual_id: me.individualId,
+    latitude: input.latitude ?? null, longitude: input.longitude ?? null, address: input.address ?? null,
+  });
+  if (error) throw error;
+  return { individualId: me.individualId, firstName: me.record.first_name as string | undefined };
+}
+
+/** Check-ins for one member, newest first (optionally since an ISO timestamp). */
+export async function listCurfewCheckins(individualId: string, sinceISO?: string): Promise<CurfewCheckin[]> {
+  let q = db().from('curfew_checkins').select('*').eq('individual_id', individualId).order('checked_at', { ascending: false });
+  if (sinceISO) q = q.gte('checked_at', sinceISO);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(mapCurfewCheckin);
+}
+
+/** Staff: all enabled curfews in the org, with member names (RLS scopes). */
+export async function listOrgCurfews(): Promise<(Curfew & { memberName?: string })[]> {
+  const { data, error } = await db()
+    .from('curfews').select('*, individuals(first_name,last_name)').eq('enabled', true);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    ...mapCurfew(r),
+    memberName: r.individuals ? `${r.individuals.first_name}${r.individuals.last_name ? ` ${r.individuals.last_name}` : ''}` : undefined,
+  }));
+}
+
+/** Staff: curfew check-ins across the org since an ISO timestamp (for compliance). */
+export async function listOrgCurfewCheckins(sinceISO: string): Promise<CurfewCheckin[]> {
+  const { data, error } = await db()
+    .from('curfew_checkins').select('*').gte('checked_at', sinceISO).order('checked_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapCurfewCheckin);
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string }

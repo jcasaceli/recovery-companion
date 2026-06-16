@@ -51,6 +51,16 @@ export function formatDateTime(iso: string): string {
   return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${d.getFullYear()}, ${h}:${m} ${ampm}`;
 }
 
+/** "2026-06-16T21:58:00Z" -> "9:58 PM" (local time only). */
+export function formatTime(iso: string): string {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
+
 /** Next weekly occurrence (today or later) of a date, as 'YYYY-MM-DD' (local). */
 export function nextWeeklyISO(startISO: string): string {
   const start = parseLocalDate(startISO);

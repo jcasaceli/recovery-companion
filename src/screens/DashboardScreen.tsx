@@ -11,10 +11,11 @@ import {
   listFlaggedIndividualIds, listOrgCheckins, getMyOrg, Agreement,
   listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
   listOrgPasses, reviewPass, Pass, setPassesEnabled, getMyHouseScope,
+  listOrgCurfews, listOrgCurfewCheckins, Curfew, CurfewCheckin,
 } from '../services/db';
 import { Payment } from '../types';
 import { notifyCare } from '../services/push';
-import { formatDate, houseEventWhen, to12h } from '../utils/format';
+import { formatDate, houseEventWhen, to12h, formatTime } from '../utils/format';
 import { DateField, TimeField } from '../components/PickerFields';
 
 function money(cents = 0) { return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
@@ -34,6 +35,8 @@ export function DashboardScreen() {
   const [houses, setHouses] = useState<House[]>([]);
   const [events, setEvents] = useState<HouseEvent[]>([]);
   const [passes, setPasses] = useState<Pass[]>([]);
+  const [curfews, setCurfews] = useState<(Curfew & { memberName?: string })[]>([]);
+  const [curfewToday, setCurfewToday] = useState<CurfewCheckin[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -49,11 +52,17 @@ export function DashboardScreen() {
 
   const loadEvents = () => { listHouses().then(setHouses).catch(() => {}); listHouseEvents().then(setEvents).catch(() => {}); };
   const loadPasses = () => { listOrgPasses('pending').then(setPasses).catch(() => {}); };
+  const loadCurfews = () => {
+    listOrgCurfews().then(setCurfews).catch(() => {});
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+    listOrgCurfewCheckins(startOfDay.toISOString()).then(setCurfewToday).catch(() => {});
+  };
 
   const load = useCallback(() => {
     if (!subscriptionActive) { setLoading(false); return; }
     loadEvents();
     loadPasses();
+    loadCurfews();
     getMyHouseScope().then((s) => setIsOwner(s.isOwner)).catch(() => {});
     Promise.all([
       listFacilitatorIndividuals(), listOrgPayments(), listOrgAgreements(),
@@ -155,6 +164,11 @@ export function DashboardScreen() {
   const signed = agreements.filter((a) => a.status === 'signed');
   const pendingAgs = agreements.filter((a) => a.status !== 'signed');
   const recentPays = [...payments].filter((p) => p.status === 'paid').slice(0, 6);
+
+  // Curfew compliance: latest check-in today per member.
+  const lastCurfewById: Record<string, CurfewCheckin> = {};
+  for (const c of curfewToday) { if (!lastCurfewById[c.individualId]) lastCurfewById[c.individualId] = c; }
+  const curfewMissing = curfews.filter((c) => !lastCurfewById[c.individualId]).length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -268,6 +282,30 @@ export function DashboardScreen() {
             ))
           )}
         </Card>
+
+        {/* Curfew compliance */}
+        {curfews.length ? (
+          <>
+            <SectionTitle>Curfew compliance · today</SectionTitle>
+            <Card style={curfewMissing ? { borderWidth: 1, borderColor: colors.warning } : undefined}>
+              {curfews.map((c) => {
+                const last = lastCurfewById[c.individualId];
+                return (
+                  <TouchableOpacity key={c.individualId} style={styles.row} onPress={() => openClient(c.individualId)}>
+                    <View style={[styles.dot, { backgroundColor: last ? colors.success : colors.crisis }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={typography.body}>{c.memberName ?? 'Member'}</Text>
+                      {c.times.length ? <Text style={typography.caption}>Curfew: {c.times.map(to12h).join(' · ')}</Text> : null}
+                    </View>
+                    <Text style={[typography.caption, { color: last ? colors.success : colors.crisis, textAlign: 'right', maxWidth: 130 }]} numberOfLines={2}>
+                      {last ? `✓ ${formatTime(last.checkedAt)}${last.address ? `\n${last.address}` : ''}` : 'No check-in'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </Card>
+          </>
+        ) : null}
 
         {/* House meetings */}
         <SectionTitle>House meetings</SectionTitle>

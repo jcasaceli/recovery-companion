@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -16,7 +16,9 @@ import { TimelineEntry, CheckIn, Milestone, TreatmentSession } from '../types';
 import {
   daysSince,
   formatDate,
+  formatTime,
   houseEventWhen,
+  to12h,
   ordinal,
   MOOD_EMOJI,
   MOOD_LABELS,
@@ -37,17 +39,30 @@ export function HomeScreen() {
   const [showCheckins, setShowCheckins] = useState(false);
   const [houseEvents, setHouseEvents] = useState<HouseEvent[]>([]);
   const [passesEnabled, setPassesEnabled] = useState(false);
+  const [curfew, setCurfew] = useState<Curfew | null>(null);
+  const [curfewToday, setCurfewToday] = useState<any[]>([]);
+  const [curfewBusy, setCurfewBusy] = useState(false);
 
   const loadCheckins = useCallback(() => {
     if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
   }, [lovedOne.id]);
+  const loadCurfew = useCallback(() => {
+    getMyCurfew().then((c) => {
+      setCurfew(c);
+      if (c?.enabled) {
+        const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+        listCurfewCheckins(c.individualId, startOfDay.toISOString()).then(setCurfewToday).catch(() => {});
+      } else { setCurfewToday([]); }
+    }).catch(() => {});
+  }, []);
   useFocusEffect(useCallback(() => {
     loadCheckins();
     if (!isFacilitator) {
       listHouseEvents().then(setHouseEvents).catch(() => {});
       getPassesEnabled().then(setPassesEnabled).catch(() => {});
+      loadCurfew();
     }
-  }, [loadCheckins, isFacilitator]));
+  }, [loadCheckins, loadCurfew, isFacilitator]));
 
   const confirmDeleteCheckin = (c: any) => {
     Alert.alert(
@@ -134,6 +149,32 @@ export function HomeScreen() {
     } catch (e: any) {
       Alert.alert('Could not check in', e?.message ?? 'Please try again.');
     }
+  };
+
+  const curfewCheckIn = async () => {
+    setCurfewBusy(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Location needed', 'Curfew check-ins require location access so your facilitator can verify where you checked in.');
+        setCurfewBusy(false);
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      let address: string | undefined;
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        const g = geo[0];
+        if (g) address = [g.name, g.street, g.city, g.region].filter(Boolean).join(', ');
+      } catch {}
+      const res = await recordCurfewCheckin({ latitude: lat, longitude: lng, address });
+      notifyCare(res.individualId, 'Curfew check-in', `${res.firstName || lovedOne.firstName} checked in for curfew${address ? ` (${address})` : ''}.`, 'activity');
+      loadCurfew();
+      Alert.alert("You're checked in ✅", address ? `Logged at ${address}.` : 'Your curfew check-in was logged.');
+    } catch (e: any) {
+      Alert.alert('Could not check in', e?.message ?? 'Please try again.');
+    } finally { setCurfewBusy(false); }
   };
 
   const QUICK_LINKS: { label: string; icon: any; screen: string }[] = [
@@ -252,6 +293,25 @@ export function HomeScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Curfew check-in (staff-enabled, per member) */}
+      {!isFacilitator && curfew?.enabled ? (
+        <Card style={{ borderWidth: 1, borderColor: colors.primary }}>
+          <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.xs }]}>🌙 Curfew check-in</Text>
+          {curfew.times.length ? (
+            <Text style={typography.caption}>Check in by: {curfew.times.map(to12h).join(' · ')}</Text>
+          ) : (
+            <Text style={typography.caption}>Check in when asked by your facilitator.</Text>
+          )}
+          <Text style={[typography.caption, { marginTop: spacing.xs, color: curfewToday.length ? colors.success : colors.warning, fontWeight: '600' }]}>
+            {curfewToday.length
+              ? `✓ Checked in today at ${formatTime(curfewToday[0].checkedAt)}`
+              : 'Not yet checked in today'}
+          </Text>
+          <View style={{ height: spacing.sm }} />
+          <Button title={curfewBusy ? 'Checking in…' : '📍 Check in now'} onPress={curfewCheckIn} disabled={curfewBusy} />
+        </Card>
+      ) : null}
 
       {/* House meetings from staff */}
       {!isFacilitator && houseEvents.length ? (

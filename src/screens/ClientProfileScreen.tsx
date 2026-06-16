@@ -13,6 +13,7 @@ import {
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
 import { DateField } from '../components/PickerFields';
+import { CurfewManager } from '../components/CurfewManager';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -326,6 +327,9 @@ export function ClientProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Curfew check-ins */}
+      <CurfewManager individualId={id} memberName={client.firstName} />
 
       {/* Membership agreements */}
       <SectionTitle>Membership agreements</SectionTitle>
