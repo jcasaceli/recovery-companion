@@ -6,7 +6,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -24,10 +24,17 @@ export function ClientsScreen() {
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
 
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [houses, setHouses] = useState<House[]>([]);
+  const [scope, setScope] = useState<{ isOwner: boolean; houseIds: string[] } | null>(null);
+  const [houseFilter, setHouseFilter] = useState<string | 'ALL'>('ALL'); // owner can filter
+  const [addHouseId, setAddHouseId] = useState<string | undefined>(undefined);
   useEffect(() => {
     getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
     listFlaggedIndividualIds().then((ids) => setFlagged(new Set(ids))).catch(() => {});
+    listHouses().then(setHouses).catch(() => {});
+    getMyHouseScope().then(setScope).catch(() => {});
   }, []);
+  const houseLabel = (id?: string) => houses.find((h) => h.id === id)?.name;
   const [filter, setFilter] = useState<ClientStatus>('in_care');
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,14 +47,20 @@ export function ClientsScreen() {
   // add-form
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [houseName, setHouseName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [rent, setRentValue] = useState('');
   const [dueDay, setDueDay] = useState('');
 
   // Preview mode shows sample residents until the org subscribes.
-  const sourceClients = locked ? DEMO_CLIENTS : clients;
+  const sourceClients = (locked ? DEMO_CLIENTS : clients).filter((c) => {
+    if (locked) return true;
+    // House managers only see members in their assigned house(s).
+    if (scope && !scope.isOwner && (!c.houseId || !scope.houseIds.includes(c.houseId))) return false;
+    // Owner can filter to one house.
+    if (houseFilter !== 'ALL' && c.houseId !== houseFilter) return false;
+    return true;
+  });
   const shown = sourceClients.filter((c) => c.status === filter);
   const counts = {
     in_care: sourceClients.filter((c) => c.status === 'in_care').length,
@@ -64,14 +77,14 @@ export function ClientsScreen() {
       await createClient({
         firstName,
         lastName: lastName || undefined,
-        houseName: houseName || undefined,
+        houseId: addHouseId,
         phone: phone || undefined,
         email: email || undefined,
         monthlyRentCents: rentCents,
         rentDueDay: day,
         levelOfCare: 'sober_living',
       });
-      setFirstName(''); setLastName(''); setHouseName(''); setPhone(''); setEmail(''); setRentValue(''); setDueDay('');
+      setFirstName(''); setLastName(''); setPhone(''); setEmail(''); setRentValue(''); setDueDay('');
       setAdding(false); setFilter('in_care');
     } catch (e: any) {
       Alert.alert('Could not add member', e?.message ?? 'Please try again.');
@@ -109,6 +122,19 @@ export function ClientsScreen() {
         </TouchableOpacity>
       ) : null}
 
+      {!locked && houses.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.houseFilterRow} contentContainerStyle={{ paddingHorizontal: spacing.md }}>
+          <TouchableOpacity onPress={() => setHouseFilter('ALL')} style={[styles.houseChip, houseFilter === 'ALL' ? styles.houseChipOn : null]}>
+            <Text style={[styles.houseChipText, houseFilter === 'ALL' ? styles.houseChipTextOn : null]}>All houses</Text>
+          </TouchableOpacity>
+          {houses.filter((h) => !scope || scope.isOwner || scope.houseIds.includes(h.id)).map((h) => (
+            <TouchableOpacity key={h.id} onPress={() => setHouseFilter(h.id)} style={[styles.houseChip, houseFilter === h.id ? styles.houseChipOn : null]}>
+              <Text style={[styles.houseChipText, houseFilter === h.id ? styles.houseChipTextOn : null]}>{h.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <View style={styles.filters}>
         <FilterTab label={`In Care (${counts.in_care})`} active={filter === 'in_care'} onPress={() => setFilter('in_care')} />
         <FilterTab label={`Completed (${counts.completed})`} active={filter === 'completed'} onPress={() => setFilter('completed')} />
@@ -123,7 +149,18 @@ export function ClientsScreen() {
             <SectionTitle>New member</SectionTitle>
             <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
-            <TextInput style={styles.input} value={houseName} onChangeText={setHouseName} placeholder="House name (optional)" placeholderTextColor={colors.textMuted} />
+            {houses.length ? (
+              <>
+                <Text style={styles.pickerLabel}>House</Text>
+                <View style={styles.houseChips}>
+                  {houses.map((h) => (
+                    <TouchableOpacity key={h.id} onPress={() => setAddHouseId(h.id)} style={[styles.houseChip, addHouseId === h.id ? styles.houseChipOn : null]}>
+                      <Text style={[styles.houseChipText, addHouseId === h.id ? styles.houseChipTextOn : null]}>{h.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : null}
             <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone (optional — to text an app invite)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
             <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email (optional)" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
             <TextInput style={styles.input} value={rent} onChangeText={setRentValue} placeholder="Monthly membership fee (optional, e.g. 800)" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
@@ -160,7 +197,7 @@ export function ClientsScreen() {
                   {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}
                 </Text>
                 <Text style={typography.caption}>
-                  {c.houseName ? `${c.houseName} · ` : ''}Fee: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
+                  {houseLabel(c.houseId) || c.houseName ? `${houseLabel(c.houseId) || c.houseName} · ` : ''}Fee: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
                 </Text>
               </View>
               {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
@@ -262,6 +299,13 @@ const styles = StyleSheet.create({
   bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
+  houseFilterRow: { marginBottom: spacing.sm, maxHeight: 44 },
+  pickerLabel: { ...typography.caption, marginBottom: 4 },
+  houseChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  houseChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  houseChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  houseChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  houseChipTextOn: { color: colors.textInverse },
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { color: colors.textSecondary },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },

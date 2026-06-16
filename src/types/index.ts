@@ -176,6 +176,7 @@ export interface ClientSummary {
   phone?: string;
   email?: string;
   houseName?: string;
+  houseId?: string;
   programName?: string;
   status: ClientStatus;
   levelOfCare?: LevelOfCare;

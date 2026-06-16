@@ -268,6 +268,72 @@ export async function setNotifyMemberActivity(on: boolean) {
   if (error) throw error;
 }
 
+// ── Houses (multi-house) ─────────────────────────────────────────────────────
+
+export interface House { id: string; name: string; joinCode?: string }
+
+async function myStaffOrgId(): Promise<string | null> {
+  const { data } = await db().from('org_members').select('org_id').limit(1).maybeSingle();
+  return data?.org_id ?? null;
+}
+
+/** All houses in the caller's org. */
+export async function listHouses(): Promise<House[]> {
+  const { data, error } = await db().from('houses').select('id,name,join_code').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map((h: any) => ({ id: h.id, name: h.name, joinCode: h.join_code ?? undefined }));
+}
+
+/** Owner: create a new house with its own join code. */
+export async function createHouse(name: string): Promise<void> {
+  const orgId = await myStaffOrgId();
+  if (!orgId) throw new Error('No organization found.');
+  const code = Math.random().toString(16).slice(2, 8).toUpperCase();
+  const { error } = await db().from('houses').insert({ org_id: orgId, name: name.trim(), join_code: code });
+  if (error) throw error;
+}
+
+export async function renameHouse(id: string, name: string): Promise<void> {
+  const { error } = await db().from('houses').update({ name: name.trim() }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteHouse(id: string): Promise<void> {
+  const { error } = await db().from('houses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Profile ids of house managers assigned to a house. */
+export async function listHouseStaff(houseId: string): Promise<string[]> {
+  const { data, error } = await db().from('house_staff').select('profile_id').eq('house_id', houseId);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => r.profile_id);
+}
+
+export async function assignManagerToHouse(houseId: string, profileId: string): Promise<void> {
+  const { error } = await db().from('house_staff').upsert({ house_id: houseId, profile_id: profileId }, { onConflict: 'house_id,profile_id' });
+  if (error) throw error;
+}
+
+export async function removeManagerFromHouse(houseId: string, profileId: string): Promise<void> {
+  const { error } = await db().from('house_staff').delete().eq('house_id', houseId).eq('profile_id', profileId);
+  if (error) throw error;
+}
+
+/** Which houses the current staff member can see (owner = all; manager = assigned). */
+export async function getMyHouseScope(): Promise<{ isOwner: boolean; houseIds: string[] }> {
+  const { data: u } = await db().auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return { isOwner: false, houseIds: [] };
+  const { data: m } = await db().from('org_members').select('is_owner').eq('profile_id', uid).maybeSingle();
+  if (m?.is_owner) {
+    const { data: hs } = await db().from('houses').select('id');
+    return { isOwner: true, houseIds: (hs ?? []).map((h: any) => h.id) };
+  }
+  const { data: hs } = await db().from('house_staff').select('house_id').eq('profile_id', uid);
+  return { isOwner: false, houseIds: (hs ?? []).map((r: any) => r.house_id) };
+}
+
 // ── Care-team announcements ──────────────────────────────────────────────────
 
 export interface CareTeamMember { name: string; role: string }
@@ -580,6 +646,7 @@ export async function createIndividual(input: {
   phone?: string;
   email?: string;
   houseName?: string;
+  houseId?: string;
   monthlyRentCents?: number;
   rentDueDay?: number;
   programName?: string;
@@ -591,6 +658,7 @@ export async function createIndividual(input: {
     .from('individuals')
     .insert({
       org_id: input.orgId,
+      house_id: input.houseId ?? null,
       first_name: input.firstName,
       last_name: input.lastName ?? null,
       phone: input.phone ?? null,

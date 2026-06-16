@@ -9,6 +9,7 @@ import { getMyOrg, setOrgPaymentHandles } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
+import { HousesManager } from '../components/HousesManager';
 
 export function SettingsScreen() {
   const { resetApp } = useAppState();
@@ -259,6 +260,8 @@ export function SettingsScreen() {
               </Text>
             ) : null}
           </Card>
+
+          <HousesManager managers={managers} />
         </>
       ) : null}
 

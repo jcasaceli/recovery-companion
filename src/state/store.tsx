@@ -115,6 +115,7 @@ interface AppState extends PersistedState {
     phone?: string;
     email?: string;
     houseName?: string;
+    houseId?: string;
     monthlyRentCents?: number;
     rentDueDay?: number;
     programName?: string;
@@ -296,6 +297,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           phone: c.phone ?? undefined,
           email: c.email ?? undefined,
           houseName: c.house_name ?? undefined,
+          houseId: c.house_id ?? undefined,
           programName: c.program_name ?? undefined,
           status: (c.status ?? 'in_care') as 'in_care' | 'completed',
           levelOfCare: c.level_of_care ?? undefined,
@@ -572,6 +574,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         phone: input.phone?.trim() || undefined,
         email: input.email?.trim() || undefined,
         houseName: input.houseName?.trim() || undefined,
+        houseId: input.houseId,
         monthlyRentCents: input.monthlyRentCents,
         rentDueDay: input.rentDueDay,
         programName: input.programName?.trim() || undefined,
