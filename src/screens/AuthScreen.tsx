@@ -5,6 +5,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { Button } from '../components/ui';
 import { useAuth } from '../state/auth';
 import { AppRole } from '../types';
+import { toUsE164 } from '../utils/format';
 
 const ROLES: { value: AppRole; label: string; blurb: string }[] = [
   { value: 'individual', label: 'I am a member of a sober living network', blurb: 'Track progress, pay membership fees, and find meetings.' },
@@ -57,7 +58,7 @@ export function AuthScreen() {
 
   const doSignUp = () =>
     run(async () => {
-      await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: phone || undefined, verifyChannel: channel, orgName: orgName || undefined });
+      await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined });
       setStep('verify');
       Alert.alert(
         channel === 'email' ? 'Check your email' : 'Check your texts',
@@ -70,7 +71,7 @@ export function AuthScreen() {
   const doVerify = () =>
     run(async () => {
       if (channel === 'email') await auth.verifyEmailOtp(email, code.trim());
-      else await auth.verifySmsOtp(phone, code.trim());
+      else await auth.verifySmsOtp(toUsE164(phone) || phone, code.trim());
       // onAuthStateChange will flip the app to the signed-in state.
     });
 
@@ -119,7 +120,7 @@ export function AuthScreen() {
               <Field label="Sober living name" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
             ) : null}
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-            <Field label="Phone (for SMS verification)" value={phone} onChange={setPhone} placeholder="+1 555 555 5555" keyboardType="phone-pad" />
+            <Field label="Phone (for SMS verification)" value={phone} onChange={setPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
 
             <Text style={styles.fieldLabel}>Verify with</Text>
@@ -155,7 +156,7 @@ export function AuthScreen() {
             <Field label="Verification code" value={code} onChange={setCode} placeholder="123456" keyboardType="number-pad" />
             <Button title="Verify" onPress={doVerify} disabled={busy || code.length < 4} />
             <TouchableOpacity
-              onPress={() => run(() => (channel === 'email' ? auth.requestEmailOtp(email) : auth.requestSmsOtp(phone)))}
+              onPress={() => run(() => (channel === 'email' ? auth.requestEmailOtp(email) : auth.requestSmsOtp(toUsE164(phone) || phone)))}
               style={styles.link}
             >
               <Text style={styles.linkText}>Resend code</Text>

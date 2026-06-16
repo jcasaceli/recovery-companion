@@ -5,7 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -16,6 +16,7 @@ import {
   daysSince,
   formatDate,
   ordinal,
+  to12h,
   MOOD_EMOJI,
   MOOD_LABELS,
   PROGRAM_LABELS,
@@ -33,11 +34,15 @@ export function HomeScreen() {
   const [alertText, setAlertText] = useState('');
   const [myCheckins, setMyCheckins] = useState<any[]>([]);
   const [showCheckins, setShowCheckins] = useState(false);
+  const [houseEvents, setHouseEvents] = useState<HouseEvent[]>([]);
 
   const loadCheckins = useCallback(() => {
     if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
   }, [lovedOne.id]);
-  useFocusEffect(useCallback(() => { loadCheckins(); }, [loadCheckins]));
+  useFocusEffect(useCallback(() => {
+    loadCheckins();
+    if (!isFacilitator) listHouseEvents().then(setHouseEvents).catch(() => {});
+  }, [loadCheckins, isFacilitator]));
 
   const confirmDeleteCheckin = (c: any) => {
     Alert.alert(
@@ -241,6 +246,25 @@ export function HomeScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* House meetings from staff */}
+      {!isFacilitator && houseEvents.length ? (
+        <Card>
+          <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.xs }]}>🏠 House meetings</Text>
+          {houseEvents.map((e) => (
+            <View key={e.id} style={styles.houseEventRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>
+                  {e.title}{e.mandatory ? <Text style={styles.mandatory}>  · MANDATORY</Text> : null}
+                </Text>
+                <Text style={typography.caption}>
+                  {formatDate(e.date)}{e.time ? ` · ${to12h(e.time)}` : ''}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </Card>
+      ) : null}
 
       {/* SOS */}
       <TouchableOpacity style={styles.sos} onPress={sos} activeOpacity={0.85}>
@@ -448,6 +472,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sosText: { color: colors.crisis, fontWeight: '700', fontSize: 14 },
+  houseEventRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: colors.divider },
+  mandatory: { color: colors.crisis, fontWeight: '800', fontSize: 11 },
   flagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, marginBottom: spacing.md },
   flagText: { color: colors.primary, fontWeight: '600', marginLeft: spacing.xs },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },

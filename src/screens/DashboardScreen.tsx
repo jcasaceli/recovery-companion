@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -9,9 +9,10 @@ import { useAppState } from '../state/store';
 import {
   listFacilitatorIndividuals, listOrgPayments, listOrgAgreements,
   listFlaggedIndividualIds, listOrgCheckins, getMyOrg, Agreement,
+  listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
 } from '../services/db';
 import { Payment } from '../types';
-import { formatDate } from '../utils/format';
+import { formatDate, to12h } from '../utils/format';
 
 function money(cents = 0) { return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
 function period() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
@@ -27,10 +28,24 @@ export function DashboardScreen() {
   const [flags, setFlags] = useState<string[]>([]);
   const [checkins, setCheckins] = useState<{ individualId: string; createdAt: string }[]>([]);
   const [org, setOrg] = useState<{ name?: string } | null>(null);
+  const [houses, setHouses] = useState<House[]>([]);
+  const [events, setEvents] = useState<HouseEvent[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Add-house-meeting modal
+  const [evtOpen, setEvtOpen] = useState(false);
+  const [evtHouseId, setEvtHouseId] = useState<string | undefined>(undefined);
+  const [evtTitle, setEvtTitle] = useState('');
+  const [evtDate, setEvtDate] = useState('');
+  const [evtTime, setEvtTime] = useState('');
+  const [evtMandatory, setEvtMandatory] = useState(false);
+  const [evtBusy, setEvtBusy] = useState(false);
+
+  const loadEvents = () => { listHouses().then(setHouses).catch(() => {}); listHouseEvents().then(setEvents).catch(() => {}); };
 
   const load = useCallback(() => {
     if (!subscriptionActive) { setLoading(false); return; }
+    loadEvents();
     Promise.all([
       listFacilitatorIndividuals(), listOrgPayments(), listOrgAgreements(),
       listFlaggedIndividualIds(), listOrgCheckins(WEEK_AGO()), getMyOrg(),
@@ -44,6 +59,28 @@ export function DashboardScreen() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [subscriptionActive]);
+
+  const saveEvent = async () => {
+    if (!evtHouseId || !evtTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(evtDate.trim())) {
+      Alert.alert('Missing info', 'Pick a house, a title, and a date (YYYY-MM-DD).');
+      return;
+    }
+    setEvtBusy(true);
+    try {
+      await createHouseEvent({ houseId: evtHouseId, title: evtTitle.trim(), date: evtDate.trim(), time: evtTime.trim() || undefined, mandatory: evtMandatory });
+      setEvtOpen(false); setEvtTitle(''); setEvtDate(''); setEvtTime(''); setEvtMandatory(false);
+      loadEvents();
+    } catch (e: any) { Alert.alert('Could not add', e?.message ?? 'Try again.'); }
+    finally { setEvtBusy(false); }
+  };
+
+  const removeEvent = (e: HouseEvent) => {
+    Alert.alert('Delete meeting?', `Remove “${e.title}”?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteHouseEvent(e.id).catch(() => {}); loadEvents(); } },
+    ]);
+  };
+  const houseName = (id: string) => houses.find((h) => h.id === id)?.name ?? 'House';
 
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
 
@@ -154,6 +191,26 @@ export function DashboardScreen() {
         ) : null}
 
         {/* Recent payments */}
+        {/* House meetings */}
+        <SectionTitle>House meetings</SectionTitle>
+        <Card>
+          {events.length === 0 ? (
+            <Text style={typography.bodySecondary}>No upcoming meetings. Add one so it appears on members’ Home screens.</Text>
+          ) : (
+            events.map((e) => (
+              <TouchableOpacity key={e.id} style={styles.row} onLongPress={() => removeEvent(e)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>{e.title}{e.mandatory ? <Text style={{ color: colors.crisis, fontWeight: '800', fontSize: 11 }}>  · MANDATORY</Text> : null}</Text>
+                  <Text style={typography.caption}>{houseName(e.houseId)} · {formatDate(e.date)}{e.time ? ` · ${to12h(e.time)}` : ''}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+          <View style={{ height: spacing.sm }} />
+          <Button title="➕ Add house meeting" variant="secondary" onPress={() => { setEvtHouseId(houses[0]?.id); setEvtOpen(true); }} />
+          {events.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press a meeting to delete it.</Text> : null}
+        </Card>
+
         <SectionTitle>Recent payments</SectionTitle>
         {recentPays.length === 0 ? (
           <Card><Text style={typography.bodySecondary}>No payments recorded yet.</Text></Card>
@@ -173,6 +230,33 @@ export function DashboardScreen() {
         <Button title="View all members" variant="secondary" onPress={() => nav.navigate('Clients')} />
         <View style={{ height: spacing.xl }} />
       </ScrollView>
+
+      {/* Add house meeting */}
+      <Modal visible={evtOpen} transparent animationType="fade" onRequestClose={() => setEvtOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Add house meeting</Text>
+            {houses.length > 1 ? (
+              <View style={styles.evtChips}>
+                {houses.map((h) => (
+                  <TouchableOpacity key={h.id} onPress={() => setEvtHouseId(h.id)} style={[styles.evtChip, evtHouseId === h.id ? styles.evtChipOn : null]}>
+                    <Text style={[styles.evtChipText, evtHouseId === h.id ? { color: colors.textInverse } : null]}>{h.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+            <TextInput style={styles.evtInput} value={evtTitle} onChangeText={setEvtTitle} placeholder="Title (e.g. House meeting)" placeholderTextColor={colors.textMuted} />
+            <TextInput style={styles.evtInput} value={evtDate} onChangeText={setEvtDate} placeholder="Date (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
+            <TextInput style={styles.evtInput} value={evtTime} onChangeText={setEvtTime} placeholder="Time (e.g. 19:00) — optional" placeholderTextColor={colors.textMuted} />
+            <View style={styles.evtSwitch}>
+              <Text style={typography.body}>Mandatory</Text>
+              <Switch value={evtMandatory} onValueChange={setEvtMandatory} trackColor={{ true: colors.crisis }} />
+            </View>
+            <Button title={evtBusy ? 'Adding…' : 'Add meeting'} onPress={saveEvent} disabled={evtBusy} />
+            <TouchableOpacity onPress={() => setEvtOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -198,4 +282,12 @@ const styles = StyleSheet.create({
   docIcon: { fontSize: 18, marginRight: spacing.sm },
   barTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, marginTop: spacing.sm, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4, backgroundColor: colors.success },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
+  modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  evtInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginVertical: spacing.xs },
+  evtChips: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: spacing.sm },
+  evtChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  evtChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  evtChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  evtSwitch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: spacing.sm },
 });

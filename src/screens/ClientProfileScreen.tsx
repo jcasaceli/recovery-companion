@@ -9,6 +9,7 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
+  listHouses,
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
 
@@ -31,6 +32,7 @@ export function ClientProfileScreen() {
   const [checkins, setCheckins] = useState<any[]>([]);
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
+  const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -90,6 +92,7 @@ export function ClientProfileScreen() {
   useEffect(() => {
     listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
+    listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
     loadUA();
     listMyPayments(id).then((pays: any[]) => {
@@ -126,8 +129,10 @@ export function ClientProfileScreen() {
   const rentColor = rent <= 0 ? colors.textMuted : paidThisMonth >= rent ? colors.success : paidThisMonth > 0 ? colors.warning : colors.crisis;
 
   const inviteMsg = () => {
-    const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
-    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Sober Living Companion app to track your progress and pay membership fees.${code}`;
+    const joinCode = houseCode || org?.join_code;
+    const code = joinCode ? ` Your join code is ${joinCode}.` : '';
+    const who = client.firstName?.trim() || 'there';
+    return `Hi ${who}, you've been invited to join ${org?.name || 'our sober living'} on the Sober Living Companion app — download it to track your progress, see house meetings, and pay your membership fees.${code} Get the app: https://soberlivingcompanion.com`;
   };
   const textInvite = () => {
     if (!client.phone) return;

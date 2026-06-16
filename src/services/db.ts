@@ -268,6 +268,54 @@ export async function setNotifyMemberActivity(on: boolean) {
   if (error) throw error;
 }
 
+// ── House meetings / events ──────────────────────────────────────────────────
+
+export interface HouseEvent {
+  id: string;
+  houseId: string;
+  title: string;
+  date: string;       // YYYY-MM-DD
+  time?: string;      // "19:00"
+  mandatory: boolean;
+  createdAt: string;
+}
+
+function mapHouseEvent(r: any): HouseEvent {
+  return {
+    id: r.id, houseId: r.house_id, title: r.title,
+    date: r.event_date, time: r.event_time ?? undefined,
+    mandatory: !!r.mandatory, createdAt: r.created_at,
+  };
+}
+
+/** Staff: add a house meeting / mandatory event. */
+export async function createHouseEvent(input: { houseId: string; title: string; date: string; time?: string; mandatory?: boolean }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('house_events').insert({
+    house_id: input.houseId, title: input.title, event_date: input.date,
+    event_time: input.time ?? null, mandatory: !!input.mandatory, created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+/** Upcoming house events the caller can see (RLS scopes by house). */
+export async function listHouseEvents(): Promise<HouseEvent[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await db()
+    .from('house_events')
+    .select('*')
+    .gte('event_date', today)
+    .order('event_date')
+    .order('event_time', { nullsFirst: true });
+  if (error) throw error;
+  return (data ?? []).map(mapHouseEvent);
+}
+
+export async function deleteHouseEvent(id: string) {
+  const { error } = await db().from('house_events').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string }

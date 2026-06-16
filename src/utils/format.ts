@@ -82,3 +82,22 @@ export function ordinal(n: number): string {
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
+
+/** Normalize a US phone number to E.164 (+1XXXXXXXXXX) for SMS verification.
+ *  Members enter a plain 10-digit US number — we add the +1 automatically. */
+export function toUsE164(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  return raw.startsWith('+') ? raw : (d ? `+${d}` : undefined);
+}
+
+/** "19:00" -> "7:00 PM" */
+export function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
+  if (isNaN(h)) return hhmm;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(isNaN(m) ? 0 : m).padStart(2, '0')} ${period}`;
+}
