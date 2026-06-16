@@ -37,11 +37,11 @@ export function TasksScreen() {
 
   return (
     <Screen>
-      <ScreenTitle title="Tasks & notes" subtitle={`Shared with ${lovedOne.firstName}'s care team`} />
+      <ScreenTitle title="Chores & tasks" subtitle={`Shared with ${lovedOne.firstName}'s care team`} />
 
       {/* Add task */}
       <Card>
-        <SectionTitle>Add a task or reminder</SectionTitle>
+        <SectionTitle>Add a chore or task</SectionTitle>
         <TextInput
           style={styles.input}
           placeholder="e.g. Attend a 7pm NA meeting"
@@ -69,7 +69,7 @@ export function TasksScreen() {
       </Card>
 
       {/* Task list */}
-      <SectionTitle>Tasks</SectionTitle>
+      <SectionTitle>Chores &amp; tasks</SectionTitle>
       {tasks.length === 0 ? (
         <Card><Text style={typography.bodySecondary}>No tasks yet.</Text></Card>
       ) : (

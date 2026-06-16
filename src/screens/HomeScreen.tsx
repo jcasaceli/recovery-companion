@@ -177,7 +177,7 @@ export function HomeScreen() {
   };
 
   const QUICK_LINKS: { label: string; icon: any; screen: string }[] = [
-    { label: 'Tasks', icon: 'checkmark-circle-outline', screen: 'Tasks' },
+    { label: 'Chores', icon: 'checkmark-circle-outline', screen: 'Tasks' },
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },

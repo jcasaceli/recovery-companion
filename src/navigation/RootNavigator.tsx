@@ -157,7 +157,7 @@ function MainStack() {
           headerShown: false,
         })}
       />
-      <RootStack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Tasks & notes' }} />
+      <RootStack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Chores & tasks' }} />
       <RootStack.Screen name="Community" component={CommunityScreen} options={{ title: 'Community' }} />
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
