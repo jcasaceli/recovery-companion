@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput, Linking } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { DateField } from '../components/PickerFields';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -181,7 +181,6 @@ export function HomeScreen() {
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
-    { label: 'Big Book', icon: 'book-outline', screen: 'BigBook' },
     { label: 'Agreements', icon: 'document-text-outline', screen: 'Agreements' },
     { label: 'Documents', icon: 'folder-outline', screen: 'Documents' },
     ...(passesEnabled ? [{ label: 'Passes', icon: 'bed-outline' as any, screen: 'Passes' }] : []),
@@ -446,6 +445,17 @@ export function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Read the Big Book online (AA's official free copy) */}
+      <TouchableOpacity
+        style={styles.bigBookLink}
+        onPress={() => Linking.openURL('https://www.aa.org/the-big-book')}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="book-outline" size={20} color={colors.primary} />
+        <Text style={styles.bigBookText}>Read the Big Book online</Text>
+        <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+      </TouchableOpacity>
     </Screen>
   );
 }
@@ -477,17 +487,20 @@ const styles = StyleSheet.create({
   },
   meetingText: { color: colors.textInverse, fontWeight: '800', fontSize: 26, marginTop: spacing.xs },
   meetingSub: { color: colors.textInverse, opacity: 0.9, fontSize: 13, marginTop: 2 },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   quick: {
-    flex: 1,
+    width: '23%',
+    marginHorizontal: '1%',
+    marginBottom: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    marginHorizontal: 3,
     ...shadow.card,
   },
-  quickLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 4, fontWeight: '600' },
+  quickLabel: { fontSize: 12, color: colors.textSecondary, marginTop: 6, fontWeight: '600', textAlign: 'center' },
+  bigBookLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.lg, marginBottom: spacing.md, paddingVertical: spacing.sm },
+  bigBookText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
   sos: {
     backgroundColor: colors.crisisBg,
     borderColor: colors.crisis,
