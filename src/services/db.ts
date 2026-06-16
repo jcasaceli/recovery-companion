@@ -565,6 +565,48 @@ export async function deleteDocument(id: string) {
   if (error) throw error;
 }
 
+// ── Meeting attendance (staff-recorded) ──────────────────────────────────────
+
+export interface MeetingAttendance {
+  id: string;
+  individualId: string;
+  meetingName: string;
+  meetingDate: string;      // YYYY-MM-DD
+  attended: boolean;
+  note?: string;
+  createdAt: string;
+}
+
+function mapMeetingAttendance(r: any): MeetingAttendance {
+  return {
+    id: r.id, individualId: r.individual_id, meetingName: r.meeting_name,
+    meetingDate: r.meeting_date, attended: !!r.attended, note: r.note ?? undefined, createdAt: r.created_at,
+  };
+}
+
+/** Attendance records for a member, newest meeting first (staff or the member). */
+export async function listMeetingAttendance(individualId: string): Promise<MeetingAttendance[]> {
+  const { data, error } = await db()
+    .from('meeting_attendance').select('*').eq('individual_id', individualId).order('meeting_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapMeetingAttendance);
+}
+
+/** Staff: record a member's meeting attendance with an optional note. */
+export async function addMeetingAttendance(input: { individualId: string; meetingName: string; meetingDate: string; attended: boolean; note?: string }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('meeting_attendance').insert({
+    individual_id: input.individualId, meeting_name: input.meetingName, meeting_date: input.meetingDate,
+    attended: input.attended, note: input.note ?? null, created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+export async function deleteMeetingAttendance(id: string) {
+  const { error } = await db().from('meeting_attendance').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string; capacity?: number }
@@ -1056,6 +1098,11 @@ export async function setTaskCompleted(taskId: string, completed: boolean) {
     .from('tasks')
     .update({ completed, completed_at: completed ? new Date().toISOString() : null })
     .eq('id', taskId);
+  if (error) throw error;
+}
+
+export async function deleteTask(taskId: string) {
+  const { error } = await db().from('tasks').delete().eq('id', taskId);
   if (error) throw error;
 }
 
