@@ -50,7 +50,7 @@ export function DashboardScreen() {
   const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id } });
   const nameOf = (id: string) => {
     const m = members.find((x) => x.id === id);
-    return m ? `${m.first_name}${m.last_name ? ` ${m.last_name}` : ''}` : 'Resident';
+    return m ? `${m.first_name}${m.last_name ? ` ${m.last_name}` : ''}` : 'Member';
   };
 
   if (loading) {
@@ -89,7 +89,7 @@ export function DashboardScreen() {
 
         {/* KPI tiles */}
         <View style={styles.kpiGrid}>
-          <Stat label="Residents" value={String(members.length)} />
+          <Stat label="Members" value={String(members.length)} />
           <Stat label="Collected (mo)" value={money(collected)} color={colors.success} />
           <Stat label="Outstanding" value={money(outstanding)} color={outstanding > 0 ? colors.crisis : colors.textSecondary} />
           <Stat label="Pending agreements" value={String(pendingAgs.length)} color={pendingAgs.length ? colors.warning : colors.textSecondary} />
@@ -98,7 +98,7 @@ export function DashboardScreen() {
         </View>
 
         {/* Rent collection */}
-        <SectionTitle>Rent · this month</SectionTitle>
+        <SectionTitle>Membership fees · this month</SectionTitle>
         <Card>
           <Text style={[typography.body, { fontWeight: '700' }]}>{money(collected)} of {money(expected)} collected · {pct}%</Text>
           <View style={styles.barTrack}><View style={[styles.barFill, { width: `${pct}%` }]} /></View>
@@ -170,7 +170,7 @@ export function DashboardScreen() {
         )}
 
         <View style={{ height: spacing.sm }} />
-        <Button title="View all residents" variant="secondary" onPress={() => nav.navigate('Clients')} />
+        <Button title="View all members" variant="secondary" onPress={() => nav.navigate('Clients')} />
         <View style={{ height: spacing.xl }} />
       </ScrollView>
     </SafeAreaView>

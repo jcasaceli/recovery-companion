@@ -13,7 +13,7 @@ import { DEMO_CLIENTS } from '../data/demo';
 import { ordinal } from '../utils/format';
 
 function money(cents?: number) {
-  return cents ? `$${(cents / 100).toFixed(2)}` : 'No rent set';
+  return cents ? `$${(cents / 100).toFixed(2)}` : 'No fee set';
 }
 
 export function ClientsScreen() {
@@ -74,7 +74,7 @@ export function ClientsScreen() {
       setFirstName(''); setLastName(''); setHouseName(''); setPhone(''); setEmail(''); setRentValue(''); setDueDay('');
       setAdding(false); setFilter('in_care');
     } catch (e: any) {
-      Alert.alert('Could not add client', e?.message ?? 'Please try again.');
+      Alert.alert('Could not add member', e?.message ?? 'Please try again.');
     } finally {
       setBusy(false);
     }
@@ -116,17 +116,17 @@ export function ClientsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {locked ? <Paywall onChanged={reloadCloud} /> : null}
-        {!locked && !selectMode && !adding ? <Button title="+ Add client" onPress={() => setAdding(true)} /> : null}
+        {!locked && !selectMode && !adding ? <Button title="+ Add member" onPress={() => setAdding(true)} /> : null}
 
         {adding ? (
           <Card>
-            <SectionTitle>New client (Sober Living)</SectionTitle>
+            <SectionTitle>New member</SectionTitle>
             <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={houseName} onChangeText={setHouseName} placeholder="House name (optional)" placeholderTextColor={colors.textMuted} />
             <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone (optional — to text an app invite)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
             <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email (optional)" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
-            <TextInput style={styles.input} value={rent} onChangeText={setRentValue} placeholder="Monthly rent (optional, e.g. 800)" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} value={rent} onChangeText={setRentValue} placeholder="Monthly membership fee (optional, e.g. 800)" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
             <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} placeholder="Rent due day 1–31 (optional)" placeholderTextColor={colors.textMuted} keyboardType="number-pad" />
             <Button title="Add" onPress={add} disabled={!firstName.trim() || busy} />
             <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
@@ -135,7 +135,7 @@ export function ClientsScreen() {
         ) : null}
 
         {shown.length === 0 ? (
-          <Text style={styles.empty}>{filter === 'in_care' ? 'No clients in care yet.' : 'No completed clients yet.'}</Text>
+          <Text style={styles.empty}>{filter === 'in_care' ? 'No members in care yet.' : 'No completed members yet.'}</Text>
         ) : (
           shown.map((c) => (
             <TouchableOpacity
@@ -160,7 +160,7 @@ export function ClientsScreen() {
                   {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}
                 </Text>
                 <Text style={typography.caption}>
-                  {c.houseName ? `${c.houseName} · ` : ''}Rent: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
+                  {c.houseName ? `${c.houseName} · ` : ''}Fee: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
                 </Text>
               </View>
               {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
@@ -179,7 +179,7 @@ export function ClientsScreen() {
             disabled={selectedIds.length === 0}
             onPress={() => setBulkOpen(true)}
           >
-            <Text style={styles.bulkBtnText}>Set rent for {selectedIds.length}</Text>
+            <Text style={styles.bulkBtnText}>Set membership fee for {selectedIds.length}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -214,7 +214,7 @@ function BulkRentModal({ visible, count, onClose, onSave }: { visible: boolean; 
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.modal}>
-          <Text style={typography.h3}>Set rent for {count} client{count === 1 ? '' : 's'}</Text>
+          <Text style={typography.h3}>Set membership fee for {count} client{count === 1 ? '' : 's'}</Text>
           <View style={styles.amtRow}><Text style={styles.dollar}>$</Text>
             <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
           </View>

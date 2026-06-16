@@ -54,14 +54,14 @@ export function MessagesScreen() {
     <Screen>
       <ScreenTitle
         title="Messages"
-        subtitle={isStaff ? `Message everyone in ${org?.name || 'your sober living'}` : 'Your care team'}
+        subtitle={isStaff ? `Message everyone in ${org?.name || 'your sober living'}` : 'Your facilitator & house managers'}
       />
 
       {/* Care team */}
       <Card>
-        <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.sm }]}>👥 Your care team</Text>
+        <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.sm }]}>👥 Your facilitator & house managers</Text>
         {team.length === 0 ? (
-          <Text style={typography.bodySecondary}>No care team yet.</Text>
+          <Text style={typography.bodySecondary}>No staff assigned yet.</Text>
         ) : (
           team.map((m, i) => (
             <View key={i} style={styles.teamRow}>
@@ -94,11 +94,11 @@ export function MessagesScreen() {
         </Card>
       ) : null}
 
-      <SectionTitle>{isStaff ? 'Sent messages' : 'Messages from your care team'}</SectionTitle>
+      <SectionTitle>{isStaff ? 'Sent messages' : 'Messages from your facilitator & house managers'}</SectionTitle>
       {posts.length === 0 ? (
         <Card>
           <Text style={typography.bodySecondary}>
-            {isStaff ? 'No messages yet. Send your first announcement above.' : 'No messages yet. Updates from your care team will appear here.'}
+            {isStaff ? 'No messages yet. Send your first announcement above.' : 'No messages yet. Updates from your facilitator and house managers will appear here.'}
           </Text>
         </Card>
       ) : (
@@ -113,7 +113,7 @@ export function MessagesScreen() {
       )}
 
       {!isStaff ? (
-        <Text style={styles.note}>Only your care team can post here. In an emergency, call 911 or 988.</Text>
+        <Text style={styles.note}>Only your facilitator and house managers can post here. In an emergency, call 911 or 988.</Text>
       ) : (
         <Text style={styles.note}>Long-press a sent message to delete it.</Text>
       )}

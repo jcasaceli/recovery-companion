@@ -52,7 +52,7 @@ export function FacilitatorPaymentsScreen() {
 
   // Preview mode: sample analytics until the org subscribes.
   if (locked) {
-    const statusLabel: Record<string, string> = { paid: 'Paid in full', partial: 'Partially paid', none: 'Not paid', norent: 'No rent set' };
+    const statusLabel: Record<string, string> = { paid: 'Paid in full', partial: 'Partially paid', none: 'Not paid', norent: 'No fee set' };
     const statusClr: Record<string, string> = { paid: colors.success, partial: colors.warning, none: colors.crisis, norent: colors.textMuted };
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
@@ -76,7 +76,7 @@ export function FacilitatorPaymentsScreen() {
               <Card key={c.id}>
                 <Text style={typography.h3}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
                 <Text style={typography.caption}>
-                  Rent {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
+                  Fee {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
                 </Text>
                 <Text style={[styles.statusLine, { color: statusClr[st] }]}>{statusLabel[st]}</Text>
               </Card>
@@ -153,7 +153,7 @@ export function FacilitatorPaymentsScreen() {
             const expanded = expandedId === m.id;
             const history = payments.filter((p) => p.individualId === m.id);
             const statusText =
-              st === 'norent' ? 'No rent set'
+              st === 'norent' ? 'No fee set'
               : st === 'paid' ? `Paid in full (${money(sum)})`
               : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
               : `Not paid (${money(rent)} due)`;
@@ -165,7 +165,7 @@ export function FacilitatorPaymentsScreen() {
                   <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
                     <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
                     <Text style={typography.caption}>
-                      Rent {money(m.monthly_rent_cents)}
+                      Fee {money(m.monthly_rent_cents)}
                       {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}
                     </Text>
                     <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
@@ -178,7 +178,7 @@ export function FacilitatorPaymentsScreen() {
                       <Text style={styles.recordBtnText}>Record</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
-                      <Text style={styles.rentBtnText}>Set rent</Text>
+                      <Text style={styles.rentBtnText}>Set membership fee</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -277,15 +277,15 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.modal}>
-          <Text style={typography.h3}>Set rent · {member.first_name}</Text>
-          <Text style={[typography.caption, { marginTop: spacing.xs }]}>Monthly rent</Text>
+          <Text style={typography.h3}>Set membership fee · {member.first_name}</Text>
+          <Text style={[typography.caption, { marginTop: spacing.xs }]}>Monthly membership fee</Text>
           <View style={styles.amtRow}>
             <Text style={styles.dollar}>$</Text>
             <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
           </View>
           <Text style={[typography.caption]}>Due day of month (1–31)</Text>
           <TextInput style={styles.dueInput} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
-          <Button title="Save rent" onPress={save} disabled={busy} />
+          <Button title="Save membership fee" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>

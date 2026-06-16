@@ -7,7 +7,7 @@ import { useAuth } from '../state/auth';
 import { AppRole } from '../types';
 
 const ROLES: { value: AppRole; label: string; blurb: string }[] = [
-  { value: 'individual', label: 'I am a member of a sober living network', blurb: 'Track progress, pay rent, and find meetings.' },
+  { value: 'individual', label: 'I am a member of a sober living network', blurb: 'Track progress, pay membership fees, and find meetings.' },
   { value: 'facilitator', label: 'I am a facilitator', blurb: 'Manage members, payments, and notes.' },
 ];
 

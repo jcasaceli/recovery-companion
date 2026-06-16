@@ -94,11 +94,11 @@ export function PaymentsScreen() {
   if (!ctx) {
     return (
       <Screen>
-        <ScreenTitle title="Pay rent" />
+        <ScreenTitle title="Pay membership fee" />
         <Card>
           <Text style={typography.bodySecondary}>
             Your sober living hasn't linked your account yet. Once your facilitator
-            adds you, you'll be able to pay rent here.
+            adds you, you'll be able to pay membership fees here.
           </Text>
         </Card>
       </Screen>
@@ -107,7 +107,7 @@ export function PaymentsScreen() {
 
   return (
     <Screen>
-      <ScreenTitle title="Pay rent" subtitle="Pay your sober living directly" />
+      <ScreenTitle title="Pay membership fee" subtitle="Pay your sober living directly" />
 
       <Card>
         {money(ctx.rentCents) ? (

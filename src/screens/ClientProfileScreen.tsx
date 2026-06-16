@@ -115,11 +115,11 @@ export function ClientProfileScreen() {
   };
 
   if (!client) {
-    return <Screen><Text style={typography.body}>Client not found.</Text></Screen>;
+    return <Screen><Text style={typography.body}>Member not found.</Text></Screen>;
   }
 
   const rent = client.monthlyRentCents || 0;
-  const rentStatus = rent <= 0 ? 'No rent set'
+  const rentStatus = rent <= 0 ? 'No fee set'
     : paidThisMonth >= rent ? `Paid in full (${money(paidThisMonth)})`
     : paidThisMonth > 0 ? `Partial: ${money(paidThisMonth)} of ${money(rent)}`
     : `Not paid (${money(rent)} due)`;
@@ -127,7 +127,7 @@ export function ClientProfileScreen() {
 
   const inviteMsg = () => {
     const code = org?.join_code ? ` Use join code ${org.join_code}.` : '';
-    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Sober Living Companion app to track your progress and pay rent.${code}`;
+    return `Hi ${client.firstName}, join ${org?.name || 'our sober living'} on the Sober Living Companion app to track your progress and pay membership fees.${code}`;
   };
   const textInvite = () => {
     if (!client.phone) return;
@@ -145,7 +145,7 @@ export function ClientProfileScreen() {
     const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
     try {
       await setRent(id, cents, day);
-      Alert.alert('Saved ✅', `${client.firstName}'s rent was updated.`);
+      Alert.alert('Saved ✅', `${client.firstName}'s membership fee was updated.`);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
@@ -235,17 +235,17 @@ export function ClientProfileScreen() {
       ) : null}
 
       {/* Rent — facilitator-set, with this month's payment status */}
-      <SectionTitle>Rent</SectionTitle>
+      <SectionTitle>Membership fee</SectionTitle>
       <Card>
         <Text style={[styles.statusLine, { color: rentColor }]}>{rentStatus} this month</Text>
-        <Text style={[styles.label, { marginTop: spacing.sm }]}>Monthly rent (you set this)</Text>
+        <Text style={[styles.label, { marginTop: spacing.sm }]}>Monthly membership fee (you set this)</Text>
         <View style={styles.amtRow}>
           <Text style={styles.dollar}>$</Text>
           <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
         </View>
         <Text style={styles.label}>Due day of month (1–31)</Text>
         <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
-        <Button title="Save rent" onPress={saveRent} />
+        <Button title="Save membership fee" onPress={saveRent} />
       </Card>
 
       {/* All meeting check-ins */}

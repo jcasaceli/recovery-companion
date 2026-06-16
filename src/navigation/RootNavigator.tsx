@@ -43,7 +43,7 @@ function ClientsStack() {
       }}
     >
       <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false }} />
-      <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Client' }} />
+      <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member' }} />
       <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
     </ClientsStackNav.Navigator>
   );
@@ -130,7 +130,7 @@ function FacilitatorTabs() {
       })}
     >
       <FacTab.Screen name="Dashboard" component={DashboardScreen} />
-      <FacTab.Screen name="Clients" component={ClientsStack} />
+      <FacTab.Screen name="Clients" component={ClientsStack} options={{ tabBarLabel: 'Members' }} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
       <FacTab.Screen name="Messages" component={MessagesScreen} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
@@ -159,7 +159,7 @@ function MainStack() {
       <RootStack.Screen name="Community" component={CommunityScreen} options={{ title: 'Community' }} />
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
-      <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay rent' }} />
+      <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay membership fee' }} />
       <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />

@@ -35,7 +35,7 @@ export function LinkMemberScreen() {
         <Text style={styles.title}>Connect to your sober living</Text>
         <Text style={styles.lead}>
           Enter the join code your facilitator gave you. This links your account
-          so you can see your info and pay rent.
+          so you can see your info and pay membership fees.
         </Text>
 
         <TextInput

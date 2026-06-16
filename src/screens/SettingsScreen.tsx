@@ -90,7 +90,7 @@ export function SettingsScreen() {
     }
     try {
       await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim());
-      Alert.alert('Saved ✅', 'Your CashApp and Zelle details were saved. Members will see them on the Pay rent screen.');
+      Alert.alert('Saved ✅', 'Your CashApp and Zelle details were saved. Members will see them on the Pay membership fee screen.');
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
@@ -197,7 +197,7 @@ export function SettingsScreen() {
                 ? '✅ Connected — you can accept payments. Residents keep 100% to you.'
                 : connect?.connected
                 ? 'Setup started — finish Stripe onboarding to accept payments.'
-                : 'Connect Stripe to accept one-time and recurring rent. Funds go directly to your bank.'}
+                : 'Connect Stripe to accept one-time and recurring fees. Funds go directly to your bank.'}
             </Text>
             <Button
               title={connect?.chargesEnabled ? 'Manage payment setup' : 'Set up payments'}
@@ -209,7 +209,7 @@ export function SettingsScreen() {
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>CashApp & Zelle</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              Members can pay you directly with these. Shown to them on the Pay rent screen.
+              Members can pay you directly with these. Shown to them on the Pay membership fee screen.
             </Text>
             <TextInput style={styles.input} value={cashapp} onChangeText={setCashapp} placeholder="CashApp tag (e.g. $YourTag)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
             <TextInput style={styles.input} value={zelle} onChangeText={setZelle} placeholder="Zelle email or phone" placeholderTextColor={colors.textMuted} autoCapitalize="none" />

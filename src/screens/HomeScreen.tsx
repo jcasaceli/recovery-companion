@@ -172,11 +172,11 @@ export function HomeScreen() {
         ) : null}
       </Card>
 
-      {/* Prominent Pay rent button for members */}
+      {/* Prominent Pay membership fee button for members */}
       {!isFacilitator ? (
         <TouchableOpacity style={styles.payRent} activeOpacity={0.85} onPress={() => nav.navigate('Payments')}>
           <Ionicons name="card" size={40} color={colors.textInverse} />
-          <Text style={styles.payRentText}>Pay rent</Text>
+          <Text style={styles.payRentText}>Pay membership fee</Text>
           <Text style={styles.payRentSub}>
             {lovedOne.monthlyRentCents
               ? `$${(lovedOne.monthlyRentCents / 100).toFixed(0)}/mo${lovedOne.rentDueDay ? ` · due the ${ordinal(lovedOne.rentDueDay)}` : ''} · tap to pay`
