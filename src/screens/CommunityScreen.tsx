@@ -79,8 +79,12 @@ export function CommunityScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-    if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
+    // Store the image inline (base64) so it actually persists — a local file://
+    // URI is device-specific and disappears, leaving a blank image.
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.4, base64: true });
+    if (!result.canceled && result.assets[0]?.base64) {
+      setImageUri(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
   };
 
   const submit = () => {

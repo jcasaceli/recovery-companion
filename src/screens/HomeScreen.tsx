@@ -5,7 +5,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin } from '../services/db';
+import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
@@ -37,6 +38,17 @@ export function HomeScreen() {
     if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
   }, [lovedOne.id]);
   useFocusEffect(useCallback(() => { loadCheckins(); }, [loadCheckins]));
+
+  const confirmDeleteCheckin = (c: any) => {
+    Alert.alert(
+      'Remove this check-in?',
+      'This deletes the record that you attended this meeting. It will be removed from your account, and your facilitator will no longer be able to see that you were here.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: async () => { await deleteMeetingCheckin(c.id).catch(() => {}); loadCheckins(); } },
+      ],
+    );
+  };
 
   const openSobriety = () => {
     if (Platform.OS === 'web') { setDateText(lovedOne.sobrietyDate || ''); setDateModal(true); }
@@ -200,11 +212,14 @@ export function HomeScreen() {
               <Text style={[typography.caption, { marginTop: spacing.sm }]}>No check-ins yet. Tap “I'm at a meeting” when you arrive.</Text>
             ) : (
               <View style={{ marginTop: spacing.sm }}>
+                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 2 }]}>Swipe a check-in left to remove it.</Text>
                 {myCheckins.map((c) => (
-                  <View key={c.id} style={styles.checkinRow}>
-                    <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
-                    <Text style={typography.caption}>{formatDate(c.createdAt)}</Text>
-                  </View>
+                  <SwipeRow key={c.id} onDelete={() => confirmDeleteCheckin(c)}>
+                    <View style={[styles.checkinRow, { backgroundColor: colors.surface }]}>
+                      <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
+                      <Text style={typography.caption}>{formatDate(c.createdAt)}</Text>
+                    </View>
+                  </SwipeRow>
                 ))}
               </View>
             )

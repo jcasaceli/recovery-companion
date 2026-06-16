@@ -519,6 +519,12 @@ export async function deleteAgreement(id: string) {
   if (error) throw error;
 }
 
+/** Member: delete one of their own meeting check-ins (e.g. an accidental tap). */
+export async function deleteMeetingCheckin(id: string) {
+  const { error } = await db().from('meeting_checkins').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** Meeting check-ins for a client (optionally since an ISO datetime). */
 export async function listMeetingCheckins(individualId: string, sinceISO?: string) {
   let q = db().from('meeting_checkins').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });

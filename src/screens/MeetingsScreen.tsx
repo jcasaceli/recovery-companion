@@ -23,6 +23,23 @@ const FELLOWSHIP_COLOR: Record<Fellowship, string> = {
   AA: colors.primary, NA: colors.accent, SMART: '#6C7BD9', Dharma: '#B07BD9',
 };
 
+// Official, maintained online-meeting finders for each fellowship. These always
+// have live meetings running around the clock, so "Join" never hits a dead link.
+const FELLOWSHIP_FINDER: Record<Fellowship, string> = {
+  AA: 'https://aa-intergroup.org/meetings/',
+  NA: 'https://virtual-na.org/meetings/',
+  SMART: 'https://meetings.smartrecovery.org/',
+  Dharma: 'https://recoverydharma.online/',
+};
+
+/** "19:00" -> "7:00 PM" */
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 // A packed weekly schedule of demo meetings (online + local). In production this
 // comes from live AA/NA/SMART/Dharma directories filtered by the member's area.
 const MEETINGS: Mtg[] = [
@@ -64,8 +81,8 @@ export function MeetingsScreen() {
   const meetings = MEETINGS.filter((m) => filter === 'ALL' || m.fellowship === filter)
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
 
-  const openZoom = (url: string) =>
-    Linking.openURL(url).catch(() => Alert.alert('Could not open Zoom', 'Make sure the Zoom app is installed.'));
+  const openUrl = (url: string) =>
+    Linking.openURL(url).catch(() => Alert.alert('Could not open link', 'Please try again.'));
 
   const addToCalendar = async (m: Mtg) => {
     try {
@@ -75,13 +92,14 @@ export function MeetingsScreen() {
       const writable = cals.find((c) => c.allowsModifications) ?? cals[0];
       if (!writable) { Alert.alert('No calendar', 'No writable calendar found.'); return; }
       const start = nextOccurrence(m.dayOfWeek, m.startTime);
+      const onlineUrl = m.isOnline ? FELLOWSHIP_FINDER[m.fellowship] : undefined;
       await Calendar.createEventAsync(writable.id, {
         title: `${m.fellowship} — ${m.name}`,
         startDate: start,
         endDate: new Date(start.getTime() + 3600000),
-        location: m.isOnline ? (m.zoomUrl ?? 'Online') : m.address,
-        notes: m.zoomUrl ? `Join: ${m.zoomUrl}` : undefined,
-        url: m.zoomUrl,
+        location: m.isOnline ? 'Online' : m.address,
+        notes: onlineUrl ? `Find the live meeting: ${onlineUrl}` : undefined,
+        url: onlineUrl,
         alarms: [{ relativeOffset: -15 }],
       });
       Alert.alert('Added', `"${m.name}" was added to your calendar with a 15-minute reminder.`);
@@ -110,17 +128,20 @@ export function MeetingsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={typography.h3}>{m.name}</Text>
-              <Text style={typography.caption}>{DAYS[m.dayOfWeek]} · {m.startTime} · {m.isOnline ? 'Online' : m.region}</Text>
+              <Text style={typography.caption}>{DAYS[m.dayOfWeek]} · {to12h(m.startTime)} · {m.isOnline ? 'Online' : m.region}</Text>
             </View>
           </View>
           <View style={styles.actions}>
-            {m.zoomUrl ? <View style={{ flex: 1 }}><Button title="Join on Zoom" onPress={() => openZoom(m.zoomUrl!)} /></View> : null}
+            {m.isOnline ? <View style={{ flex: 1 }}><Button title="Join online →" onPress={() => openUrl(FELLOWSHIP_FINDER[m.fellowship])} /></View> : null}
             <View style={{ flex: 1 }}><Button title="Add to calendar" variant="secondary" onPress={() => addToCalendar(m)} /></View>
           </View>
         </Card>
       ))}
 
-      <Text style={styles.note}>Times are examples. Production pulls live listings for your area.</Text>
+      <Text style={styles.note}>
+        The weekly times are a guide. “Join online” opens the fellowship’s official meeting finder,
+        which has live meetings running around the clock.
+      </Text>
     </Screen>
   );
 }
