@@ -42,9 +42,9 @@ function ClientsStack() {
         headerTitleStyle: { color: colors.textPrimary },
       }}
     >
-      <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false }} />
-      <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member' }} />
-      <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
+      <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false, title: 'Members' }} />
+      <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member', headerBackTitle: 'Members' }} />
+      <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement', headerBackTitle: 'Member' }} />
     </ClientsStackNav.Navigator>
   );
 }

@@ -12,6 +12,7 @@ import {
   listHouses,
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
+import { DateField } from '../components/PickerFields';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -300,8 +301,8 @@ export function ClientProfileScreen() {
         <View style={styles.backdrop}>
           <View style={styles.modal}>
             <Text style={typography.h3}>Log UA · {client.firstName}</Text>
-            <Text style={[styles.label, { marginTop: spacing.sm }]}>Test date (YYYY-MM-DD)</Text>
-            <TextInput style={styles.input} value={uaDate} onChangeText={setUaDate} placeholder="2026-06-03" placeholderTextColor={colors.textMuted} />
+            <Text style={[styles.label, { marginTop: spacing.sm }]}>Test date</Text>
+            <DateField value={uaDate} onChange={setUaDate} placeholder="Pick the test date" />
             <Text style={styles.label}>Result</Text>
             <View style={styles.uaChips}>
               {(['negative', 'positive', 'refused', 'pending'] as UAResult[]).map((r) => (

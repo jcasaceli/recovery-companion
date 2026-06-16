@@ -12,7 +12,8 @@ import {
   listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
 } from '../services/db';
 import { Payment } from '../types';
-import { formatDate, to12h } from '../utils/format';
+import { formatDate, houseEventWhen } from '../utils/format';
+import { DateField, TimeField } from '../components/PickerFields';
 
 function money(cents = 0) { return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
 function period() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
@@ -39,6 +40,7 @@ export function DashboardScreen() {
   const [evtDate, setEvtDate] = useState('');
   const [evtTime, setEvtTime] = useState('');
   const [evtMandatory, setEvtMandatory] = useState(false);
+  const [evtRecurring, setEvtRecurring] = useState(false);
   const [evtBusy, setEvtBusy] = useState(false);
 
   const loadEvents = () => { listHouses().then(setHouses).catch(() => {}); listHouseEvents().then(setEvents).catch(() => {}); };
@@ -61,14 +63,14 @@ export function DashboardScreen() {
   }, [subscriptionActive]);
 
   const saveEvent = async () => {
-    if (!evtHouseId || !evtTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(evtDate.trim())) {
-      Alert.alert('Missing info', 'Pick a house, a title, and a date (YYYY-MM-DD).');
+    if (!evtHouseId || !evtTitle.trim() || !evtDate) {
+      Alert.alert('Missing info', 'Pick a house, a title, and a date.');
       return;
     }
     setEvtBusy(true);
     try {
-      await createHouseEvent({ houseId: evtHouseId, title: evtTitle.trim(), date: evtDate.trim(), time: evtTime.trim() || undefined, mandatory: evtMandatory });
-      setEvtOpen(false); setEvtTitle(''); setEvtDate(''); setEvtTime(''); setEvtMandatory(false);
+      await createHouseEvent({ houseId: evtHouseId, title: evtTitle.trim(), date: evtDate, time: evtTime || undefined, mandatory: evtMandatory, recurring: evtRecurring });
+      setEvtOpen(false); setEvtTitle(''); setEvtDate(''); setEvtTime(''); setEvtMandatory(false); setEvtRecurring(false);
       loadEvents();
     } catch (e: any) { Alert.alert('Could not add', e?.message ?? 'Try again.'); }
     finally { setEvtBusy(false); }
@@ -201,7 +203,7 @@ export function DashboardScreen() {
               <TouchableOpacity key={e.id} style={styles.row} onLongPress={() => removeEvent(e)}>
                 <View style={{ flex: 1 }}>
                   <Text style={typography.body}>{e.title}{e.mandatory ? <Text style={{ color: colors.crisis, fontWeight: '800', fontSize: 11 }}>  · MANDATORY</Text> : null}</Text>
-                  <Text style={typography.caption}>{houseName(e.houseId)} · {formatDate(e.date)}{e.time ? ` · ${to12h(e.time)}` : ''}</Text>
+                  <Text style={typography.caption}>{houseName(e.houseId)} · {houseEventWhen(e.date, e.time, e.recurring)}</Text>
                 </View>
               </TouchableOpacity>
             ))
@@ -246,11 +248,18 @@ export function DashboardScreen() {
               </View>
             ) : null}
             <TextInput style={styles.evtInput} value={evtTitle} onChangeText={setEvtTitle} placeholder="Title (e.g. House meeting)" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.evtInput} value={evtDate} onChangeText={setEvtDate} placeholder="Date (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
-            <TextInput style={styles.evtInput} value={evtTime} onChangeText={setEvtTime} placeholder="Time (e.g. 19:00) — optional" placeholderTextColor={colors.textMuted} />
+            <DateField value={evtDate} onChange={setEvtDate} placeholder="Pick a date" />
+            <TimeField value={evtTime} onChange={setEvtTime} placeholder="Pick a time (optional)" />
             <View style={styles.evtSwitch}>
               <Text style={typography.body}>Mandatory</Text>
               <Switch value={evtMandatory} onValueChange={setEvtMandatory} trackColor={{ true: colors.crisis }} />
+            </View>
+            <View style={styles.evtSwitch}>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>Repeats weekly</Text>
+                <Text style={typography.caption}>Shows on members’ Home every week on this weekday.</Text>
+              </View>
+              <Switch value={evtRecurring} onValueChange={setEvtRecurring} trackColor={{ true: colors.primary }} />
             </View>
             <Button title={evtBusy ? 'Adding…' : 'Add meeting'} onPress={saveEvent} disabled={evtBusy} />
             <TouchableOpacity onPress={() => setEvtOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>

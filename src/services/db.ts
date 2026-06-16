@@ -11,6 +11,7 @@
  */
 
 import { supabase } from './supabase';
+import { nextWeeklyISO } from '../utils/format';
 import {
   AppRole,
   Task,
@@ -277,6 +278,7 @@ export interface HouseEvent {
   date: string;       // YYYY-MM-DD
   time?: string;      // "19:00"
   mandatory: boolean;
+  recurring: boolean; // repeats weekly on the same weekday
   createdAt: string;
 }
 
@@ -284,31 +286,34 @@ function mapHouseEvent(r: any): HouseEvent {
   return {
     id: r.id, houseId: r.house_id, title: r.title,
     date: r.event_date, time: r.event_time ?? undefined,
-    mandatory: !!r.mandatory, createdAt: r.created_at,
+    mandatory: !!r.mandatory, recurring: !!r.recurring, createdAt: r.created_at,
   };
 }
 
 /** Staff: add a house meeting / mandatory event. */
-export async function createHouseEvent(input: { houseId: string; title: string; date: string; time?: string; mandatory?: boolean }) {
+export async function createHouseEvent(input: { houseId: string; title: string; date: string; time?: string; mandatory?: boolean; recurring?: boolean }) {
   const { data: u } = await db().auth.getUser();
   const { error } = await db().from('house_events').insert({
     house_id: input.houseId, title: input.title, event_date: input.date,
-    event_time: input.time ?? null, mandatory: !!input.mandatory, created_by: u.user?.id,
+    event_time: input.time ?? null, mandatory: !!input.mandatory,
+    recurring: !!input.recurring, created_by: u.user?.id,
   });
   if (error) throw error;
 }
 
-/** Upcoming house events the caller can see (RLS scopes by house). */
+/** House events the caller can see (RLS scopes by house): upcoming one-offs plus
+ *  every weekly-recurring meeting, sorted by their next occurrence. */
 export async function listHouseEvents(): Promise<HouseEvent[]> {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await db()
     .from('house_events')
     .select('*')
-    .gte('event_date', today)
-    .order('event_date')
-    .order('event_time', { nullsFirst: true });
+    .or(`recurring.eq.true,event_date.gte.${today}`);
   if (error) throw error;
-  return (data ?? []).map(mapHouseEvent);
+  const rows = (data ?? []).map(mapHouseEvent);
+  const next = (e: HouseEvent) => (e.recurring ? nextWeeklyISO(e.date) : e.date);
+  return rows.sort((a, b) =>
+    next(a).localeCompare(next(b)) || (a.time ?? '~').localeCompare(b.time ?? '~'));
 }
 
 export async function deleteHouseEvent(id: string) {

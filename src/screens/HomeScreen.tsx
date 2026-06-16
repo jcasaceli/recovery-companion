@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { DateField } from '../components/PickerFields';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
@@ -15,8 +16,8 @@ import { TimelineEntry, CheckIn, Milestone, TreatmentSession } from '../types';
 import {
   daysSince,
   formatDate,
+  houseEventWhen,
   ordinal,
-  to12h,
   MOOD_EMOJI,
   MOOD_LABELS,
   PROGRAM_LABELS,
@@ -258,7 +259,7 @@ export function HomeScreen() {
                   {e.title}{e.mandatory ? <Text style={styles.mandatory}>  · MANDATORY</Text> : null}
                 </Text>
                 <Text style={typography.caption}>
-                  {formatDate(e.date)}{e.time ? ` · ${to12h(e.time)}` : ''}
+                  {houseEventWhen(e.date, e.time, e.recurring)}
                 </Text>
               </View>
             </View>
@@ -389,16 +390,10 @@ export function HomeScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={typography.h3}>Set your sobriety date</Text>
-            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Enter the date you’re counting from.</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={dateText}
-              onChangeText={setDateText}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-            />
-            <Button title="Save" onPress={saveDateText} />
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Pick the date you’re counting from.</Text>
+            <DateField value={dateText} onChange={setDateText} placeholder="Pick a date" />
+            <View style={{ height: spacing.sm }} />
+            <Button title="Save" onPress={saveDateText} disabled={!dateText} />
             <TouchableOpacity onPress={() => setDateModal(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>

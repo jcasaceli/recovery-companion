@@ -13,6 +13,7 @@ import { Button } from '../components/ui';
 import { useAppState, OnboardingInput } from '../state/store';
 import { Relationship, ProgramType } from '../types';
 import { PROGRAM_LABELS } from '../utils/format';
+import { DateField } from '../components/PickerFields';
 
 const RELATIONSHIPS: { value: Relationship; label: string }[] = [
   { value: 'son', label: 'Son' },
@@ -138,24 +139,10 @@ export function OnboardingScreen() {
             </View>
 
             <Text style={styles.fieldLabel}>Treatment start date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              value={startDate}
-              onChangeText={setStartDate}
-              autoCapitalize="none"
-            />
+            <DateField value={startDate} onChange={setStartDate} placeholder="Pick a date" />
 
             <Text style={styles.fieldLabel}>Recovery / sobriety date (optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              value={sobrietyDate}
-              onChangeText={setSobrietyDate}
-              autoCapitalize="none"
-            />
+            <DateField value={sobrietyDate} onChange={setSobrietyDate} placeholder="Pick a date" />
 
             <View style={{ height: spacing.md }} />
             <Button title="Continue" onPress={() => setStep('consent')} disabled={!profileValid} />

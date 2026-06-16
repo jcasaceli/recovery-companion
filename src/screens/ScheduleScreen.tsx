@@ -5,7 +5,8 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { ScheduleEvent } from '../types';
-import { formatDate } from '../utils/format';
+import { formatDate, dayOfWeek, to12h } from '../utils/format';
+import { DateField, TimeField } from '../components/PickerFields';
 
 export function ScheduleScreen() {
   const { scheduleEvents, addScheduleEvents, lovedOne } = useAppState();
@@ -16,8 +17,8 @@ export function ScheduleScreen() {
   const [location, setLocation] = useState('');
 
   const addManual = () => {
-    if (!title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Add a title and a valid date', 'Date should be YYYY-MM-DD.');
+    if (!title.trim() || !date) {
+      Alert.alert('Add a title and a date', 'Please enter a title and pick a date.');
       return;
     }
     addScheduleEvents([{ title: title.trim(), date, startTime: time || undefined, location: location || undefined, source: 'manual', createdByName: 'You' }]);
@@ -64,8 +65,8 @@ export function ScheduleScreen() {
         ) : (
           <>
             <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Event title (e.g. NA meeting)" placeholderTextColor={colors.textMuted} />
-            <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="Date (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
-            <TextInput style={styles.input} value={time} onChangeText={setTime} placeholder="Start time (e.g. 19:00) — optional" placeholderTextColor={colors.textMuted} />
+            <DateField value={date} onChange={setDate} placeholder="Pick a date" />
+            <TimeField value={time} onChange={setTime} placeholder="Pick a start time (optional)" />
             <TextInput style={styles.input} value={location} onChangeText={setLocation} placeholder="Location (optional)" placeholderTextColor={colors.textMuted} />
             <Button title="Add event" onPress={addManual} disabled={!title.trim()} />
             <TouchableOpacity onPress={() => setAdding(false)} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
@@ -78,15 +79,15 @@ export function ScheduleScreen() {
       ) : (
         dates.map((d) => (
           <View key={d}>
-            <SectionTitle>{formatDate(d)}</SectionTitle>
+            <SectionTitle>{dayOfWeek(d)}, {formatDate(d)}</SectionTitle>
             {byDate[d].map((e) => (
               <Card key={e.id}>
                 <View style={styles.eventRow}>
-                  <View style={styles.time}><Text style={styles.timeText}>{e.startTime ?? '—'}</Text></View>
+                  <View style={styles.time}><Text style={styles.timeText}>{e.startTime ? to12h(e.startTime) : '—'}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={typography.h3}>{e.title}</Text>
                     <Text style={typography.caption}>
-                      {e.endTime ? `until ${e.endTime}` : ''}{e.location ? ` · ${e.location}` : ''}
+                      {e.endTime ? `until ${to12h(e.endTime)}` : ''}{e.location ? ` · ${e.location}` : ''}
                       {e.source === 'photo' ? ' · from photo' : ''}
                     </Text>
                   </View>
@@ -106,6 +107,6 @@ const styles = StyleSheet.create({
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { color: colors.textSecondary },
   eventRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  time: { width: 60 },
-  timeText: { ...typography.h3, color: colors.primary },
+  time: { width: 84 },
+  timeText: { ...typography.h3, color: colors.primary, fontSize: 15 },
 });

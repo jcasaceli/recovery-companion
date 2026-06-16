@@ -16,21 +16,58 @@ export const LEVEL_OF_CARE_LABELS: Record<LevelOfCare, string> = {
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-/** "2026-05-31" -> "May 31" */
-export function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+function pad2(n: number) { return String(n).padStart(2, '0'); }
+
+/** Parse a 'YYYY-MM-DD' string as a LOCAL date (avoids the UTC off-by-one
+ *  that `new Date("2026-06-16")` causes in negative-offset timezones). */
+function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split('-').map((n) => parseInt(n, 10));
+  return new Date(y, (m || 1) - 1, d || 1);
 }
 
-/** "2026-05-31T15:20:00Z" -> "May 31, 3:20 PM" (local) */
+/** "2026-06-16" -> "06-16-2026" (US MM-DD-YYYY). */
+export function formatDate(iso: string): string {
+  // Date-only strings parse as local; full timestamps keep their instant.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.slice(0, 10)) && iso.length <= 10
+    ? parseLocalDate(iso)
+    : new Date(iso);
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${d.getFullYear()}`;
+}
+
+/** "2026-06-16" -> "Tuesday". */
+export function dayOfWeek(iso: string): string {
+  return DAYS[parseLocalDate(iso).getDay()];
+}
+
+/** "2026-05-31T15:20:00Z" -> "05-31-2026, 3:20 PM" (local) */
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   let h = d.getHours();
   const m = d.getMinutes().toString().padStart(2, '0');
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${h}:${m} ${ampm}`;
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${d.getFullYear()}, ${h}:${m} ${ampm}`;
+}
+
+/** Next weekly occurrence (today or later) of a date, as 'YYYY-MM-DD' (local). */
+export function nextWeeklyISO(startISO: string): string {
+  const start = parseLocalDate(startISO);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const DAY = 86400000;
+  if (start.getTime() >= today.getTime()) return startISO.slice(0, 10);
+  const diff = Math.round((today.getTime() - start.getTime()) / DAY);
+  const rem = diff % 7;
+  const next = new Date(today.getTime() + (rem === 0 ? 0 : 7 - rem) * DAY);
+  return `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`;
+}
+
+/** Friendly "when" line for a house meeting, e.g. "Tuesday, 06-16-2026 · 7:00 PM · Repeats weekly". */
+export function houseEventWhen(date: string, time?: string, recurring?: boolean): string {
+  const shown = recurring ? nextWeeklyISO(date) : date;
+  return `${dayOfWeek(shown)}, ${formatDate(shown)}${time ? ` · ${to12h(time)}` : ''}${recurring ? ' · Repeats weekly' : ''}`;
 }
 
 /** Whole days between an ISO date and now. */
