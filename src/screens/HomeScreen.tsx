@@ -182,6 +182,7 @@ export function HomeScreen() {
     { label: 'Community', icon: 'people-outline', screen: 'Community' },
     { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
+    { label: 'Big Book', icon: 'book-outline', screen: 'BigBook' },
     { label: 'Agreements', icon: 'document-text-outline', screen: 'Agreements' },
     { label: 'Documents', icon: 'folder-outline', screen: 'Documents' },
     ...(passesEnabled ? [{ label: 'Passes', icon: 'bed-outline' as any, screen: 'Passes' }] : []),

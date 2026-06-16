@@ -27,6 +27,7 @@ import { AgreementViewScreen } from '../screens/AgreementViewScreen';
 import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
 import { PassesScreen } from '../screens/PassesScreen';
 import { MemberDocumentsScreen } from '../screens/MemberDocumentsScreen';
+import { BigBookScreen } from '../screens/BigBookScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -164,6 +165,7 @@ function MainStack() {
       <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay membership fee' }} />
       <RootStack.Screen name="Passes" component={PassesScreen} options={{ title: 'Passes' }} />
       <RootStack.Screen name="Documents" component={MemberDocumentsScreen} options={{ title: 'My documents' }} />
+      <RootStack.Screen name="BigBook" component={BigBookScreen} options={{ title: 'Big Book' }} />
       <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
