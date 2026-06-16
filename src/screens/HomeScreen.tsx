@@ -12,7 +12,7 @@ import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { TimelineEntry, CheckIn, Milestone, TreatmentSession } from '../types';
+import { CheckIn, Milestone } from '../types';
 import {
   daysSince,
   formatDate,
@@ -27,7 +27,7 @@ import {
 
 export function HomeScreen() {
   const nav = useNavigation<any>();
-  const { lovedOne, checkIns, milestones, timeline, backToClients, resetSobrietyDate, addNote } = useAppState();
+  const { lovedOne, checkIns, milestones, backToClients, resetSobrietyDate, addNote } = useAppState();
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -104,7 +104,6 @@ export function HomeScreen() {
   const sober = lovedOne.sobrietyDate ? daysSince(lovedOne.sobrietyDate) : null;
   const recentMood = checkIns[0];
   const nextMilestone = milestones.find((m) => !m.celebrated);
-  const recent = timeline.slice(0, 3);
 
   const sos = () => {
     Alert.alert(
@@ -402,26 +401,6 @@ export function HomeScreen() {
         </>
       ) : null}
 
-      {/* Recent activity preview */}
-      <SectionTitle>Recent activity</SectionTitle>
-      {recent.length === 0 ? (
-        <Card>
-          <Text style={typography.bodySecondary}>
-            No activity yet. Add your first check-in to start building {lovedOne.firstName}'s
-            timeline.
-          </Text>
-        </Card>
-      ) : null}
-      {recent.map((entry) => (
-        <Card key={entry.id} style={styles.activityRow}>
-          <View style={styles.dot} />
-          <View style={{ flex: 1 }}>
-            <Text style={typography.body}>{describeEntry(entry)}</Text>
-            <Text style={typography.caption}>{formatDate(entry.date)}</Text>
-          </View>
-        </Card>
-      ))}
-
       {/* Quick actions */}
       <View style={{ height: spacing.sm }} />
       <Button title="🌙 Do tonight's review" onPress={() => nav.navigate('NightlyReview')} />
@@ -469,21 +448,6 @@ export function HomeScreen() {
       </Modal>
     </Screen>
   );
-}
-
-function describeEntry(entry: TimelineEntry): string {
-  switch (entry.kind) {
-    case 'check-in':
-      return `Check-in: ${MOOD_LABELS[(entry.data as CheckIn).mood]}`;
-    case 'milestone':
-      return `Milestone: ${(entry.data as Milestone).title}`;
-    case 'session':
-      return (entry.data as TreatmentSession).attended
-        ? 'Attended a session'
-        : 'Missed a session';
-    default:
-      return 'Update';
-  }
 }
 
 const styles = StyleSheet.create({
@@ -557,12 +521,4 @@ const styles = StyleSheet.create({
   moodEmoji: { fontSize: 40, marginRight: spacing.md },
   milestoneCard: { backgroundColor: colors.accentLight },
   milestoneTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm + 2 },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    marginRight: spacing.md,
-  },
 });
