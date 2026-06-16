@@ -524,7 +524,7 @@ export async function listOrgCurfewCheckins(sinceISO: string): Promise<CurfewChe
 
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
-export interface House { id: string; name: string; joinCode?: string }
+export interface House { id: string; name: string; joinCode?: string; capacity?: number }
 
 async function myStaffOrgId(): Promise<string | null> {
   const { data } = await db().from('org_members').select('org_id').limit(1).maybeSingle();
@@ -533,9 +533,15 @@ async function myStaffOrgId(): Promise<string | null> {
 
 /** All houses in the caller's org. */
 export async function listHouses(): Promise<House[]> {
-  const { data, error } = await db().from('houses').select('id,name,join_code').order('created_at');
+  const { data, error } = await db().from('houses').select('id,name,join_code,capacity').order('created_at');
   if (error) throw error;
-  return (data ?? []).map((h: any) => ({ id: h.id, name: h.name, joinCode: h.join_code ?? undefined }));
+  return (data ?? []).map((h: any) => ({ id: h.id, name: h.name, joinCode: h.join_code ?? undefined, capacity: h.capacity ?? undefined }));
+}
+
+/** Owner: set a house's bed capacity (for occupancy tracking). */
+export async function setHouseCapacity(id: string, capacity: number | null): Promise<void> {
+  const { error } = await db().from('houses').update({ capacity }).eq('id', id);
+  if (error) throw error;
 }
 
 /** Owner: create a new house with its own join code. */
@@ -1247,6 +1253,32 @@ export async function setMemberRent(individualId: string, amountCents: number | 
   const { error } = await db()
     .from('individuals')
     .update({ monthly_rent_cents: amountCents, rent_due_day: dueDay })
+    .eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Facilitator: assign a member's bed label and move-in (intake) date. */
+export async function setMemberBed(individualId: string, fields: { bedLabel?: string | null; moveInDate?: string | null; houseId?: string | null }) {
+  const row: any = {};
+  if (fields.bedLabel !== undefined) row.bed_label = fields.bedLabel || null;
+  if (fields.moveInDate !== undefined) row.move_in_date = fields.moveInDate || null;
+  if (fields.houseId !== undefined) row.house_id = fields.houseId || null;
+  const { error } = await db().from('individuals').update(row).eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Facilitator: discharge a member — frees their bed and marks them completed. */
+export async function dischargeMember(individualId: string, dischargeDate: string) {
+  const { error } = await db().from('individuals')
+    .update({ status: 'completed', discharge_date: dischargeDate, bed_label: null })
+    .eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Facilitator: re-admit a previously discharged member. */
+export async function readmitMember(individualId: string) {
+  const { error } = await db().from('individuals')
+    .update({ status: 'in_care', discharge_date: null })
     .eq('id', individualId);
   if (error) throw error;
 }

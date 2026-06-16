@@ -9,7 +9,7 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
-  listHouses,
+  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember,
 } from '../services/db';
 import { formatDateTime, formatDate } from '../utils/format';
 import { DateField } from '../components/PickerFields';
@@ -44,6 +44,18 @@ export function ClientProfileScreen() {
   const nav = useNavigation<any>();
 
   const loadAgreements = () => listAgreements(id).then(setAgreements).catch(() => {});
+
+  // Bed / intake / discharge (CRM)
+  const [bedLabel, setBedLabel] = useState('');
+  const [moveInDate, setMoveInDate] = useState('');
+  const [dischargeDate, setDischargeDate] = useState<string | undefined>(undefined);
+  const [bedSaving, setBedSaving] = useState(false);
+  const loadCrm = () => getIndividual(id).then((r: any) => {
+    if (!r) return;
+    setBedLabel(r.bed_label ?? '');
+    setMoveInDate(r.move_in_date ?? '');
+    setDischargeDate(r.discharge_date ?? undefined);
+  }).catch(() => {});
 
   const [uaTests, setUaTests] = useState<UATest[]>([]);
   const [uaOpen, setUaOpen] = useState(false);
@@ -97,6 +109,7 @@ export function ClientProfileScreen() {
     listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
     loadUA();
+    loadCrm();
     listMyPayments(id).then((pays: any[]) => {
       const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
       setPaidThisMonth(sum);
@@ -117,6 +130,34 @@ export function ClientProfileScreen() {
         },
       },
     ]);
+  };
+
+  const saveBed = async () => {
+    setBedSaving(true);
+    try {
+      await setMemberBed(id, { bedLabel: bedLabel.trim() || null, moveInDate: moveInDate || null });
+      Alert.alert('Saved', 'Bed and move-in details updated.');
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    finally { setBedSaving(false); }
+  };
+
+  const discharge = () => {
+    Alert.alert('Discharge resident?', `This marks ${client?.firstName ?? 'this member'} as discharged and frees their bed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Discharge', style: 'destructive',
+        onPress: async () => {
+          const today = new Date().toISOString().slice(0, 10);
+          try { await dischargeMember(id, today); setDischargeDate(today); setBedLabel(''); await setClientStatus(id, 'completed'); }
+          catch (e: any) { Alert.alert('Could not discharge', e?.message ?? 'Try again.'); }
+        },
+      },
+    ]);
+  };
+
+  const readmit = async () => {
+    try { await readmitMember(id); setDischargeDate(undefined); await setClientStatus(id, 'in_care'); }
+    catch (e: any) { Alert.alert('Could not re-admit', e?.message ?? 'Try again.'); }
   };
 
   if (!client) {
@@ -378,17 +419,31 @@ export function ClientProfileScreen() {
         </View>
       </Modal>
 
-      {/* Status */}
+      {/* Bed & intake */}
+      <SectionTitle>Bed &amp; intake</SectionTitle>
+      <Card>
+        <Text style={styles.label}>Bed / room label</Text>
+        <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
+        <Text style={styles.label}>Move-in (intake) date</Text>
+        <DateField value={moveInDate} onChange={setMoveInDate} placeholder="Pick the move-in date" />
+        <View style={{ height: spacing.sm }} />
+        <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
+      </Card>
+
+      {/* Status / discharge */}
       <SectionTitle>Status</SectionTitle>
       <Card>
-        <Text style={[typography.body, { marginBottom: spacing.sm }]}>
-          Currently: <Text style={{ fontWeight: '700' }}>{client.status === 'in_care' ? 'In Care' : 'Completed'}</Text>
+        <Text style={[typography.body, { marginBottom: spacing.xs }]}>
+          Currently: <Text style={{ fontWeight: '700' }}>{client.status === 'in_care' ? 'In Care' : 'Discharged'}</Text>
         </Text>
-        <Button
-          title={client.status === 'in_care' ? 'Mark as completed' : 'Reactivate (In Care)'}
-          variant="secondary"
-          onPress={() => setClientStatus(id, client.status === 'in_care' ? 'completed' : 'in_care')}
-        />
+        {dischargeDate ? (
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Discharged on {formatDate(dischargeDate)}</Text>
+        ) : null}
+        {client.status === 'in_care' ? (
+          <Button title="Discharge resident" variant="secondary" onPress={discharge} />
+        ) : (
+          <Button title="Re-admit (In Care)" variant="secondary" onPress={readmit} />
+        )}
       </Card>
 
       {/* Invite */}

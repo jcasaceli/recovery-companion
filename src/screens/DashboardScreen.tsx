@@ -187,6 +187,45 @@ export function DashboardScreen() {
           <Stat label="Pass requests" value={String(passes.length)} color={passes.length ? colors.warning : colors.textSecondary} />
         </View>
 
+        {/* Occupancy */}
+        <SectionTitle>Occupancy &amp; beds</SectionTitle>
+        <Card>
+          {houses.map((h) => {
+            const residents = members.filter((m) => m.house_id === h.id);
+            const cap = h.capacity ?? null;
+            const open = cap != null ? Math.max(0, cap - residents.length) : null;
+            return (
+              <View key={h.id} style={{ marginBottom: spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>{h.name}</Text>
+                  <Text style={[typography.caption, { color: open === 0 ? colors.warning : colors.success, fontWeight: '700' }]}>
+                    {cap != null ? `${residents.length}/${cap} beds · ${open} open` : `${residents.length} residents`}
+                  </Text>
+                </View>
+                {residents.map((m) => (
+                  <TouchableOpacity key={m.id} style={styles.row} onPress={() => openClient(m.id)}>
+                    <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                    <Text style={[typography.body, { flex: 1 }]}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
+                    <Text style={typography.caption}>{m.bed_label || 'No bed assigned'}</Text>
+                  </TouchableOpacity>
+                ))}
+                {cap == null ? <Text style={[typography.caption, { color: colors.textMuted }]}>Set a bed capacity in Account → Houses.</Text> : null}
+              </View>
+            );
+          })}
+          {members.filter((m) => !m.house_id).length ? (
+            <View style={{ marginTop: spacing.sm }}>
+              <Text style={[typography.caption, { fontWeight: '700', color: colors.warning }]}>Unassigned to a house</Text>
+              {members.filter((m) => !m.house_id).map((m) => (
+                <TouchableOpacity key={m.id} style={styles.row} onPress={() => openClient(m.id)}>
+                  <View style={[styles.dot, { backgroundColor: colors.warning }]} />
+                  <Text style={[typography.body, { flex: 1 }]}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+
         {/* Rent collection */}
         <SectionTitle>Membership fees · this month</SectionTitle>
         <Card>

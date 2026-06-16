@@ -4,7 +4,7 @@ import { Card, SectionTitle, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
 import {
   House, listHouses, createHouse, renameHouse, deleteHouse,
-  listHouseStaff, assignManagerToHouse, removeManagerFromHouse,
+  listHouseStaff, assignManagerToHouse, removeManagerFromHouse, setHouseCapacity,
 } from '../services/db';
 import { Manager } from '../services/managers';
 
@@ -19,6 +19,15 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [capDraft, setCapDraft] = useState<Record<string, string>>({});
+
+  const saveCap = async (houseId: string) => {
+    const raw = capDraft[houseId];
+    const n = raw == null || raw.trim() === '' ? null : parseInt(raw, 10);
+    if (n != null && (isNaN(n) || n < 0)) { Alert.alert('Enter a number', 'Bed capacity must be a whole number.'); return; }
+    try { await setHouseCapacity(houseId, n); setHouses((hs) => hs.map((h) => h.id === houseId ? { ...h, capacity: n ?? undefined } : h)); }
+    catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -76,7 +85,19 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
               </TouchableOpacity>
               {open ? (
                 <View style={styles.assignArea}>
-                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>Assign house managers</Text>
+                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>Bed capacity</Text>
+                  <View style={styles.capRow}>
+                    <TextInput
+                      style={styles.capInput}
+                      defaultValue={h.capacity != null ? String(h.capacity) : ''}
+                      onChangeText={(t) => setCapDraft((d) => ({ ...d, [h.id]: t }))}
+                      placeholder="# beds"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                    />
+                    <TouchableOpacity style={styles.capSave} onPress={() => saveCap(h.id)}><Text style={styles.capSaveText}>Save</Text></TouchableOpacity>
+                  </View>
+                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4, marginTop: spacing.sm }]}>Assign house managers</Text>
                   {managers.length === 0 ? (
                     <Text style={typography.caption}>Add house managers first (below), then assign them here.</Text>
                   ) : managers.map((m) => {
@@ -124,4 +145,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginVertical: spacing.md },
+  capRow: { flexDirection: 'row', alignItems: 'center' },
+  capInput: { flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.sm, fontSize: 15, color: colors.textPrimary, marginRight: spacing.sm },
+  capSave: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  capSaveText: { color: colors.textInverse, fontWeight: '700' },
 });
