@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, ActivityIndicator, Linking, Platform, Share } from 'react-native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { startRentCheckout } from '../services/payments';
+import { startRentCheckout, getRentCheckoutUrl } from '../services/payments';
 import { notifyCare } from '../services/push';
 import * as dbApi from '../services/db';
 import { PaymentMethod } from '../types';
@@ -62,6 +62,26 @@ export function PaymentsScreen() {
     try { await startRentCheckout(recurring, c); }
     catch (e: any) { Alert.alert('Payment unavailable', e?.message ?? 'Try again.'); }
     finally { setBusy(false); }
+  };
+
+  // Generate a secure Stripe payment link and share it so a loved one can pay.
+  const sendPaymentLink = async () => {
+    const c = cents();
+    if (!c || c < 100) { Alert.alert('Enter an amount', 'Enter the amount you’d like them to pay.'); return; }
+    setBusy(true);
+    try {
+      const url = await getRentCheckoutUrl(false, c);
+      const message = `Please help pay my sober living membership fee (${money(c)}). Here's a secure payment link: ${url}`;
+      if (Platform.OS === 'web' && !(navigator as any)?.share) {
+        Linking.openURL(`mailto:?subject=${encodeURIComponent('Membership fee payment')}&body=${encodeURIComponent(message)}`).catch(() => {});
+      } else {
+        await Share.share({ message });
+      }
+    } catch (e: any) {
+      Alert.alert('Could not create link', e?.message ?? 'Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   // CashApp / Zelle are paid in those apps; we record a member-reported payment.
@@ -136,9 +156,19 @@ export function PaymentsScreen() {
       <Card>
         <Text style={styles.method}>💳 Debit / Credit card</Text>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Secure card payment via Stripe.</Text>
-        <Button title="Pay once" onPress={() => payCard(false)} disabled={busy} />
+        <Button title="Pay it myself" onPress={() => payCard(false)} disabled={busy} />
         <View style={{ height: spacing.sm }} />
         <Button title="Set up monthly auto-pay" variant="secondary" onPress={() => payCard(true)} disabled={busy} />
+      </Card>
+
+      {/* Send a payment link to a loved one */}
+      <Card>
+        <Text style={styles.method}>📤 Have a loved one pay</Text>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Text or email a secure payment link to a parent or loved one so they can pay your
+          membership fee for you. It still counts toward your balance.
+        </Text>
+        <Button title="Create & send a payment link" variant="secondary" onPress={sendPaymentLink} disabled={busy} />
       </Card>
 
       {/* CashApp */}

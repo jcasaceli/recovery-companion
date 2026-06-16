@@ -418,6 +418,7 @@ export interface Agreement {
   signaturePaths?: string[];   // SVG path strings making up the signature
   signerName?: string;
   signedAt?: string;
+  signedIp?: string;
   createdAt: string;
 }
 
@@ -431,6 +432,7 @@ function mapAgreement(r: any): Agreement {
     signaturePaths: r.signature_paths ?? undefined,
     signerName: r.signer_name ?? undefined,
     signedAt: r.signed_at ?? undefined,
+    signedIp: r.signed_ip ?? undefined,
     createdAt: r.created_at,
   };
 }
@@ -500,13 +502,14 @@ export async function listMyAgreements(): Promise<Agreement[]> {
 }
 
 /** Member: sign an agreement. Stores the signature strokes + name + timestamp. */
-export async function signAgreement(id: string, signaturePaths: string[], signerName: string) {
+export async function signAgreement(id: string, signaturePaths: string[], signerName: string, signedIp?: string) {
   const { error } = await db()
     .from('agreements')
     .update({
       signature_paths: signaturePaths,
       signer_name: signerName,
       signed_at: new Date().toISOString(),
+      signed_ip: signedIp ?? null,
       status: 'signed',
     })
     .eq('id', id);

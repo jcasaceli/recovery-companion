@@ -63,3 +63,10 @@ export async function startRentCheckout(recurring: boolean, amountCents?: number
   const { url } = await call('/api/stripe/rent/checkout', 'POST', { recurring, amountCents });
   await WebBrowser.openBrowserAsync(url);
 }
+
+/** Returns a Stripe checkout URL (without opening it) — e.g. to share with a
+ *  loved one so they can pay the member's fee. Payment still credits the member. */
+export async function getRentCheckoutUrl(recurring: boolean, amountCents?: number): Promise<string> {
+  const { url } = await call('/api/stripe/rent/checkout', 'POST', { recurring, amountCents });
+  return url;
+}
