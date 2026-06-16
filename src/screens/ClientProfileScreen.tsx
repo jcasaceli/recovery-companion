@@ -14,6 +14,7 @@ import {
 import { formatDateTime, formatDate } from '../utils/format';
 import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
+import { DocumentsManager } from '../components/DocumentsManager';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -371,6 +372,9 @@ export function ClientProfileScreen() {
 
       {/* Curfew check-ins */}
       <CurfewManager individualId={id} memberName={client.firstName} />
+
+      {/* Document storage */}
+      <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
 
       {/* Membership agreements */}
       <SectionTitle>Membership agreements</SectionTitle>

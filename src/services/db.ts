@@ -522,6 +522,49 @@ export async function listOrgCurfewCheckins(sinceISO: string): Promise<CurfewChe
   return (data ?? []).map(mapCurfewCheckin);
 }
 
+// ── Document storage ─────────────────────────────────────────────────────────
+
+export interface Document {
+  id: string;
+  individualId: string;
+  title: string;
+  fileData?: string;        // base64 data URI
+  createdAt: string;
+}
+
+function mapDocument(r: any): Document {
+  return { id: r.id, individualId: r.individual_id, title: r.title, fileData: r.file_data ?? undefined, createdAt: r.created_at };
+}
+
+/** Documents on a member's file (RLS: staff or the member themselves). */
+export async function listDocuments(individualId: string): Promise<Document[]> {
+  const { data, error } = await db().from('documents').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapDocument);
+}
+
+/** Member: their own stored documents. */
+export async function listMyDocuments(): Promise<Document[]> {
+  const me = await resolveMyIndividual();
+  if (!me) return [];
+  return listDocuments(me.individualId);
+}
+
+/** Staff: store a document image on a member's file. */
+export async function createDocument(input: { orgId?: string; individualId: string; title: string; fileData?: string }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('documents').insert({
+    org_id: input.orgId ?? null, individual_id: input.individualId,
+    title: input.title, file_data: input.fileData ?? null, created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+export async function deleteDocument(id: string) {
+  const { error } = await db().from('documents').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string; capacity?: number }
