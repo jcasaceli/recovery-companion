@@ -56,7 +56,8 @@
           "calendarPermission": "Sober Living Companion needs calendar access to add your meetings and appointments."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font"
     ],
     "extra": {
       "eas": {
