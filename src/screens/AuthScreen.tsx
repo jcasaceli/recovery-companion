@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
 import { Button } from '../components/ui';
 import { useAuth } from '../state/auth';
@@ -185,19 +186,32 @@ function Field({
 }: {
   label: string; value: string; onChange: (s: string) => void; placeholder?: string; secure?: boolean; keyboardType?: any;
 }) {
+  const [show, setShow] = useState(false);
   return (
     <View>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={secure}
-        autoCapitalize="none"
-        keyboardType={keyboardType}
-      />
+      <View style={styles.inputWrap}>
+        <TextInput
+          style={[styles.input, secure ? styles.inputWithIcon : null]}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry={secure && !show}
+          autoCapitalize="none"
+          keyboardType={keyboardType}
+        />
+        {secure ? (
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShow((s) => !s)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={show ? 'Hide password' : 'Show password'}
+          >
+            <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -222,6 +236,9 @@ const styles = StyleSheet.create({
   roleBlurb: { ...typography.caption, marginTop: 2 },
   fieldLabel: { ...typography.bodySecondary, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.xs },
   input: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border },
+  inputWrap: { position: 'relative', justifyContent: 'center' },
+  inputWithIcon: { paddingRight: 48 },
+  eyeBtn: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, alignItems: 'center', justifyContent: 'center' },
   segment: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4 },
   segmentBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
   segmentActive: { backgroundColor: colors.surface },
