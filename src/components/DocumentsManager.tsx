@@ -1,16 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Image, Alert, ActivityIndicator, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as WebBrowser from 'expo-web-browser';
+import { decode } from 'base64-arraybuffer';
 import { Card, SectionTitle, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { listDocuments, createDocument, deleteDocument, Document } from '../services/db';
+import { listDocuments, createDocument, deleteDocument, uploadDocumentFile, getDocumentUrl, Document } from '../services/db';
 import { formatDate } from '../utils/format';
 
-/** Staff: store and review documents on a member's file (intake paperwork, IDs,
- *  insurance cards, house rules, etc.). Read-only for the member elsewhere. */
+type Pending = { uri: string; fileName: string; mimeType: string; size?: number; isImage: boolean };
+
+function iconFor(mime?: string, name?: string) {
+  const m = (mime || '').toLowerCase();
+  const n = (name || '').toLowerCase();
+  if (m.startsWith('image/')) return '🖼️';
+  if (m.includes('pdf') || n.endsWith('.pdf')) return '📄';
+  if (m.includes('word') || n.endsWith('.doc') || n.endsWith('.docx')) return '📝';
+  return '📎';
+}
+
+/** Staff: store and review documents (PDFs, Word docs, photos) on a resident's
+ *  file. Files live in a private Storage bucket; residents can view their own. */
 export function DocumentsManager({ individualId, orgId, memberName }: { individualId: string; orgId?: string; memberName?: string }) {
   const [docs, setDocs] = useState<Document[]>([]);
-  const [pending, setPending] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<Document | null>(null);
@@ -18,38 +33,63 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
   const load = () => listDocuments(individualId).then(setDocs).catch(() => {});
   useEffect(() => { load(); }, [individualId]);
 
-  const pickFrom = async (source: 'camera' | 'library') => {
+  const pickPhoto = async (source: 'camera' | 'library') => {
     const perm = source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') {
-      Alert.alert('Permission needed', `Allow ${source === 'camera' ? 'camera' : 'photo'} access to add a document.`);
-      return;
-    }
-    const opts: ImagePicker.ImagePickerOptions = { quality: 0.3, base64: true, allowsEditing: false };
-    const result = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    if (result.canceled || !result.assets?.[0]?.base64) return;
-    setPending(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    if (perm.status !== 'granted') { Alert.alert('Permission needed', `Allow ${source === 'camera' ? 'camera' : 'photo'} access.`); return; }
+    const opts: ImagePicker.ImagePickerOptions = { quality: 0.5, allowsEditing: false };
+    const r = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    const a = r.assets?.[0];
+    if (r.canceled || !a) return;
+    setPending({ uri: a.uri, fileName: a.fileName || `photo_${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg', size: a.fileSize, isImage: true });
+    if (!title) setTitle(a.fileName?.replace(/\.[^.]+$/, '') || '');
+  };
+
+  const pickFile = async () => {
+    const r = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/*'],
+      copyToCacheDirectory: true,
+    });
+    const a = (r as any).assets?.[0];
+    if ((r as any).canceled || !a) return;
+    setPending({ uri: a.uri, fileName: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/octet-stream', size: a.size, isImage: (a.mimeType || '').startsWith('image/') });
+    if (!title) setTitle((a.name || '').replace(/\.[^.]+$/, ''));
   };
 
   const add = () => {
     const buttons: any[] = [
-      { text: 'Choose from library', onPress: () => pickFrom('library') },
+      { text: 'Choose file (PDF, Word…)', onPress: pickFile },
+      { text: 'Choose photo', onPress: () => pickPhoto('library') },
       { text: 'Cancel', style: 'cancel' },
     ];
-    if (Platform.OS !== 'web') buttons.unshift({ text: 'Take photo', onPress: () => pickFrom('camera') });
-    Alert.alert('Add a document', 'Add a photo or scan of the document.', buttons);
+    if (Platform.OS !== 'web') buttons.unshift({ text: 'Take photo', onPress: () => pickPhoto('camera') });
+    Alert.alert('Add a document', 'Upload a PDF, Word doc, or photo/scan.', buttons);
   };
 
   const save = async () => {
     if (!pending || !title.trim()) { Alert.alert('Add a title', 'Give the document a name first.'); return; }
     setBusy(true);
     try {
-      await createDocument({ orgId, individualId, title: title.trim(), fileData: pending });
+      const b64 = await FileSystem.readAsStringAsync(pending.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const bytes = decode(b64);
+      const path = await uploadDocumentFile(individualId, pending.fileName, bytes, pending.mimeType);
+      await createDocument({ orgId, individualId, title: title.trim(), storagePath: path, fileName: pending.fileName, mimeType: pending.mimeType, sizeBytes: pending.size });
       setPending(null); setTitle('');
       load();
-    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    } catch (e: any) { Alert.alert('Could not upload', e?.message ?? 'Try again.'); }
     finally { setBusy(false); }
+  };
+
+  const open = async (d: Document) => {
+    if (d.storagePath) {
+      const url = await getDocumentUrl(d.storagePath);
+      if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
+      if ((d.mimeType || '').startsWith('image/')) { setViewing({ ...d, fileData: url }); return; }
+      await WebBrowser.openBrowserAsync(url); // PDF / Word open in a viewer
+    } else if (d.fileData) {
+      setViewing(d); // legacy inline image
+    }
   };
 
   const remove = (d: Document) => {
@@ -64,14 +104,18 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
       <SectionTitle>Documents</SectionTitle>
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Store {memberName ? `${memberName}’s` : 'this member’s'} paperwork — intake forms, ID, insurance, house rules. They can view these too.
+          Store {memberName ? `${memberName}’s` : 'this resident’s'} paperwork — PDFs, Word docs, IDs, insurance, house rules. They can view these too.
         </Text>
 
         {pending ? (
           <View style={styles.pendingBox}>
-            <Image source={{ uri: pending }} style={styles.preview} resizeMode="cover" />
-            <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Document name (e.g. Driver’s license)" placeholderTextColor={colors.textMuted} />
-            <Button title={busy ? 'Saving…' : 'Save document'} onPress={save} disabled={busy} />
+            {pending.isImage ? (
+              <Image source={{ uri: pending.uri }} style={styles.preview} resizeMode="cover" />
+            ) : (
+              <View style={styles.fileChip}><Text style={{ fontSize: 22 }}>{iconFor(pending.mimeType, pending.fileName)}</Text><Text style={[typography.body, { flex: 1 }]} numberOfLines={1}>{pending.fileName}</Text></View>
+            )}
+            <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Document name (e.g. Signed lease)" placeholderTextColor={colors.textMuted} />
+            <Button title={busy ? 'Uploading…' : 'Save document'} onPress={save} disabled={busy} />
             <TouchableOpacity onPress={() => { setPending(null); setTitle(''); }} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Discard</Text>
             </TouchableOpacity>
@@ -83,13 +127,13 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
         {docs.length ? (
           <View style={{ marginTop: spacing.sm }}>
             {docs.map((d) => (
-              <TouchableOpacity key={d.id} style={styles.row} onPress={() => setViewing(d)} onLongPress={() => remove(d)}>
-                <Text style={styles.icon}>📄</Text>
+              <TouchableOpacity key={d.id} style={styles.row} onPress={() => open(d)} onLongPress={() => remove(d)}>
+                <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={typography.body}>{d.title}</Text>
-                  <Text style={typography.caption}>Added {formatDate(d.createdAt)}</Text>
+                  <Text style={typography.caption}>{d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}</Text>
                 </View>
-                <Text style={[typography.caption, { color: colors.primary }]}>View</Text>
+                <Text style={[typography.caption, { color: colors.primary }]}>Open</Text>
               </TouchableOpacity>
             ))}
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press a document to delete it.</Text>
@@ -117,6 +161,7 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
 const styles = StyleSheet.create({
   pendingBox: { marginBottom: spacing.sm },
   preview: { width: '100%', height: 180, borderRadius: radius.md, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt },
+  fileChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
   icon: { fontSize: 20, marginRight: spacing.sm },

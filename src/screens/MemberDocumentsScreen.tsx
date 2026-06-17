@@ -1,9 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ActivityIndicator, Alert } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Screen, ScreenTitle, Card } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { listMyDocuments, Document } from '../services/db';
+import { listMyDocuments, getDocumentUrl, Document } from '../services/db';
 import { formatDate } from '../utils/format';
+
+function iconFor(mime?: string, name?: string) {
+  const m = (mime || '').toLowerCase();
+  const n = (name || '').toLowerCase();
+  if (m.startsWith('image/')) return '🖼️';
+  if (m.includes('pdf') || n.endsWith('.pdf')) return '📄';
+  if (m.includes('word') || n.endsWith('.doc') || n.endsWith('.docx')) return '📝';
+  return '📎';
+}
 
 /** Member: read-only view of the documents staff have stored on their file. */
 export function MemberDocumentsScreen() {
@@ -11,6 +21,17 @@ export function MemberDocumentsScreen() {
   const [viewing, setViewing] = useState<Document | null>(null);
 
   useEffect(() => { listMyDocuments().then(setDocs).catch(() => setDocs([])); }, []);
+
+  const open = async (d: Document) => {
+    if (d.storagePath) {
+      const url = await getDocumentUrl(d.storagePath);
+      if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
+      if ((d.mimeType || '').startsWith('image/')) { setViewing({ ...d, fileData: url }); return; }
+      await WebBrowser.openBrowserAsync(url);
+    } else if (d.fileData) {
+      setViewing(d);
+    }
+  };
 
   return (
     <Screen>
@@ -22,13 +43,13 @@ export function MemberDocumentsScreen() {
       ) : (
         <Card>
           {docs.map((d) => (
-            <TouchableOpacity key={d.id} style={styles.row} onPress={() => setViewing(d)}>
-              <Text style={styles.icon}>📄</Text>
+            <TouchableOpacity key={d.id} style={styles.row} onPress={() => open(d)}>
+              <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={typography.body}>{d.title}</Text>
-                <Text style={typography.caption}>Added {formatDate(d.createdAt)}</Text>
+                <Text style={typography.caption}>{d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}</Text>
               </View>
-              <Text style={[typography.caption, { color: colors.primary }]}>View</Text>
+              <Text style={[typography.caption, { color: colors.primary }]}>Open</Text>
             </TouchableOpacity>
           ))}
         </Card>

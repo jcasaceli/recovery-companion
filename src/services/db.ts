@@ -528,12 +528,36 @@ export interface Document {
   id: string;
   individualId: string;
   title: string;
-  fileData?: string;        // base64 data URI
+  fileData?: string;        // legacy: base64 data URI (older image docs)
+  storagePath?: string;     // path in the 'documents' Storage bucket
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
   createdAt: string;
 }
 
 function mapDocument(r: any): Document {
-  return { id: r.id, individualId: r.individual_id, title: r.title, fileData: r.file_data ?? undefined, createdAt: r.created_at };
+  return {
+    id: r.id, individualId: r.individual_id, title: r.title, fileData: r.file_data ?? undefined,
+    storagePath: r.storage_path ?? undefined, fileName: r.file_name ?? undefined,
+    mimeType: r.mime_type ?? undefined, sizeBytes: r.size_bytes ?? undefined, createdAt: r.created_at,
+  };
+}
+
+/** Upload bytes to the private documents bucket; returns the storage path. */
+export async function uploadDocumentFile(individualId: string, fileName: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const safe = fileName.replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = `${individualId}/${Date.now()}_${safe}`;
+  const { error } = await db().storage.from('documents').upload(path, bytes, { contentType, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+/** A short-lived signed URL to view/download a stored document. */
+export async function getDocumentUrl(storagePath: string): Promise<string | null> {
+  const { data, error } = await db().storage.from('documents').createSignedUrl(storagePath, 3600);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }
 
 /** Documents on a member's file (RLS: staff or the member themselves). */
@@ -550,17 +574,24 @@ export async function listMyDocuments(): Promise<Document[]> {
   return listDocuments(me.individualId);
 }
 
-/** Staff: store a document image on a member's file. */
-export async function createDocument(input: { orgId?: string; individualId: string; title: string; fileData?: string }) {
+/** Staff: store a document on a member's file (Storage file or legacy base64 image). */
+export async function createDocument(input: {
+  orgId?: string; individualId: string; title: string;
+  fileData?: string; storagePath?: string; fileName?: string; mimeType?: string; sizeBytes?: number;
+}) {
   const { data: u } = await db().auth.getUser();
   const { error } = await db().from('documents').insert({
-    org_id: input.orgId ?? null, individual_id: input.individualId,
-    title: input.title, file_data: input.fileData ?? null, created_by: u.user?.id,
+    org_id: input.orgId ?? null, individual_id: input.individualId, title: input.title,
+    file_data: input.fileData ?? null, storage_path: input.storagePath ?? null,
+    file_name: input.fileName ?? null, mime_type: input.mimeType ?? null, size_bytes: input.sizeBytes ?? null,
+    created_by: u.user?.id,
   });
   if (error) throw error;
 }
 
 export async function deleteDocument(id: string) {
+  const { data } = await db().from('documents').select('storage_path').eq('id', id).maybeSingle();
+  if (data?.storage_path) await db().storage.from('documents').remove([data.storage_path]);
   const { error } = await db().from('documents').delete().eq('id', id);
   if (error) throw error;
 }
