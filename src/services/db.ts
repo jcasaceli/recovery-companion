@@ -607,6 +607,126 @@ export async function deleteMeetingAttendance(id: string) {
   if (error) throw error;
 }
 
+// ── Fillable lease / intake forms ────────────────────────────────────────────
+
+export type FormFieldType =
+  | 'text' | 'longtext' | 'number' | 'phone' | 'date' | 'yesno' | 'ssn_last4' | 'address';
+
+export interface FormField {
+  key: string;
+  label: string;
+  type: FormFieldType;
+  required?: boolean;
+}
+
+export interface FormTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  fields: FormField[];
+  createdAt: string;
+}
+
+export interface FormResponse {
+  id: string;
+  individualId: string;
+  templateId?: string;
+  title: string;
+  fields: FormField[];
+  answers: Record<string, any>;
+  status: 'pending' | 'completed';
+  signaturePaths?: string[];
+  signerName?: string;
+  signedAt?: string;
+  signedIp?: string;
+  createdAt: string;
+}
+
+function mapTemplate(r: any): FormTemplate {
+  return { id: r.id, title: r.title, description: r.description ?? undefined, fields: r.fields ?? [], createdAt: r.created_at };
+}
+function mapFormResponse(r: any): FormResponse {
+  return {
+    id: r.id, individualId: r.individual_id, templateId: r.template_id ?? undefined,
+    title: r.title, fields: r.fields ?? [], answers: r.answers ?? {}, status: r.status,
+    signaturePaths: r.signature_paths ?? undefined, signerName: r.signer_name ?? undefined,
+    signedAt: r.signed_at ?? undefined, signedIp: r.signed_ip ?? undefined, createdAt: r.created_at,
+  };
+}
+
+/** Staff: saved form templates for the org. */
+export async function listFormTemplates(): Promise<FormTemplate[]> {
+  const { data, error } = await db().from('form_templates').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapTemplate);
+}
+
+/** Staff: save a reusable form template. */
+export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[] }) {
+  const { data: u } = await db().auth.getUser();
+  const org = await getMyOrg();
+  const { error } = await db().from('form_templates').insert({
+    org_id: org?.id ?? null, title: input.title, description: input.description ?? null,
+    fields: input.fields, created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+export async function deleteFormTemplate(id: string) {
+  const { error } = await db().from('form_templates').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Staff: assign a form to a resident (snapshots the fields so it's immutable). */
+export async function assignForm(input: { individualId: string; orgId?: string; templateId?: string; title: string; fields: FormField[] }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('form_responses').insert({
+    org_id: input.orgId ?? null, individual_id: input.individualId, template_id: input.templateId ?? null,
+    title: input.title, fields: input.fields, answers: {}, status: 'pending', created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+/** Form responses on a resident's file (staff or the resident). */
+export async function listFormResponses(individualId: string): Promise<FormResponse[]> {
+  const { data, error } = await db().from('form_responses').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapFormResponse);
+}
+
+/** Member: their own assigned forms. */
+export async function listMyFormResponses(): Promise<FormResponse[]> {
+  const me = await resolveMyIndividual();
+  if (!me) return [];
+  return listFormResponses(me.individualId);
+}
+
+export async function getFormResponse(id: string): Promise<FormResponse | null> {
+  const { data, error } = await db().from('form_responses').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? mapFormResponse(data) : null;
+}
+
+/** Member: save progress without submitting. */
+export async function saveFormAnswers(id: string, answers: Record<string, any>) {
+  const { error } = await db().from('form_responses').update({ answers }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Member: submit + e-sign a form (captures signer, date/time, IP). */
+export async function submitFormResponse(id: string, input: { answers: Record<string, any>; signaturePaths: string[]; signerName: string; signedIp?: string }) {
+  const { error } = await db().from('form_responses').update({
+    answers: input.answers, signature_paths: input.signaturePaths, signer_name: input.signerName,
+    signed_ip: input.signedIp ?? null, signed_at: new Date().toISOString(), status: 'completed',
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteFormResponse(id: string) {
+  const { error } = await db().from('form_responses').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Houses (multi-house) ─────────────────────────────────────────────────────
 
 export interface House { id: string; name: string; joinCode?: string; capacity?: number }

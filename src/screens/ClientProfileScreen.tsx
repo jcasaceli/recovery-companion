@@ -17,6 +17,7 @@ import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
 import { ChoresManager } from '../components/ChoresManager';
 import { AttendanceManager } from '../components/AttendanceManager';
+import { FormsManager } from '../components/FormsManager';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -380,6 +381,9 @@ export function ClientProfileScreen() {
 
       {/* Meeting attendance */}
       <AttendanceManager individualId={id} memberName={client.firstName} />
+
+      {/* Lease & intake forms */}
+      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
 
       {/* Document storage */}
       <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} />

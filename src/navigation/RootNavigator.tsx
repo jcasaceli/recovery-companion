@@ -27,6 +27,8 @@ import { AgreementViewScreen } from '../screens/AgreementViewScreen';
 import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
 import { PassesScreen } from '../screens/PassesScreen';
 import { MemberDocumentsScreen } from '../screens/MemberDocumentsScreen';
+import { MemberFormsScreen } from '../screens/MemberFormsScreen';
+import { FormFillScreen } from '../screens/FormFillScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -47,6 +49,7 @@ function ClientsStack() {
       <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false, title: 'Members' }} />
       <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member', headerBackTitle: 'Members' }} />
       <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement', headerBackTitle: 'Member' }} />
+      <ClientsStackNav.Screen name="FormFill" component={FormFillScreen} options={{ title: 'Form', headerBackTitle: 'Member' }} />
     </ClientsStackNav.Navigator>
   );
 }
@@ -164,6 +167,8 @@ function MainStack() {
       <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay membership fee' }} />
       <RootStack.Screen name="Passes" component={PassesScreen} options={{ title: 'Passes' }} />
       <RootStack.Screen name="Documents" component={MemberDocumentsScreen} options={{ title: 'My documents' }} />
+      <RootStack.Screen name="Forms" component={MemberFormsScreen} options={{ title: 'Forms' }} />
+      <RootStack.Screen name="FormFill" component={FormFillScreen} options={{ title: 'Form' }} />
       <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
