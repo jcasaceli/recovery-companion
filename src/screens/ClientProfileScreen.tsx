@@ -221,6 +221,8 @@ export function ClientProfileScreen() {
   };
 
   const uploadAgreement = () => {
+    // On web, Alert.alert buttons don't render — go straight to the file picker.
+    if (Platform.OS === 'web') { pickFrom('library'); return; }
     Alert.alert('Add membership agreement', 'Add a photo of the signed-paper agreement, or pick one from your library.', [
       { text: 'Take photo', onPress: () => pickFrom('camera') },
       { text: 'Choose from library', onPress: () => pickFrom('library') },

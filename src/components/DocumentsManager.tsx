@@ -58,12 +58,15 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
   };
 
   const add = () => {
+    // On web, Alert.alert buttons don't render — go straight to the file picker
+    // (it lets you choose a PDF, Word doc, or image).
+    if (Platform.OS === 'web') { pickFile(); return; }
     const buttons: any[] = [
       { text: 'Choose file (PDF, Word…)', onPress: pickFile },
       { text: 'Choose photo', onPress: () => pickPhoto('library') },
       { text: 'Cancel', style: 'cancel' },
     ];
-    if (Platform.OS !== 'web') buttons.unshift({ text: 'Take photo', onPress: () => pickPhoto('camera') });
+    buttons.unshift({ text: 'Take photo', onPress: () => pickPhoto('camera') });
     Alert.alert('Add a document', 'Upload a PDF, Word doc, or photo/scan.', buttons);
   };
 
