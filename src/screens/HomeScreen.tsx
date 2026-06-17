@@ -248,17 +248,19 @@ export function HomeScreen() {
 
       {/* Member's own meeting check-in history */}
       {!isFacilitator ? (
-        <Card onPress={() => setShowCheckins((v) => !v)}>
-          <View style={styles.sobrietyRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={typography.h3}>My meeting check-ins</Text>
-              <Text style={typography.caption}>
-                {myCheckins.length} total · {myCheckins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
-                {myCheckins.length ? ` · tap to ${showCheckins ? 'hide' : 'view'}` : ''}
-              </Text>
+        <Card>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowCheckins((v) => !v)}>
+            <View style={styles.sobrietyRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.h3}>My meeting check-ins</Text>
+                <Text style={typography.caption}>
+                  {myCheckins.length} total · {myCheckins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
+                  {myCheckins.length ? ` · tap to ${showCheckins ? 'hide' : 'view'}` : ''}
+                </Text>
+              </View>
+              <Ionicons name="checkmark-done-outline" size={24} color={colors.primary} />
             </View>
-            <Ionicons name="checkmark-done-outline" size={24} color={colors.primary} />
-          </View>
+          </TouchableOpacity>
           {showCheckins ? (
             myCheckins.length === 0 ? (
               <Text style={[typography.caption, { marginTop: spacing.sm }]}>No check-ins yet. Tap “I'm at a meeting” when you arrive.</Text>
@@ -267,7 +269,7 @@ export function HomeScreen() {
                 <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 2 }]}>Swipe a check-in left to remove it.</Text>
                 {myCheckins.map((c) => (
                   <SwipeRow key={c.id} onDelete={() => confirmDeleteCheckin(c)}>
-                    <View style={[styles.checkinRow, { backgroundColor: colors.surface }]}>
+                    <View style={styles.checkinRow}>
                       <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
                       <Text style={typography.caption}>{formatDate(c.createdAt)}</Text>
                     </View>
@@ -519,7 +521,7 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   modalInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: 'top', fontSize: 15, color: colors.textPrimary, marginBottom: spacing.md },
   dateInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
-  checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  checkinRow: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   sobrietyRow: { flexDirection: 'row', alignItems: 'center' },
   hero: {
     backgroundColor: colors.primary,
