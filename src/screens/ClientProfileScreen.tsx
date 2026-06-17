@@ -6,7 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  getMyOrg, listMyPayments, listNotes, deleteNote,
+  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember,
@@ -16,7 +16,6 @@ import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
 import { ChoresManager } from '../components/ChoresManager';
-import { AttendanceManager } from '../components/AttendanceManager';
 import { FormsManager } from '../components/FormsManager';
 
 function money(cents?: number) {
@@ -35,6 +34,8 @@ export function ClientProfileScreen() {
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
+  const [checkins, setCheckins] = useState<any[]>([]);
+  const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
@@ -106,6 +107,7 @@ export function ClientProfileScreen() {
   };
 
   useEffect(() => {
+    listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
@@ -299,6 +301,73 @@ export function ClientProfileScreen() {
         <Button title="Save membership fee" onPress={saveRent} />
       </Card>
 
+      {/* Membership agreements */}
+      <SectionTitle>Membership agreements</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Upload an agreement for {client.firstName} to review and sign. Signed copies appear here.
+        </Text>
+        <Button title="📄 Upload agreement" onPress={uploadAgreement} />
+        {agreements.length ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {agreements.map((a) => (
+              <TouchableOpacity
+                key={a.id}
+                style={styles.agreementRow}
+                activeOpacity={0.7}
+                onPress={() => nav.navigate('AgreementView', { id: a.id })}
+                onLongPress={() => removeAgreement(a)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>{a.title}</Text>
+                  <Text style={[typography.caption, { color: a.status === 'signed' ? colors.success : colors.warning }]}>
+                    {a.status === 'signed' ? `✓ Signed by ${a.signerName ?? 'resident'}${a.signedAt ? ` · ${formatDate(a.signedAt)}` : ''}` : '⏳ Awaiting signature'}
+                  </Text>
+                </View>
+                <Text style={styles.chevronSm}>›</Text>
+              </TouchableOpacity>
+            ))}
+            <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press to delete.</Text>
+          </View>
+        ) : null}
+      </Card>
+
+      {/* Title prompt after picking a document */}
+      <Modal visible={!!pendingDoc} transparent animationType="fade" onRequestClose={() => setPendingDoc(null)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Name this agreement</Text>
+            {pendingDoc ? <Image source={{ uri: pendingDoc }} style={styles.docPreview} resizeMode="contain" /> : null}
+            <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Membership Agreement 2026" placeholderTextColor={colors.textMuted} />
+            <Button title={uploading ? 'Sending…' : 'Send to resident'} onPress={saveAgreement} disabled={uploading || !docTitle.trim()} />
+            {uploading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} /> : null}
+            <TouchableOpacity onPress={() => setPendingDoc(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Lease & intake form templates / custom */}
+      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
+
+      {/* Bed & intake */}
+      <SectionTitle>Bed &amp; intake</SectionTitle>
+      <Card>
+        <Text style={styles.label}>Bed / room label</Text>
+        <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
+        <Text style={styles.label}>Move-in (intake) date</Text>
+        <DateField value={moveInDate} onChange={setMoveInDate} placeholder="Pick the move-in date" />
+        <View style={{ height: spacing.sm }} />
+        <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
+      </Card>
+
+      {/* Curfew check-ins */}
+      <CurfewManager individualId={id} memberName={client.firstName} />
+
+      {/* Chores & tasks */}
+      <ChoresManager individualId={id} memberName={client.firstName} />
+
       {/* UA / drug-test logs */}
       <SectionTitle>UA / drug tests</SectionTitle>
       <Card>
@@ -354,77 +423,25 @@ export function ClientProfileScreen() {
         </View>
       </Modal>
 
-      {/* Curfew check-ins */}
-      <CurfewManager individualId={id} memberName={client.firstName} />
-
-      {/* Chores & tasks */}
-      <ChoresManager individualId={id} memberName={client.firstName} />
-
-      {/* Meeting attendance */}
-      <AttendanceManager individualId={id} memberName={client.firstName} />
-
-      {/* Lease & intake forms */}
-      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
-
       {/* Document storage */}
       <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
 
-      {/* Membership agreements */}
-      <SectionTitle>Membership agreements</SectionTitle>
-      <Card>
-        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Upload an agreement for {client.firstName} to review and sign. Signed copies appear here.
+      {/* Meeting check-ins (staff view) */}
+      <SectionTitle>Meeting check-ins</SectionTitle>
+      <Card onPress={() => setShowMeetings((v) => !v)}>
+        <Text style={styles.meetingCount}>{checkins.length}</Text>
+        <Text style={typography.bodySecondary}>
+          total check-in{checkins.length === 1 ? '' : 's'} · {checkins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
+          {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} all` : ''}
         </Text>
-        <Button title="📄 Upload agreement" onPress={uploadAgreement} />
-        {agreements.length ? (
-          <View style={{ marginTop: spacing.sm }}>
-            {agreements.map((a) => (
-              <TouchableOpacity
-                key={a.id}
-                style={styles.agreementRow}
-                activeOpacity={0.7}
-                onPress={() => nav.navigate('AgreementView', { id: a.id })}
-                onLongPress={() => removeAgreement(a)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.body}>{a.title}</Text>
-                  <Text style={[typography.caption, { color: a.status === 'signed' ? colors.success : colors.warning }]}>
-                    {a.status === 'signed' ? `✓ Signed by ${a.signerName ?? 'resident'}${a.signedAt ? ` · ${formatDate(a.signedAt)}` : ''}` : '⏳ Awaiting signature'}
-                  </Text>
-                </View>
-                <Text style={styles.chevronSm}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press to delete.</Text>
-          </View>
-        ) : null}
-      </Card>
-
-      {/* Title prompt after picking a document */}
-      <Modal visible={!!pendingDoc} transparent animationType="fade" onRequestClose={() => setPendingDoc(null)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
-            <Text style={typography.h3}>Name this agreement</Text>
-            {pendingDoc ? <Image source={{ uri: pendingDoc }} style={styles.docPreview} resizeMode="contain" /> : null}
-            <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Membership Agreement 2026" placeholderTextColor={colors.textMuted} />
-            <Button title={uploading ? 'Sending…' : 'Send to resident'} onPress={saveAgreement} disabled={uploading || !docTitle.trim()} />
-            {uploading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} /> : null}
-            <TouchableOpacity onPress={() => setPendingDoc(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
-              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Bed & intake */}
-      <SectionTitle>Bed &amp; intake</SectionTitle>
-      <Card>
-        <Text style={styles.label}>Bed / room label</Text>
-        <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
-        <Text style={styles.label}>Move-in (intake) date</Text>
-        <DateField value={moveInDate} onChange={setMoveInDate} placeholder="Pick the move-in date" />
-        <View style={{ height: spacing.sm }} />
-        <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
+        {showMeetings
+          ? checkins.map((c) => (
+              <View key={c.id} style={styles.checkinRow}>
+                <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
+                <Text style={typography.caption}>{formatDateTime(c.createdAt)}</Text>
+              </View>
+            ))
+          : null}
       </Card>
 
       {/* Status / discharge */}
@@ -470,6 +487,8 @@ const styles = StyleSheet.create({
   dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },
   amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
+  meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
+  checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },

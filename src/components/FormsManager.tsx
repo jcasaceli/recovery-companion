@@ -76,7 +76,7 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
 
   return (
     <>
-      <SectionTitle>Lease &amp; intake forms</SectionTitle>
+      <SectionTitle>Lease &amp; Intake Form Templates/Custom</SectionTitle>
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Send {memberName || 'this resident'} a form to fill in and e-sign (lease, intake, emergency contact, etc.).
