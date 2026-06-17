@@ -15,8 +15,11 @@
  *
  * Required env (server/.env):
  *   STRIPE_SECRET_KEY=sk_test_...
- *   STRIPE_WEBHOOK_SECRET=whsec_...           (from `stripe listen` or dashboard)
+ *   STRIPE_WEBHOOK_SECRET=whsec_...           ("Your account" destination secret)
+ *   STRIPE_WEBHOOK_SECRET_CONNECT=whsec_...   (optional: "Connected accounts" destination secret,
+ *                                              for residents paying membership fees by card)
  *   STRIPE_PLATFORM_PRICE_ID=price_...        ($60/mo recurring price you create)
+ *   STRIPE_MANAGER_PRICE_ID=price_...         ($25/mo recurring price for manager seats)
  *   SUPABASE_URL=https://xxx.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY=eyJ...          (Project Settings → API → service_role)
  *   PUBLIC_RETURN_URL=https://your-return-page (where Stripe sends users back)
@@ -268,12 +271,23 @@ async function recordCardPayment(meta, amountTotal) {
 export async function stripeWebhook(req, res) {
   if (!stripe) return res.status(503).end();
   const sig = req.headers['stripe-signature'];
+  // We may have two event destinations: one scoped to "Your account" (platform
+  // $60 subscription) and one scoped to "Connected accounts" (residents paying
+  // membership fees by card). Each destination has its own signing secret, so we
+  // verify the payload against whichever one matches.
+  const secrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_WEBHOOK_SECRET_CONNECT,
+  ].filter(Boolean);
   let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (e) {
-    console.error('[stripe] webhook signature failed', e.message);
-    return res.status(400).send(`Webhook Error: ${e.message}`);
+  let lastErr;
+  for (const secret of secrets) {
+    try { event = stripe.webhooks.constructEvent(req.body, sig, secret); break; }
+    catch (e) { lastErr = e; }
+  }
+  if (!event) {
+    console.error('[stripe] webhook signature failed', lastErr?.message);
+    return res.status(400).send(`Webhook Error: ${lastErr?.message || 'no matching signing secret'}`);
   }
 
   try {
