@@ -6,7 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
+  getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember,
@@ -35,8 +35,6 @@ export function ClientProfileScreen() {
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
-  const [checkins, setCheckins] = useState<any[]>([]);
-  const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
@@ -108,7 +106,6 @@ export function ClientProfileScreen() {
   };
 
   useEffect(() => {
-    listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
@@ -302,24 +299,6 @@ export function ClientProfileScreen() {
         <Button title="Save membership fee" onPress={saveRent} />
       </Card>
 
-      {/* All meeting check-ins */}
-      <SectionTitle>Meeting check-ins</SectionTitle>
-      <Card onPress={() => setShowMeetings((v) => !v)}>
-        <Text style={styles.meetingCount}>{checkins.length}</Text>
-        <Text style={typography.bodySecondary}>
-          total check-in{checkins.length === 1 ? '' : 's'} · {checkins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
-          {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} all` : ''}
-        </Text>
-        {showMeetings
-          ? checkins.map((c) => (
-              <View key={c.id} style={styles.checkinRow}>
-                <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
-                <Text style={typography.caption}>{formatDateTime(c.createdAt)}</Text>
-              </View>
-            ))
-          : null}
-      </Card>
-
       {/* UA / drug-test logs */}
       <SectionTitle>UA / drug tests</SectionTitle>
       <Card>
@@ -491,8 +470,6 @@ const styles = StyleSheet.create({
   dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },
   amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
-  meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
-  checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
