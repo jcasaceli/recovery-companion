@@ -41,3 +41,6 @@ server/.env
 # generated native folders
 /ios
 /android
+
+# Google Play service account key (SECRET — never commit)
+google-play-service-account.json
