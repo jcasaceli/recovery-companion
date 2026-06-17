@@ -54,12 +54,12 @@ export function FormFillScreen() {
     } finally { setBusy(false); }
   };
 
-  if (!form) return <Screen><ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} /></Screen>;
+  if (!form) return <Screen edges={[]}><ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} /></Screen>;
 
   const done = form.status === 'completed';
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title={form.title} subtitle={done ? 'Completed' : 'Please complete and sign'} />
 
       <Card>

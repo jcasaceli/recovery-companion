@@ -165,7 +165,7 @@ export function ClientProfileScreen() {
   };
 
   if (!client) {
-    return <Screen><Text style={typography.body}>Member not found.</Text></Screen>;
+    return <Screen edges={[]}><Text style={typography.body}>Member not found.</Text></Screen>;
   }
 
   const rent = client.monthlyRentCents || 0;
@@ -251,7 +251,7 @@ export function ClientProfileScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle
         title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
         subtitle={client.houseName || 'Sober Living'}

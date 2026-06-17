@@ -109,7 +109,7 @@ export function MeetingsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma — online & local" />
 
       <View style={styles.filters}>

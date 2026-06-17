@@ -307,8 +307,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         // Subscription gate: only an active/trialing org can manage real clients.
         const org: any = await dbApi.getMyOrg().catch(() => null);
         setSubscriptionActive(!!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing'));
+        // Always start facilitators/managers on their Dashboard — clear any
+        // resident that was open in a previous session so login never drops them
+        // back into a member's view.
+        setIndividualId(undefined);
         setState((s) => ({ ...s, onboarded: true, clients }));
-        return; // no client selected yet → ClientsScreen
+        return; // no client selected yet → Dashboard
       }
       const resolved = await dbApi.resolveMyIndividual();
       if (!resolved) {

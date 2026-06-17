@@ -34,7 +34,7 @@ export function MemberDocumentsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="My documents" subtitle="Paperwork your facilitator has shared" />
       {docs === null ? (
         <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />

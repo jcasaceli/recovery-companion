@@ -55,7 +55,7 @@ export function ScheduleScreen() {
   const dates = Object.keys(byDate);
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Schedule" subtitle={`${lovedOne.firstName}'s events`} />
 
       <Card>

@@ -108,12 +108,12 @@ export function PaymentsScreen() {
   };
 
   if (loading) {
-    return <Screen><ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} /></Screen>;
+    return <Screen edges={[]}><ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} /></Screen>;
   }
 
   if (!ctx) {
     return (
-      <Screen>
+      <Screen edges={[]}>
         <ScreenTitle title="Pay membership fee" />
         <Card>
           <Text style={typography.bodySecondary}>
@@ -126,7 +126,7 @@ export function PaymentsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Pay membership fee" subtitle="Pay your sober living directly" />
 
       <Card>

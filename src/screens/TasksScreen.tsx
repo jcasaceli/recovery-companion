@@ -36,7 +36,7 @@ export function TasksScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Chores & tasks" subtitle={`Shared with ${lovedOne.firstName}'s care team`} />
 
       {/* Add task */}

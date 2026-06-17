@@ -16,12 +16,16 @@ import { colors, spacing, radius, typography, shadow } from '../theme';
 export function Screen({
   children,
   scroll = true,
+  edges = ['top'],
 }: {
   children: ReactNode;
   scroll?: boolean;
+  // Screens shown inside a navigator header already get the top inset from the
+  // header — pass edges={[]} there to avoid a redundant blank gap up top.
+  edges?: ('top' | 'right' | 'bottom' | 'left')[];
 }) {
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={styles.screen} edges={edges}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scrollContent}

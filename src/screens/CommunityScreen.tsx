@@ -95,7 +95,7 @@ export function CommunityScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Community" subtitle="Share your journey & support each other" />
 
       <Text style={styles.guidelines}>

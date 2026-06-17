@@ -14,7 +14,7 @@ export function MemberFormsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <ScreenTitle title="Forms" subtitle="Forms your facilitator has sent you" />
       {forms === null ? (
         <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />
