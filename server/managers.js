@@ -110,13 +110,14 @@ managersRouter.post('/', async (req, res) => {
 
   const name = (req.body?.name || '').trim();
   const email = (req.body?.email || '').trim().toLowerCase();
-  if (!name || !email) return res.status(400).json({ error: 'Name and email are required.' });
+  const phone = (req.body?.phone || '').trim();
+  if (!name || !email || !phone) return res.status(400).json({ error: 'Name, email, and phone are required.' });
 
   try {
     const password = tempPassword();
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email, password, email_confirm: true,
-      user_metadata: { role: 'facilitator', full_name: name },
+      user_metadata: { role: 'facilitator', full_name: name, phone },
     });
     if (createErr) {
       if (/already/i.test(createErr.message)) return res.status(409).json({ error: 'That email already has an account.' });
@@ -124,7 +125,7 @@ managersRouter.post('/', async (req, res) => {
     }
     const uid = created.user.id;
     await supabaseAdmin.from('profiles').upsert(
-      { id: uid, role: 'facilitator', full_name: name, email, email_verified: true },
+      { id: uid, role: 'facilitator', full_name: name, email, phone, email_verified: true },
       { onConflict: 'id' },
     );
     await supabaseAdmin.from('org_members').upsert(
