@@ -163,7 +163,7 @@ stripeRouter.post('/rent/checkout', async (req, res) => {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
     const found = await residentOrg(user.id);
-    const NOT_READY = "Your facilitator hasn't set up payments yet, so you can't pay in the app right now. Please reach out to your house manager.";
+    const NOT_READY = "Your sober living home hasn't set up payments yet — check with your house manager.";
     if (!found?.org?.stripe_account_id) {
       return res.status(400).json({ error: NOT_READY });
     }
