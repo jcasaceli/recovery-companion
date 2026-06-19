@@ -163,10 +163,22 @@ stripeRouter.post('/rent/checkout', async (req, res) => {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
     const found = await residentOrg(user.id);
+    const NOT_READY = "Your facilitator hasn't set up payments yet, so you can't pay in the app right now. Please reach out to your house manager.";
     if (!found?.org?.stripe_account_id) {
-      return res.status(400).json({ error: 'Your sober living has not set up payments yet.' });
+      return res.status(400).json({ error: NOT_READY });
     }
     const connectedAccount = found.org.stripe_account_id;
+
+    // The account may exist but not be fully onboarded (no business name / can't
+    // accept charges yet). Check before sending the resident to a broken checkout.
+    try {
+      const acct = await stripe.accounts.retrieve(connectedAccount);
+      if (!acct.charges_enabled) {
+        return res.status(400).json({ error: NOT_READY });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: NOT_READY });
+    }
 
     const recurring = req.body?.recurring === true;
     const amount = Number(req.body?.amountCents) || found.individual.monthly_rent_cents || 0;
