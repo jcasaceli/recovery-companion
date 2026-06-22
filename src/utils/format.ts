@@ -87,6 +87,29 @@ export function daysSince(iso: string): number {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
 }
 
+export interface SobrietyParts { months: number; days: number; hours: number; minutes: number; seconds: number; }
+
+/** Break the time since a sobriety date into calendar months, then days,
+ *  hours, minutes, and seconds — for a live recovery counter. */
+export function sobrietyParts(iso: string): SobrietyParts {
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(iso.slice(0, 10)) && iso.length <= 10
+    ? parseLocalDate(iso)
+    : new Date(iso);
+  const now = new Date();
+  if (now.getTime() <= start.getTime()) return { months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+  // Full calendar months elapsed, then the remainder as days + time.
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  const anchor = new Date(start);
+  anchor.setMonth(start.getMonth() + months);
+  if (anchor.getTime() > now.getTime()) { months -= 1; anchor.setMonth(anchor.getMonth() - 1); }
+  let ms = now.getTime() - anchor.getTime();
+  const days = Math.floor(ms / 86400000); ms -= days * 86400000;
+  const hours = Math.floor(ms / 3600000); ms -= hours * 3600000;
+  const minutes = Math.floor(ms / 60000); ms -= minutes * 60000;
+  const seconds = Math.floor(ms / 1000);
+  return { months, days, hours, minutes, seconds };
+}
+
 export const MOOD_LABELS: Record<MoodLevel, string> = {
   1: 'Struggling',
   2: 'Low',

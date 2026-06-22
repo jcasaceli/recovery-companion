@@ -15,6 +15,7 @@ import { useAuth } from '../state/auth';
 import { CheckIn, Milestone } from '../types';
 import {
   daysSince,
+  sobrietyParts,
   formatDate,
   formatTime,
   houseEventWhen,
@@ -102,6 +103,15 @@ export function HomeScreen() {
   };
 
   const sober = lovedOne.sobrietyDate ? daysSince(lovedOne.sobrietyDate) : null;
+  // Re-render every second so the live recovery counter ticks.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    if (!lovedOne.sobrietyDate) return;
+    const id = setInterval(() => setNowTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [lovedOne.sobrietyDate]);
+  const parts = lovedOne.sobrietyDate ? sobrietyParts(lovedOne.sobrietyDate) : null;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
   const recentMood = checkIns[0];
   const nextMilestone = milestones.find((m) => !m.celebrated);
 
@@ -218,10 +228,17 @@ export function HomeScreen() {
           {lovedOne.programName || 'Sober Living'}
         </Text>
         {sober !== null ? (
-          <View style={styles.heroStat}>
-            <Text style={styles.heroNumber}>{sober}</Text>
-            <Text style={styles.heroLabel}>days in recovery</Text>
-          </View>
+          <>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroNumber}>{sober}</Text>
+              <Text style={styles.heroLabel}>days in recovery</Text>
+            </View>
+            {parts ? (
+              <Text style={styles.heroBreakdown}>
+                {parts.months} {parts.months === 1 ? 'month' : 'months'} · {parts.days} {parts.days === 1 ? 'day' : 'days'} · {pad2(parts.hours)}:{pad2(parts.minutes)}:{pad2(parts.seconds)}
+              </Text>
+            ) : null}
+          </>
         ) : null}
       </Card>
 
@@ -533,6 +550,7 @@ const styles = StyleSheet.create({
   heroStat: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.md },
   heroNumber: { fontSize: 40, fontWeight: '800', color: colors.textInverse },
   heroLabel: { fontSize: 15, color: colors.primaryLight, marginLeft: spacing.sm },
+  heroBreakdown: { marginTop: 6, fontSize: 15, fontWeight: '600', color: colors.textInverse, opacity: 0.92, fontVariant: ['tabular-nums'] },
   moodRow: { flexDirection: 'row', alignItems: 'center' },
   moodEmoji: { fontSize: 40, marginRight: spacing.md },
   milestoneCard: { backgroundColor: colors.accentLight },
