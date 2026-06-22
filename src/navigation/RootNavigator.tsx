@@ -2,7 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
@@ -64,7 +65,13 @@ const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
 };
 
 function Tabs({ navigation }: any) {
-  return (
+  const auth = useAuth();
+  const { cloudHasIndividual } = useAppState();
+  const insets = useSafeAreaInsets();
+  // Signed-in member who hasn't connected a sober living code yet.
+  const needsCode = auth.configured && auth.profile?.role !== 'facilitator' && !cloudHasIndividual;
+
+  const tabs = (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -83,7 +90,41 @@ function Tabs({ navigation }: any) {
       <Tab.Screen name="Resources" component={ResourcesScreen} />
     </Tab.Navigator>
   );
+
+  if (!needsCode) return tabs;
+
+  // The banner consumes the top inset; tell the screens below the inset is
+  // already handled so their own SafeAreaView doesn't double-pad.
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.primary }}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('LinkMember')}
+        style={[bannerStyles.banner, { paddingTop: insets.top + 10 }]}
+      >
+        <Ionicons name="key-outline" size={18} color={colors.textInverse} />
+        <Text style={bannerStyles.text}>Enter sober living code</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+      </TouchableOpacity>
+      <SafeAreaInsetsContext.Provider value={{ top: 0, bottom: insets.bottom, left: insets.left, right: insets.right }}>
+        {tabs}
+      </SafeAreaInsetsContext.Provider>
+    </View>
+  );
 }
+
+const bannerStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+  },
+  text: { color: colors.textInverse, fontWeight: '700', fontSize: 15 },
+});
 
 export function RootNavigator() {
   const auth = useAuth();
@@ -98,11 +139,10 @@ export function RootNavigator() {
     if (auth.profile?.role === 'facilitator' && !cloudHasIndividual) {
       return <FacilitatorTabs />;
     }
-    // A member who isn't linked to a sober living yet enters their join code.
-    if (auth.profile?.role !== 'facilitator' && !cloudHasIndividual) {
-      return <LinkMemberScreen />;
-    }
-    return <MainStack />; // signed in & linked
+    // Members enter the full app whether or not they've connected a sober living
+    // yet. Unlinked residents get a "Enter sober living code" banner (in Tabs)
+    // and can connect any time via the LinkMember modal.
+    return <MainStack />;
   }
 
   // Local prototype: gate on the on-device onboarding flag.
@@ -172,6 +212,7 @@ function MainStack() {
       <RootStack.Screen name="Agreements" component={MemberAgreementsScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement' }} />
       <RootStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <RootStack.Screen name="LinkMember" component={LinkMemberScreen} options={{ presentation: 'modal', headerShown: false }} />
     </RootStack.Navigator>
   );
 }

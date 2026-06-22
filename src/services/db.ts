@@ -236,6 +236,18 @@ export async function redeemOrgCode(code: string): Promise<string> {
   return data as string;
 }
 
+/** Member: the name of the sober living network/org they're linked to (or null
+ *  if they haven't connected a code yet). Used for the "you're now connected to
+ *  …" confirmation. RLS policy "resident sees their org" allows this read. */
+export async function getMyNetworkName(): Promise<string | null> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return null;
+  const { data: ind } = await db().from('individuals').select('org_id').eq('profile_id', u.user.id).maybeSingle();
+  if (!ind?.org_id) return null;
+  const { data: org } = await db().from('organizations').select('name').eq('id', ind.org_id).maybeSingle();
+  return org?.name ?? null;
+}
+
 /** Member: record a meeting check-in with current location. */
 export async function recordMeetingCheckin(
   individualId: string,

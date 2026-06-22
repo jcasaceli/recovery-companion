@@ -52,6 +52,11 @@ import {
 } from '../data/mockData';
 
 const STORAGE_KEY = 'recovery-companion:state:v2';
+// A signed-in member who hasn't connected a sober living code yet ("solo
+// resident") still gets the full personal app — sobriety counter, check-ins,
+// etc. Their data lives on-device under a per-user key (namespaced so switching
+// accounts never leaks data) until they redeem a code and become a cloud member.
+const soloKey = (uid: string) => `recovery-companion:solo:${uid}`;
 
 interface PersistedState {
   onboarded: boolean;
@@ -209,11 +214,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [individualId, setIndividualId] = useState<string | undefined>(undefined);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
 
-  // Local persistence (prototype path only). When Supabase is configured the
-  // cloud is authoritative — never read or write the on-device cache.
+  // A signed-in, non-facilitator member who hasn't linked a sober living yet.
+  // They get the full personal app; their data persists on-device per-user.
+  const soloResident = cloud && auth.profile?.role !== 'facilitator' && !individualId;
+
+  // Local persistence. Prototype mode (no Supabase) uses the shared STORAGE_KEY.
+  // In cloud mode the cloud is authoritative for LINKED members & facilitators
+  // (never cached locally) — but a SOLO resident persists to a per-user key so
+  // their counter/check-ins survive restarts until they connect a code.
   useEffect(() => {
     if (auth.configured) {
-      setReady(true);
+      setReady(true); // cloud bootstrap (loadCloud) handles solo-cache loading
       return;
     }
     (async () => {
@@ -231,11 +242,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [auth.configured]);
 
   useEffect(() => {
-    if (!ready || auth.configured) return; // never persist when in cloud mode
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch((e) =>
+    if (!ready) return;
+    // Cloud mode: only SOLO residents persist (to their per-user key). Linked
+    // members & facilitators are never cached on-device.
+    if (auth.configured && !soloResident) return;
+    const uid = auth.session?.user?.id;
+    const key = soloResident && uid ? soloKey(uid) : STORAGE_KEY;
+    AsyncStorage.setItem(key, JSON.stringify(state)).catch((e) =>
       console.warn('[store] failed to save state', e),
     );
-  }, [state, ready, auth.configured]);
+  }, [state, ready, auth.configured, soloResident, auth.session?.user?.id]);
 
   // Load a specific client's full detail into the screen-facing state.
   const loadClientDetail = async (id: string) => {
@@ -316,8 +332,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
       const resolved = await dbApi.resolveMyIndividual();
       if (!resolved) {
+        // Solo resident — not connected to a sober living yet. Restore their
+        // on-device data (sobriety date, check-ins, …) so the app is fully usable.
         setIndividualId(undefined);
-        setState((s) => ({ ...s, onboarded: true }));
+        const uid = auth.session?.user?.id;
+        let solo: any = null;
+        if (uid) {
+          try { const raw = await AsyncStorage.getItem(soloKey(uid)); if (raw) solo = JSON.parse(raw); } catch {}
+        }
+        setState((s) => (solo ? { ...emptyState, ...solo, onboarded: true } : { ...s, onboarded: true }));
         return;
       }
       await loadClientDetail(resolved.individualId);
