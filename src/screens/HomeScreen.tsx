@@ -28,9 +28,13 @@ import {
 
 export function HomeScreen() {
   const nav = useNavigation<any>();
-  const { lovedOne, checkIns, milestones, backToClients, resetSobrietyDate, addNote } = useAppState();
+  const { lovedOne, checkIns, milestones, backToClients, resetSobrietyDate, addNote,
+    addMeetingCheckin, deleteMeetingCheckin: removeLocalCheckin, meetingCheckins } = useAppState();
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
+  // A real cloud individual id is a UUID; a solo (unconnected) resident's id is
+  // a local placeholder like "lo-1". Only connected residents hit the cloud.
+  const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne.id || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateModal, setDateModal] = useState(false);
   const [dateText, setDateText] = useState('');
@@ -45,8 +49,12 @@ export function HomeScreen() {
   const [curfewBusy, setCurfewBusy] = useState(false);
 
   const loadCheckins = useCallback(() => {
-    if (lovedOne.id) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
-  }, [lovedOne.id]);
+    // Solo residents read their on-device list (rendered directly); only
+    // connected members pull from the cloud meeting-checkin table.
+    if (connected) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
+  }, [connected, lovedOne.id]);
+  // Solo residents: mirror their on-device check-ins into the visible list.
+  useEffect(() => { if (!connected) setMyCheckins(meetingCheckins); }, [connected, meetingCheckins]);
   const loadCurfew = useCallback(() => {
     getMyCurfew().then((c) => {
       setCurfew(c);
@@ -71,7 +79,7 @@ export function HomeScreen() {
       'This deletes the record that you attended this meeting. It will be removed from your account, and your facilitator will no longer be able to see that you were here.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: async () => { await deleteMeetingCheckin(c.id).catch(() => {}); loadCheckins(); } },
+        { text: 'Remove', style: 'destructive', onPress: async () => { if (connected) { await deleteMeetingCheckin(c.id).catch(() => {}); loadCheckins(); } else { removeLocalCheckin(c.id); } } },
       ],
     );
   };
@@ -151,10 +159,16 @@ export function HomeScreen() {
           if (g) address = [g.name, g.street, g.city, g.region].filter(Boolean).join(', ');
         } catch {}
       }
-      await recordMeetingCheckin(lovedOne.id, lat, lng, address);
-      loadCheckins();
-      notifyCare(lovedOne.id, 'Meeting check-in', `${lovedOne.firstName} checked in at a meeting${address ? ` (${address})` : ''}.`, 'activity');
-      Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
+      if (connected) {
+        await recordMeetingCheckin(lovedOne.id, lat, lng, address);
+        loadCheckins();
+        notifyCare(lovedOne.id, 'Meeting check-in', `${lovedOne.firstName} checked in at a meeting${address ? ` (${address})` : ''}.`, 'activity');
+        Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
+      } else {
+        // Solo resident — log it on their own device.
+        addMeetingCheckin({ address, latitude: lat, longitude: lng });
+        Alert.alert("You're checked in ✅", address ? `Logged at ${address}.` : 'Your meeting check-in was logged.');
+      }
     } catch (e: any) {
       Alert.alert('Could not check in', e?.message ?? 'Please try again.');
     }

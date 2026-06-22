@@ -77,6 +77,19 @@ interface PersistedState {
   scheduleEvents: ScheduleEvent[];
   /** Facilitator's client list (cloud mode). */
   clients: ClientSummary[];
+  /** A solo (not-yet-connected) resident's own meeting check-ins, kept
+   *  on-device. Connected members use the cloud meeting-checkin table instead. */
+  meetingCheckins: LocalMeetingCheckin[];
+}
+
+/** A meeting check-in logged by a solo resident (stored on-device). Shaped to
+ *  match the cloud check-in objects the Home screen renders. */
+export interface LocalMeetingCheckin {
+  id: string;
+  createdAt: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 /** Fields collected during onboarding to create the loved-one profile. */
@@ -141,6 +154,10 @@ interface AppState extends PersistedState {
   setRent: (id: string, amountCents: number | null, dueDay: number | null) => Promise<void>;
   /** Facilitator: edit a client's details (name/house/phone/email). */
   updateClient: (id: string, fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string }) => Promise<void>;
+  /** Solo resident: log a meeting check-in on-device (no facilitator yet). */
+  addMeetingCheckin: (input: { address?: string; latitude?: number; longitude?: number }) => void;
+  /** Solo resident: remove one of their on-device meeting check-ins. */
+  deleteMeetingCheckin: (id: string) => void;
   /** Re-run the cloud bootstrap (e.g. after a member links via join code). */
   reloadCloud: () => Promise<void>;
   /** Facilitator: whether the org's $60/mo subscription is active (or trialing).
@@ -182,6 +199,7 @@ const emptyState: PersistedState = {
   posts: [],
   scheduleEvents: [],
   clients: [],
+  meetingCheckins: [],
 };
 
 const demoPosts: CommunityPost[] = [
@@ -422,6 +440,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           posts: demoPosts,
           scheduleEvents: demoSchedule,
           clients: [],
+          meetingCheckins: [],
         });
         return;
       }
@@ -462,8 +481,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         posts: [],
         scheduleEvents: [],
         clients: [],
+        meetingCheckins: [],
       });
     };
+
+    const addMeetingCheckin: AppState['addMeetingCheckin'] = (input) => {
+      const entry: LocalMeetingCheckin = {
+        id: newId('mc'),
+        createdAt: new Date().toISOString(),
+        address: input.address,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      };
+      setState((s) => ({ ...s, meetingCheckins: [entry, ...s.meetingCheckins] }));
+    };
+    const deleteMeetingCheckin: AppState['deleteMeetingCheckin'] = (id) =>
+      setState((s) => ({ ...s, meetingCheckins: s.meetingCheckins.filter((c) => c.id !== id) }));
 
     const resetApp = () => setState(emptyState);
 
@@ -685,6 +718,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setClientLevel,
       setRent,
       updateClient,
+      addMeetingCheckin,
+      deleteMeetingCheckin,
       reloadCloud: async () => { if (cloud) await loadCloud(); },
       subscriptionActive,
       cloudHasIndividual: cloud ? !!individualId : true,

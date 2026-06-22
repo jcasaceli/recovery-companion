@@ -2,8 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
-import { useSafeAreaInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { TouchableOpacity } from 'react-native';
 import { colors } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
@@ -64,14 +63,8 @@ const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Resources: { active: 'heart', inactive: 'heart-outline' },
 };
 
-function Tabs({ navigation }: any) {
-  const auth = useAuth();
-  const { cloudHasIndividual } = useAppState();
-  const insets = useSafeAreaInsets();
-  // Signed-in member who hasn't connected a sober living code yet.
-  const needsCode = auth.configured && auth.profile?.role !== 'facilitator' && !cloudHasIndividual;
-
-  const tabs = (
+function Tabs() {
+  return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -90,41 +83,7 @@ function Tabs({ navigation }: any) {
       <Tab.Screen name="Resources" component={ResourcesScreen} />
     </Tab.Navigator>
   );
-
-  if (!needsCode) return tabs;
-
-  // The banner consumes the top inset; tell the screens below the inset is
-  // already handled so their own SafeAreaView doesn't double-pad.
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.primary }}>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('LinkMember')}
-        style={[bannerStyles.banner, { paddingTop: insets.top + 10 }]}
-      >
-        <Ionicons name="key-outline" size={18} color={colors.textInverse} />
-        <Text style={bannerStyles.text}>Enter sober living code</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
-      </TouchableOpacity>
-      <SafeAreaInsetsContext.Provider value={{ top: 0, bottom: insets.bottom, left: insets.left, right: insets.right }}>
-        {tabs}
-      </SafeAreaInsetsContext.Provider>
-    </View>
-  );
 }
-
-const bannerStyles = StyleSheet.create({
-  banner: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-  },
-  text: { color: colors.textInverse, fontWeight: '700', fontSize: 15 },
-});
 
 export function RootNavigator() {
   const auth = useAuth();

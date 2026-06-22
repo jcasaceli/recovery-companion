@@ -11,7 +11,29 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, radius, typography, shadow } from '../theme';
+import { useAppState } from '../state/store';
+import { useAuth } from '../state/auth';
+
+/** Persistent "Enter sober living code" banner for a signed-in resident who
+ *  hasn't connected to a sober living yet. Renders inside the screen's safe
+ *  area (so it never double-pads) and opens the LinkMember modal. */
+function ConnectBanner() {
+  const nav = useNavigation<any>();
+  const auth = useAuth();
+  const { cloudHasIndividual } = useAppState();
+  const show = auth.configured && auth.profile?.role !== 'facilitator' && !cloudHasIndividual;
+  if (!show) return null;
+  return (
+    <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('LinkMember')} style={styles.connectBanner}>
+      <Ionicons name="key-outline" size={16} color={colors.textInverse} />
+      <Text style={styles.connectText}>Enter sober living code</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textInverse} />
+    </TouchableOpacity>
+  );
+}
 
 export function Screen({
   children,
@@ -26,6 +48,7 @@ export function Screen({
 }) {
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
+      <ConnectBanner />
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -117,6 +140,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scrollContent: { padding: spacing.md, paddingBottom: spacing.xxl },
+  connectBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.primary, paddingVertical: 11, paddingHorizontal: 16,
+  },
+  connectText: { color: colors.textInverse, fontWeight: '700', fontSize: 14 },
   titleBlock: { marginBottom: spacing.lg, marginTop: spacing.sm },
   card: {
     backgroundColor: colors.surface,
