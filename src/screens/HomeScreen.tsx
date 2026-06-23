@@ -32,12 +32,17 @@ export function HomeScreen() {
     addMeetingCheckin, deleteMeetingCheckin: removeLocalCheckin, meetingCheckins } = useAppState();
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
+  // The resident is viewing their OWN app (signed-in, non-facilitator) — use
+  // first-person framing and their own name rather than the loved-one wording.
+  const selfView = auth.configured && !isFacilitator;
   // A real cloud individual id is a UUID; a solo (unconnected) resident's id is
-  // a local placeholder like "lo-1". Only connected residents hit the cloud.
+  // a local placeholder like "self". Only connected residents hit the cloud.
   const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne.id || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateModal, setDateModal] = useState(false);
   const [dateText, setDateText] = useState('');
+  // iOS: the date currently spinning in the all-in-one picker modal (null = closed).
+  const [iosDate, setIosDate] = useState<Date | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertText, setAlertText] = useState('');
   const [myCheckins, setMyCheckins] = useState<any[]>([]);
@@ -84,9 +89,21 @@ export function HomeScreen() {
     );
   };
 
+  // Parse/format "YYYY-MM-DD" in LOCAL time so the date never shifts by a day.
+  const parseLocal = (s?: string) => {
+    if (s && /^\d{4}-\d{2}-\d{2}$/.test(s)) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+    return new Date();
+  };
+  const fmtLocal = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
   const openSobriety = () => {
     if (Platform.OS === 'web') { setDateText(lovedOne.sobrietyDate || ''); setDateModal(true); }
-    else setShowDatePicker(true);
+    else if (Platform.OS === 'ios') { setIosDate(parseLocal(lovedOne.sobrietyDate)); } // one screen, commit on Save
+    else setShowDatePicker(true); // Android native dialog
+  };
+  const saveIosDate = () => {
+    if (iosDate) resetSobrietyDate(fmtLocal(iosDate));
+    setIosDate(null);
   };
   const saveDateText = () => {
     const d = dateText.trim();
@@ -104,9 +121,9 @@ export function HomeScreen() {
   };
 
   const onSobrietyDate = (event: any, selected?: Date) => {
-    setShowDatePicker(false);
+    setShowDatePicker(false); // Android dialog returns once ('set' or 'dismissed')
     if (event.type === 'set' && selected) {
-      resetSobrietyDate(selected.toISOString().slice(0, 10));
+      resetSobrietyDate(fmtLocal(selected));
     }
   };
 
@@ -222,8 +239,8 @@ export function HomeScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <ScreenTitle
-            title={`Hi there 👋`}
-            subtitle={`Here's how ${lovedOne.firstName} is doing`}
+            title={selfView && lovedOne.firstName ? `Hi ${lovedOne.firstName} 👋` : `Hi there 👋`}
+            subtitle={selfView ? 'Your recovery, one day at a time' : `Here's how ${lovedOne.firstName} is doing`}
           />
         </View>
         <TouchableOpacity
@@ -237,7 +254,7 @@ export function HomeScreen() {
 
       {/* Hero: recovery summary */}
       <Card style={styles.hero}>
-        <Text style={styles.heroName}>{lovedOne.firstName}</Text>
+        <Text style={styles.heroName}>{lovedOne.firstName || (selfView ? 'Welcome' : '')}</Text>
         <Text style={styles.heroProgram}>
           {lovedOne.programName || 'Sober Living'}
         </Text>
@@ -253,7 +270,11 @@ export function HomeScreen() {
               </Text>
             ) : null}
           </>
-        ) : null}
+        ) : (
+          <Text style={styles.heroBreakdown}>
+            {selfView ? 'Set your sobriety date below to start your counter.' : 'No sobriety date set yet.'}
+          </Text>
+        )}
       </Card>
 
       {/* Prominent Pay membership fee button for members */}
@@ -455,14 +476,40 @@ export function HomeScreen() {
           <Ionicons name="calendar-outline" size={24} color={colors.primary} />
         </View>
       </Card>
+      {/* Android: native date dialog (returns once) */}
       {showDatePicker ? (
         <DateTimePicker
-          value={lovedOne.sobrietyDate ? new Date(lovedOne.sobrietyDate) : new Date()}
+          value={parseLocal(lovedOne.sobrietyDate)}
           mode="date"
           maximumDate={new Date()}
           onChange={onSobrietyDate}
         />
       ) : null}
+
+      {/* iOS: one screen — month, day & year together; commit only on Save */}
+      <Modal visible={iosDate !== null} transparent animationType="fade" onRequestClose={() => setIosDate(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={typography.h3}>Set your sobriety date</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Pick the date you’re counting from.</Text>
+            {iosDate ? (
+              <DateTimePicker
+                value={iosDate}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                themeVariant="light"
+                onChange={(_e, d) => { if (d) setIosDate(d); }}
+                style={{ alignSelf: 'stretch' }}
+              />
+            ) : null}
+            <Button title="Save" onPress={saveIosDate} />
+            <TouchableOpacity onPress={() => setIosDate(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Web fallback: the native date picker doesn't work in a browser */}
       <Modal visible={dateModal} transparent animationType="fade" onRequestClose={() => setDateModal(false)}>

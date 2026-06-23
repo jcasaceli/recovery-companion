@@ -185,9 +185,23 @@ function logCloud(e: unknown) {
   console.warn('[store] cloud write failed', e);
 }
 
+// A neutral, empty profile — a brand-new resident starts here (their own name,
+// no sobriety date yet) rather than inheriting the "Jordan" sample profile.
+// id is intentionally NOT a UUID so the app treats them as a solo resident.
+const blankLovedOne: LovedOne = {
+  id: 'self',
+  firstName: '',
+  relationship: 'other',
+  programName: '',
+  programType: 'outpatient',
+  treatmentStartDate: today(),
+  sobrietyDate: undefined,
+  careTeam: [],
+};
+
 const emptyState: PersistedState = {
   onboarded: false,
-  lovedOne: mockLovedOne, // placeholder until onboarding overwrites it
+  lovedOne: blankLovedOne, // placeholder until onboarding/cloud overwrites it
   checkIns: [],
   milestones: [],
   sessions: [],
@@ -351,14 +365,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const resolved = await dbApi.resolveMyIndividual();
       if (!resolved) {
         // Solo resident — not connected to a sober living yet. Restore their
-        // on-device data (sobriety date, check-ins, …) so the app is fully usable.
+        // on-device data (their name, sobriety date, check-ins) so the app is
+        // fully usable. A first-time solo resident gets a fresh profile seeded
+        // with THEIR name (from sign-up) and no sobriety date — never "Jordan".
         setIndividualId(undefined);
         const uid = auth.session?.user?.id;
         let solo: any = null;
         if (uid) {
           try { const raw = await AsyncStorage.getItem(soloKey(uid)); if (raw) solo = JSON.parse(raw); } catch {}
         }
-        setState((s) => (solo ? { ...emptyState, ...solo, onboarded: true } : { ...s, onboarded: true }));
+        if (solo) {
+          setState({ ...emptyState, ...solo, onboarded: true });
+        } else {
+          const first = ((profile as any)?.full_name || '').trim().split(/\s+/)[0] || '';
+          setState({ ...emptyState, onboarded: true, lovedOne: { ...blankLovedOne, firstName: first } });
+        }
         return;
       }
       await loadClientDetail(resolved.individualId);
