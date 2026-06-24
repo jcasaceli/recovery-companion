@@ -8,6 +8,7 @@ import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { SobrietyClockScreen } from '../screens/SobrietyClockScreen';
 import { NightlyReviewScreen } from '../screens/NightlyReviewScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { ResourcesScreen } from '../screens/ResourcesScreen';
@@ -58,6 +59,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Home: { active: 'home', inactive: 'home-outline' },
+  Clock: { active: 'timer', inactive: 'timer-outline' },
   NightlyReview: { active: 'moon', inactive: 'moon-outline' },
   Messages: { active: 'mail', inactive: 'mail-outline' },
   Resources: { active: 'heart', inactive: 'heart-outline' },
@@ -78,6 +80,7 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Clock" component={SobrietyClockScreen} options={{ tabBarLabel: 'Sobriety' }} />
       <Tab.Screen name="NightlyReview" component={NightlyReviewScreen} options={{ tabBarLabel: 'Nightly Review' }} />
       <Tab.Screen name="Messages" component={MessagesScreen} />
       <Tab.Screen name="Resources" component={ResourcesScreen} />

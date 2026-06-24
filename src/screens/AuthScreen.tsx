@@ -40,7 +40,7 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [channel, setChannel] = useState<'email' | 'sms'>('email');
+  const [channel] = useState<'email' | 'sms'>('email'); // verification is email-only
   const [orgName, setOrgName] = useState('');
   const [code, setCode] = useState('');
 
@@ -77,6 +77,14 @@ export function AuthScreen() {
     });
 
   const doSignIn = () => run(() => auth.signIn(email.trim().toLowerCase(), password));
+
+  const doForgot = () => {
+    if (!email.trim()) { setError('Enter your email above first, then tap “Forgot password?”'); return; }
+    run(async () => {
+      await auth.resetPassword(email.trim().toLowerCase());
+      Alert.alert('Check your email', 'We sent you a link to reset your password. Open it, choose a new password, then come back and sign in.');
+    });
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -121,23 +129,8 @@ export function AuthScreen() {
               <Field label="Sober living name" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
             ) : null}
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-            <Field label="Phone (for SMS verification)" value={phone} onChange={setPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" />
+            <Field label="Phone (optional)" value={phone} onChange={setPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
-
-            <Text style={styles.fieldLabel}>Verify with</Text>
-            <View style={styles.segment}>
-              {(['email', 'sms'] as const).map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.segmentBtn, channel === c ? styles.segmentActive : null]}
-                  onPress={() => setChannel(c)}
-                >
-                  <Text style={[styles.segmentText, channel === c ? styles.segmentTextActive : null]}>
-                    {c === 'email' ? 'Email' : 'Text message'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <View style={{ height: spacing.md }} />
             <Button
@@ -169,6 +162,9 @@ export function AuthScreen() {
           <View>
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Your password" secure />
+            <TouchableOpacity onPress={doForgot} style={styles.forgot} disabled={busy}>
+              <Text style={styles.linkText}>Forgot password?</Text>
+            </TouchableOpacity>
             <Button title="Sign in" onPress={doSignIn} disabled={busy || !email || !password} />
             <BackLink onPress={() => setStep('choose')} />
           </View>
@@ -245,6 +241,7 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.textSecondary, fontWeight: '600' },
   segmentTextActive: { color: colors.primary },
   link: { alignItems: 'center', paddingVertical: spacing.md },
+  forgot: { alignSelf: 'flex-end', paddingVertical: spacing.sm, marginBottom: spacing.xs },
   linkText: { color: colors.primary, fontWeight: '600' },
   error: { color: colors.crisis, backgroundColor: '#FCECEA', borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md, textAlign: 'center', fontWeight: '600' },
 });

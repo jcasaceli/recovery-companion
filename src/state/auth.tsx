@@ -52,6 +52,7 @@ interface AuthContextValue {
   profile: Profile | null;
   signUp: (input: SignUpInput) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   requestEmailOtp: (email: string) => Promise<void>;
   verifyEmailOtp: (email: string, token: string) => Promise<void>;
   requestSmsOtp: (phone: string) => Promise<void>;
@@ -147,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       signIn: (email, password) => dbApi.signInWithPassword(email, password).then(() => {}),
+      resetPassword: (email) => dbApi.resetPassword(email),
       requestEmailOtp: (email) => dbApi.requestEmailOtp(email),
       verifyEmailOtp: (email, token) => dbApi.verifyEmailOtp(email, token).then(() => {}),
       requestSmsOtp: (phone) => dbApi.requestSmsOtp(phone),

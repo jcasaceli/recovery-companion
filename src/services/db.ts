@@ -98,6 +98,13 @@ export async function signInWithPassword(email: string, password: string) {
   return data;
 }
 
+/** Send a password-reset email. The link in the email opens the Supabase
+ *  recovery flow (configure the redirect URL in Supabase Auth settings). */
+export async function resetPassword(email: string) {
+  const { error } = await db().auth.resetPasswordForEmail(email.trim().toLowerCase());
+  if (error) throw error;
+}
+
 /** Send a one-time code / magic link to the email. */
 export async function requestEmailOtp(email: string) {
   const { error } = await db().auth.signInWithOtp({ email });
