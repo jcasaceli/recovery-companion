@@ -17,6 +17,7 @@ import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
 import { ChoresManager } from '../components/ChoresManager';
 import { FormsManager } from '../components/FormsManager';
+import { DEMO_CLIENTS } from '../data/demo';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
@@ -164,7 +165,38 @@ export function ClientProfileScreen() {
   };
 
   if (!client) {
-    return <Screen edges={[]}><Text style={typography.body}>Member not found.</Text></Screen>;
+    // Preview mode: tapping a sample resident opens a read-only sample profile so
+    // owners can see exactly what they'd manage — including agreement upload.
+    const demo = DEMO_CLIENTS.find((c) => c.id === id);
+    if (!demo) return <Screen edges={[]}><Text style={typography.body}>Member not found.</Text></Screen>;
+    const previewMsg = () => Alert.alert('Preview', 'This is a sample profile. Subscribe ($60/mo) to add your real residents and send agreements they sign right on their phone.');
+    return (
+      <Screen edges={[]}>
+        <ScreenTitle title={`${demo.firstName}${demo.lastName ? ` ${demo.lastName}` : ''}`} subtitle={demo.houseName || 'Sober Living'} />
+        <Card style={{ backgroundColor: colors.surfaceAlt }}>
+          <Text style={[typography.body, { fontWeight: '700', color: colors.primary }]}>👀 Sample profile · preview</Text>
+          <Text style={[typography.caption, { marginTop: 2 }]}>This is what a resident's profile looks like. Subscribe to manage your own.</Text>
+        </Card>
+        <SectionTitle>Sobriety</SectionTitle>
+        <Card><Text style={typography.h3}>96 days sober</Text><Text style={typography.caption}>Their app counts every second with a live sobriety clock.</Text></Card>
+        <SectionTitle>Membership fee</SectionTitle>
+        <Card><Text style={typography.body}>{money(demo.monthlyRentCents)} / month · <Text style={{ color: colors.success, fontWeight: '700' }}>Paid this month</Text></Text></Card>
+        <SectionTitle>Membership agreements</SectionTitle>
+        <Card>
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload an agreement for {demo.firstName} to review and sign. Signed copies appear here.</Text>
+          <Button title="📄 Upload agreement" onPress={previewMsg} />
+          <View style={{ marginTop: spacing.sm }}>
+            <View style={styles.agreementRow}><Text style={{ flex: 1, ...typography.body }}>House Agreement 2026</Text><Text style={{ color: colors.success, fontWeight: '700' }}>Signed</Text></View>
+            <View style={styles.agreementRow}><Text style={{ flex: 1, ...typography.body }}>Curfew Policy</Text><Text style={{ color: colors.warning, fontWeight: '700' }}>Pending</Text></View>
+          </View>
+        </Card>
+        <SectionTitle>Documents</SectionTitle>
+        <Card>
+          <Button title="⬆️ Upload a document" onPress={previewMsg} />
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>Store intake forms, IDs, and signed paperwork in one place.</Text>
+        </Card>
+      </Screen>
+    );
   }
 
   const rent = client.monthlyRentCents || 0;

@@ -180,9 +180,7 @@ export function ClientsScreen() {
               style={styles.row}
               activeOpacity={0.7}
               onPress={() =>
-                locked
-                  ? Alert.alert('Preview', 'Subscribe to add and manage your own residents. These are sample profiles.')
-                  : selectMode
+                selectMode && !locked
                   ? toggleSel(c.id)
                   : nav.navigate('ClientProfile', { id: c.id })
               }

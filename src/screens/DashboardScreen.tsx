@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { Paywall } from '../components/Paywall';
+import { DEMO_CLIENTS } from '../data/demo';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import {
@@ -141,9 +142,29 @@ export function DashboardScreen() {
     return <SafeAreaView style={styles.screen} edges={['top']}><ActivityIndicator style={{ marginTop: spacing.xxl }} color={colors.primary} /></SafeAreaView>;
   }
   if (!subscriptionActive) {
+    // Preview: show a real (sample-data) dashboard above the paywall so owners
+    // see exactly what they get. Tapping a member on the Members tab opens a
+    // full sample profile (with the agreement-upload feature).
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll}><Text style={typography.h1}>Dashboard</Text><Paywall onChanged={reloadCloud} /></ScrollView>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Text style={typography.h1}>Dashboard</Text>
+          <Text style={[typography.bodySecondary, { marginBottom: spacing.md }]}>Preview · sample data</Text>
+          <Paywall onChanged={reloadCloud} />
+          <SectionTitle>A peek at your dashboard</SectionTitle>
+          <View style={styles.kpiGrid}>
+            <Stat label="Members" value={String(DEMO_CLIENTS.length)} />
+            <Stat label="Collected (mo)" value="$4,250" color={colors.success} />
+            <Stat label="Outstanding" value="$750" color={colors.crisis} />
+            <Stat label="Pending agreements" value="2" color={colors.warning} />
+            <Stat label="Meetings (wk)" value="41" />
+            <Stat label="UA flags" value="0" />
+            <Stat label="Pass requests" value="1" color={colors.warning} />
+          </View>
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>
+            This is sample data. Open the <Text style={{ fontWeight: '700' }}>Members</Text> tab and tap anyone to explore a full resident profile — including sending agreements and uploading documents.
+          </Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
