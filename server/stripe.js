@@ -39,6 +39,47 @@ const supabaseAdmin =
 
 const RETURN_URL = process.env.PUBLIC_RETURN_URL || 'https://example.com/return';
 
+// ----- Welcome email for new paying operators (sent on first $60 payment) -----
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const WELCOME_FROM = process.env.WELCOME_FROM || 'Sober Living Companion <joseph@soberlivingdirectory.com>';
+
+async function sendWelcomeEmail(to, orgName) {
+  if (!RESEND_API_KEY || !to) {
+    console.warn('[welcome-email] skipped (missing RESEND_API_KEY or recipient)');
+    return;
+  }
+  const name = orgName || 'your sober living';
+  const html = `
+  <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2b2b2b">
+    <div style="background:#3E8E7E;border-radius:14px 14px 0 0;padding:18px 22px;color:#fff;font-weight:800;font-size:18px">🌱 Welcome to Sober Living Companion</div>
+    <div style="border:1px solid #e3e0d9;border-top:0;border-radius:0 0 14px 14px;padding:24px;line-height:1.6">
+      <p style="margin:0 0 12px">Welcome aboard — <strong>${name}</strong> is all set up! 🎉 Your membership is active, and your residents can use the app for free.</p>
+      <p style="margin:0 0 8px;font-weight:700">Here's how to get started in 5 steps:</p>
+      <ol style="margin:0 0 16px;padding-left:20px;color:#444">
+        <li style="margin:6px 0"><strong>Sign in</strong> to the app (use the email you signed up with) — on <a href="https://apps.apple.com/app/sober-living-companion/id6780705094" style="color:#2F6B5F">iPhone</a>, <a href="https://play.google.com/store/apps/details?id=com.soberlivingcompanion.app" style="color:#2F6B5F">Android</a>, or the <a href="https://app.soberlivingcompanion.com" style="color:#2F6B5F">web dashboard</a>.</li>
+        <li style="margin:6px 0"><strong>Add your residents</strong> — go to <em>Members → Add member</em>.</li>
+        <li style="margin:6px 0"><strong>Share your house join code</strong> (shown on the Members screen) so residents download the free app and connect to your home.</li>
+        <li style="margin:6px 0"><strong>Send agreements &amp; upload documents</strong> from each resident's profile — they sign right on their phone.</li>
+        <li style="margin:6px 0"><strong>Track payments &amp; meeting check-ins</strong> on your Dashboard.</li>
+      </ol>
+      <p style="margin:0 0 16px"><a href="https://app.soberlivingcompanion.com" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open my dashboard →</a></p>
+      <p style="margin:0;color:#6b6b6b;font-size:14px">Questions? Just reply to this email, or call Joseph at (213) 321-6518. We're a non-profit and we're here to help you succeed.</p>
+      <p style="margin:14px 0 0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
+    </div>
+  </div>`;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: WELCOME_FROM, to, reply_to: 'joseph@soberlivingdirectory.com', subject: `Welcome to Sober Living Companion 🎉 — here's how to start`, html }),
+    });
+    if (!r.ok) console.error('[welcome-email] resend failed', r.status, await r.text());
+    else console.log('[welcome-email] sent to', to);
+  } catch (e) {
+    console.error('[welcome-email] error', e);
+  }
+}
+
 function ready(res) {
   if (!stripe) {
     res.status(503).json({ error: 'Stripe not configured (set STRIPE_SECRET_KEY).' });
@@ -321,11 +362,19 @@ export async function stripeWebhook(req, res) {
           // to avoid double-counting the first subscription charge.)
           await recordCardPayment(s.metadata, s.amount_total);
         } else if (supabaseAdmin && s.metadata?.org_id && s.metadata?.kind !== 'rent') {
-          // Platform subscription activated.
+          // Platform subscription activated → mark active and welcome the operator.
           await supabaseAdmin
             .from('organizations')
             .update({ subscription_status: 'active', stripe_subscription_id: s.subscription })
             .eq('id', s.metadata.org_id);
+          // Look up the org name for a personalized welcome, then email directions.
+          let orgName = s.customer_details?.name;
+          try {
+            const { data: org } = await supabaseAdmin.from('organizations').select('name').eq('id', s.metadata.org_id).maybeSingle();
+            if (org?.name) orgName = org.name;
+          } catch {}
+          const to = s.customer_email || s.customer_details?.email;
+          await sendWelcomeEmail(to, orgName);
         }
         break;
       }
