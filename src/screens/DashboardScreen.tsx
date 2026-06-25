@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -12,7 +12,7 @@ import {
   listFlaggedIndividualIds, listOrgCheckins, getMyOrg, Agreement,
   listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
   listOrgPasses, reviewPass, Pass, setPassesEnabled, getMyHouseScope,
-  listOrgCurfews, listOrgCurfewCheckins, Curfew, CurfewCheckin,
+  listOrgCurfews, listOrgCurfewCheckins, Curfew, CurfewCheckin, ensureDefaultHouse,
 } from '../services/db';
 import { Payment } from '../types';
 import { notifyCare } from '../services/push';
@@ -58,6 +58,10 @@ export function DashboardScreen() {
     const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
     listOrgCurfewCheckins(startOfDay.toISOString()).then(setCurfewToday).catch(() => {});
   };
+
+  // A new operator's first house is named after their sober living. Best-effort,
+  // runs once; no-op if they already have a house.
+  useEffect(() => { ensureDefaultHouse(); }, []);
 
   const load = useCallback(() => {
     if (!subscriptionActive) { setLoading(false); return; }

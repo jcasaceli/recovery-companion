@@ -48,6 +48,16 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
     finally { setBusy(false); }
   };
 
+  // Load a ready-made template into the builder so the facilitator can remove
+  // parts they don't need (or tweak it) before sending.
+  const editTemplate = (t: { title: string; fields: FormField[] }) => {
+    setTitle(t.title);
+    setFields(t.fields.map((f) => ({ ...f })));
+    setSaveAsTemplate(false);
+    setPickerOpen(false);
+    setBuilderOpen(true);
+  };
+
   const addField = () => {
     if (!fLabel.trim()) return;
     setFields((arr) => [...arr, { key: slugify(fLabel) + '_' + arr.length, label: fLabel.trim(), type: fType, required: fRequired }]);
@@ -111,10 +121,18 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
             <ScrollView style={{ maxHeight: 380, marginVertical: spacing.sm }}>
               <Text style={styles.group}>Ready-made</Text>
               {BUILT_IN_TEMPLATES.map((t) => (
-                <TouchableOpacity key={t.key} style={styles.tmpl} disabled={busy} onPress={() => assign({ title: t.title, fields: t.fields })}>
+                <View key={t.key} style={styles.tmpl}>
                   <Text style={typography.body}>{t.title}</Text>
                   <Text style={typography.caption}>{t.description}</Text>
-                </TouchableOpacity>
+                  <View style={styles.tmplActions}>
+                    <TouchableOpacity disabled={busy} onPress={() => assign({ title: t.title, fields: t.fields })}>
+                      <Text style={styles.tmplSend}>Send as-is</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity disabled={busy} onPress={() => editTemplate(t)}>
+                      <Text style={styles.tmplEdit}>✏️ Edit first</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               ))}
               {templates.length ? <Text style={styles.group}>Your saved forms</Text> : null}
               {templates.map((t) => (
@@ -185,6 +203,9 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.lg, paddingBottom: spacing.xl },
   group: { ...typography.caption, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginTop: spacing.sm, marginBottom: spacing.xs },
   tmpl: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
+  tmplActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm },
+  tmplSend: { ...typography.caption, color: colors.primary, fontWeight: '800' },
+  tmplEdit: { ...typography.caption, color: colors.textSecondary, fontWeight: '800' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   fieldRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider },
   typeChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.xs },

@@ -834,6 +834,18 @@ export async function renameHouse(id: string, name: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Make sure the operator has at least one house. A new account's first house is
+ *  named after their sober living (the org name), with its own join code. They
+ *  can add more houses anytime under the Account tab. Best-effort, idempotent. */
+export async function ensureDefaultHouse(): Promise<void> {
+  try {
+    const houses = await listHouses();
+    if (houses.length) return;
+    const org = await getMyOrg();
+    if (org?.name) await createHouse(org.name);
+  } catch { /* best effort */ }
+}
+
 export async function deleteHouse(id: string): Promise<void> {
   const { error } = await db().from('houses').delete().eq('id', id);
   if (error) throw error;
@@ -1189,7 +1201,11 @@ export async function createIndividual(input: {
   treatmentStartDate?: string;
   sobrietyDate?: string;
   levelOfCare?: string;
-}): Promise<void> {
+}): Promise<{ id?: string; joinCode: string }> {
+  // Generate the per-member join code now so the invite can carry it. When the
+  // member redeems THIS code they link to this exact record (agreements/forms
+  // follow). A follow-up select (new statement) re-reads the row under RLS.
+  const joinCode = Math.random().toString(36).slice(2, 8).toUpperCase();
   const { error } = await db()
     .from('individuals')
     .insert({
@@ -1206,9 +1222,12 @@ export async function createIndividual(input: {
       treatment_start_date: input.treatmentStartDate ?? null,
       sobriety_date: input.sobrietyDate ?? null,
       level_of_care: input.levelOfCare ?? null,
+      join_code: joinCode,
       status: 'in_care',
     });
   if (error) throw error;
+  const { data } = await db().from('individuals').select('id').eq('join_code', joinCode).maybeSingle();
+  return { id: data?.id, joinCode };
 }
 
 export async function setCommunityAccess(individualId: string, allowed: boolean) {

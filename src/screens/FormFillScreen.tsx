@@ -101,7 +101,19 @@ export function FormFillScreen() {
   );
 }
 
+// Map a field to OS autofill hints so saved name/address/phone/email on the
+// phone can auto-populate the form (iOS textContentType + Android autoComplete).
+function autofill(field: FormField): { textContentType?: any; autoComplete?: any } {
+  const k = `${field.key} ${field.label}`.toLowerCase();
+  if (field.type === 'phone' || /phone|tel\b/.test(k)) return { textContentType: 'telephoneNumber', autoComplete: 'tel' };
+  if (field.type === 'address' || /address/.test(k)) return { textContentType: 'fullStreetAddress', autoComplete: 'postal-address' };
+  if (/email/.test(k)) return { textContentType: 'emailAddress', autoComplete: 'email' };
+  if (/\bname\b/.test(k)) return { textContentType: 'name', autoComplete: 'name' };
+  return {};
+}
+
 function FieldInput({ field, value, onChange, disabled }: { field: FormField; value: any; onChange: (v: any) => void; disabled?: boolean }) {
+  const af = autofill(field);
   if (disabled) {
     const shown = field.type === 'yesno' ? (value ? 'Yes' : value === false ? 'No' : '—') : (String(value ?? '').trim() || '—');
     return <Text style={[typography.body, { color: colors.textSecondary }]}>{shown}</Text>;
@@ -125,13 +137,13 @@ function FieldInput({ field, value, onChange, disabled }: { field: FormField; va
       return <TextInput style={[styles.input, styles.initial]} value={value || ''} onChangeText={(t) => onChange(t.toUpperCase().slice(0, 6))} placeholder="ABC" placeholderTextColor={colors.textMuted} autoCapitalize="characters" maxLength={6} />;
     case 'longtext':
     case 'address':
-      return <TextInput style={[styles.input, { minHeight: 72, textAlignVertical: 'top' }]} value={value || ''} onChangeText={onChange} placeholder={field.type === 'address' ? 'Street, city, state, ZIP' : 'Type here…'} placeholderTextColor={colors.textMuted} multiline />;
+      return <TextInput style={[styles.input, { minHeight: 72, textAlignVertical: 'top' }]} value={value || ''} onChangeText={onChange} placeholder={field.type === 'address' ? 'Street, city, state, ZIP' : 'Type here…'} placeholderTextColor={colors.textMuted} multiline textContentType={af.textContentType} autoComplete={af.autoComplete} />;
     case 'number':
       return <TextInput style={styles.input} value={value || ''} onChangeText={onChange} placeholder="Number" placeholderTextColor={colors.textMuted} keyboardType="number-pad" />;
     case 'phone':
-      return <TextInput style={styles.input} value={value || ''} onChangeText={onChange} placeholder="(555) 123-4567" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />;
+      return <TextInput style={styles.input} value={value || ''} onChangeText={onChange} placeholder="(555) 123-4567" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" />;
     default:
-      return <TextInput style={styles.input} value={value || ''} onChangeText={onChange} placeholder="Type here…" placeholderTextColor={colors.textMuted} />;
+      return <TextInput style={styles.input} value={value || ''} onChangeText={onChange} placeholder="Type here…" placeholderTextColor={colors.textMuted} textContentType={af.textContentType} autoComplete={af.autoComplete} />;
   }
 }
 

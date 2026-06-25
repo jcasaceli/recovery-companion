@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -52,6 +52,16 @@ export function HomeScreen() {
   const [curfew, setCurfew] = useState<Curfew | null>(null);
   const [curfewToday, setCurfewToday] = useState<any[]>([]);
   const [curfewBusy, setCurfewBusy] = useState(false);
+  const [toSign, setToSign] = useState(0); // pending agreements + forms awaiting the member's signature
+
+  const loadToSign = useCallback(() => {
+    if (!connected) { setToSign(0); return; }
+    Promise.all([
+      listMyAgreements().then((a) => a.filter((x) => x.status !== 'signed').length).catch(() => 0),
+      listMyFormResponses().then((f) => f.filter((x) => x.status !== 'completed').length).catch(() => 0),
+    ]).then(([a, f]) => setToSign(a + f)).catch(() => {});
+  }, [connected]);
+  useEffect(() => { loadToSign(); }, [loadToSign]);
 
   const loadCheckins = useCallback(() => {
     // Solo residents read their on-device list (rendered directly); only
@@ -75,8 +85,9 @@ export function HomeScreen() {
       listHouseEvents().then(setHouseEvents).catch(() => {});
       getPassesEnabled().then(setPassesEnabled).catch(() => {});
       loadCurfew();
+      loadToSign(); // refresh the "to sign" banner when returning to Home
     }
-  }, [loadCheckins, loadCurfew, isFacilitator]));
+  }, [loadCheckins, loadCurfew, loadToSign, isFacilitator]));
 
   const confirmDeleteCheckin = (c: any) => {
     Alert.alert(
@@ -251,6 +262,16 @@ export function HomeScreen() {
           <Ionicons name="settings-outline" size={24} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
+
+      {/* New agreements / forms to sign */}
+      {selfView && toSign > 0 ? (
+        <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('Agreements')}>
+          <Card style={styles.toSignCard}>
+            <Text style={styles.toSignTitle}>📝 {toSign} {toSign === 1 ? 'item needs' : 'items need'} your signature</Text>
+            <Text style={styles.toSignBody}>You have agreements or forms from your sober living to review and sign. Tap to open.</Text>
+          </Card>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Hero: recovery summary */}
       <Card style={styles.hero}>
@@ -543,6 +564,9 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
+  toSignCard: { borderWidth: 1, borderColor: colors.warning, backgroundColor: '#FFF7E6' },
+  toSignTitle: { ...typography.body, fontWeight: '800', color: colors.textPrimary },
+  toSignBody: { ...typography.caption, marginTop: 2 },
   gear: { paddingTop: spacing.md + 4, paddingLeft: spacing.sm },
   backToClients: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.xs },
   backToClientsText: { color: colors.primary, fontWeight: '600', fontSize: 14 },

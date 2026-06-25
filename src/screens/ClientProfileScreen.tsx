@@ -9,8 +9,9 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
-  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember,
+  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, getJoinCode,
 } from '../services/db';
+import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate } from '../utils/format';
 import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
@@ -39,6 +40,8 @@ export function ClientProfileScreen() {
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
+  const [memberCode, setMemberCode] = useState<string | undefined>(undefined); // this member's personal join code
+  const [inviting, setInviting] = useState(false);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -111,6 +114,7 @@ export function ClientProfileScreen() {
     listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
+    getJoinCode(id).then(setMemberCode).catch(() => {});
     loadAgreements();
     loadUA();
     loadCrm();
@@ -206,21 +210,34 @@ export function ClientProfileScreen() {
     : `Not paid (${money(rent)} due)`;
   const rentColor = rent <= 0 ? colors.textMuted : paidThisMonth >= rent ? colors.success : paidThisMonth > 0 ? colors.warning : colors.crisis;
 
+  const houseName = client.houseName || org?.name || 'our sober living';
+  // Personal code links them to THIS record (so agreements/forms follow). Plain
+  // ASCII only — some phones don't decode percent-encoding in an sms: link.
   const inviteMsg = () => {
-    const joinCode = houseCode || org?.join_code;
+    const joinCode = memberCode || houseCode || org?.join_code;
     const code = joinCode ? ` Your join code is ${joinCode}.` : '';
     const who = client.firstName?.trim() || 'there';
-    return `Hi ${who}, you've been invited to join ${org?.name || 'our sober living'} on the Sober Living Companion app — download it to track your progress, see house meetings, and pay your membership fees.${code} Get the app: https://soberlivingcompanion.com`;
+    return `Hi ${who}, you've been invited to join ${houseName} on the Sober Living Companion app. Download it to track your progress, see house meetings, and pay your membership fees.${code} Get the app: https://app.soberlivingcompanion.com`;
   };
   const textInvite = () => {
     if (!client.phone) return;
     const sep = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open Messages'));
   };
-  const emailInvite = () => {
+  // Email goes through the server (Resend) so the resident gets a real, branded
+  // invite with their personal code — no need to open a mail app.
+  const emailInvite = async () => {
     if (!client.email) return;
-    const subject = `Join ${org?.name || 'our sober living'} on Sober Living Companion`;
-    Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open email'));
+    setInviting(true);
+    try {
+      const r = await sendMemberInvite(id);
+      if (r?.sent) Alert.alert('Invite sent ✅', `We emailed ${client.firstName} an app invite with their join code.`);
+      else Alert.alert('Could not send', 'No email on file, or email isn’t set up yet.');
+    } catch {
+      // Fallback: open the user's mail app pre-filled.
+      const subject = `Join ${houseName} on Sober Living Companion`;
+      Linking.openURL(`mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open email'));
+    } finally { setInviting(false); }
   };
 
   const saveRent = async () => {
@@ -383,17 +400,6 @@ export function ClientProfileScreen() {
       {/* Lease & intake form templates / custom */}
       <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
 
-      {/* Bed & intake */}
-      <SectionTitle>Bed &amp; intake</SectionTitle>
-      <Card>
-        <Text style={styles.label}>Bed / room label</Text>
-        <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
-        <Text style={styles.label}>Move-in (intake) date</Text>
-        <DateField value={moveInDate} onChange={setMoveInDate} placeholder="Pick the move-in date" />
-        <View style={{ height: spacing.sm }} />
-        <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
-      </Card>
-
       {/* Curfew check-ins */}
       <CurfewManager individualId={id} memberName={client.firstName} />
 
@@ -476,6 +482,17 @@ export function ClientProfileScreen() {
           : null}
       </Card>
 
+      {/* Bed & intake */}
+      <SectionTitle>Bed &amp; intake</SectionTitle>
+      <Card>
+        <Text style={styles.label}>Bed / room label</Text>
+        <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
+        <Text style={styles.label}>Move-in (intake) date</Text>
+        <DateField value={moveInDate} onChange={setMoveInDate} placeholder="Pick the move-in date" />
+        <View style={{ height: spacing.sm }} />
+        <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
+      </Card>
+
       {/* Status / discharge */}
       <SectionTitle>Status</SectionTitle>
       <Card>
@@ -497,15 +514,17 @@ export function ClientProfileScreen() {
         <Card>
           <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
           <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-            Send {client.firstName} your join code to download and join.
+            {client.email
+              ? `We email an invite automatically when you add a member. Use these to resend ${client.firstName}'s invite (join code ${memberCode || '…'}).`
+              : `Send ${client.firstName} their join code (${memberCode || '…'}) to download and join.`}
           </Text>
-          {client.phone ? (
+          {client.email ? (
             <>
-              <Button title="📲 Text invite" variant="secondary" onPress={textInvite} />
-              <View style={{ height: spacing.sm }} />
+              <Button title={inviting ? 'Sending…' : '✉️ Email invite'} variant="secondary" onPress={emailInvite} disabled={inviting} />
+              {client.phone ? <View style={{ height: spacing.sm }} /> : null}
             </>
           ) : null}
-          {client.email ? <Button title="✉️ Email invite" variant="secondary" onPress={emailInvite} /> : null}
+          {client.phone ? <Button title="📲 Text invite" variant="secondary" onPress={textInvite} /> : null}
         </Card>
       ) : null}
     </Screen>

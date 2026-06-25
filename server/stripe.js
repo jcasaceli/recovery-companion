@@ -58,10 +58,11 @@ async function sendWelcomeEmail(to, orgName) {
       <ol style="margin:0 0 16px;padding-left:20px;color:#444">
         <li style="margin:6px 0"><strong>Sign in</strong> to the app (use the email you signed up with) — on <a href="https://apps.apple.com/app/sober-living-companion/id6780705094" style="color:#2F6B5F">iPhone</a>, <a href="https://play.google.com/store/apps/details?id=com.soberlivingcompanion.app" style="color:#2F6B5F">Android</a>, or the <a href="https://app.soberlivingcompanion.com" style="color:#2F6B5F">web dashboard</a>.</li>
         <li style="margin:6px 0"><strong>Add your residents</strong> — go to <em>Members → Add member</em>.</li>
-        <li style="margin:6px 0"><strong>Share your house join code</strong> (shown on the Members screen) so residents download the free app and connect to your home.</li>
+        <li style="margin:6px 0"><strong>Your first house</strong> is named <strong>${name}</strong> and already has its own join code. Add a resident's email and we'll automatically email them an app invite with their personal join code.</li>
         <li style="margin:6px 0"><strong>Send agreements &amp; upload documents</strong> from each resident's profile — they sign right on their phone.</li>
         <li style="margin:6px 0"><strong>Track payments &amp; meeting check-ins</strong> on your Dashboard.</li>
       </ol>
+      <p style="margin:0 0 16px;background:#F3F7F5;border-radius:10px;padding:12px 14px;color:#2b2b2b"><strong>Running more than one house?</strong> You can add as many houses as you like — each with its own join code — under the <strong>Account</strong> tab.</p>
       <p style="margin:0 0 16px"><a href="https://app.soberlivingcompanion.com" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open my dashboard →</a></p>
       <p style="margin:0;color:#6b6b6b;font-size:14px">Questions? Just reply to this email, or call Joseph at (213) 321-6518. We're a non-profit and we're here to help you succeed.</p>
       <p style="margin:14px 0 0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>

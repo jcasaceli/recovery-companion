@@ -50,7 +50,7 @@ interface AuthContextValue {
   status: Status;
   session: Session | null;
   profile: Profile | null;
-  signUp: (input: SignUpInput) => Promise<void>;
+  signUp: (input: SignUpInput) => Promise<boolean>;  // true if signed in immediately (no email confirmation)
   signIn: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   requestEmailOtp: (email: string) => Promise<void>;
@@ -141,11 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       signUp: async (input) => {
-        await dbApi.signUp(input);
-        if (input.verifyChannel === 'sms' && input.phone) {
-          // Trigger SMS OTP (needs Twilio configured in Supabase Auth).
-          await dbApi.requestSmsOtp(input.phone);
-        }
+        const data = await dbApi.signUp(input);
+        // When email confirmation is OFF, Supabase returns a session here and
+        // onAuthStateChange signs the user in — no code step needed.
+        return !!data?.session;
       },
       signIn: (email, password) => dbApi.signInWithPassword(email, password).then(() => {}),
       resetPassword: (email) => dbApi.resetPassword(email),

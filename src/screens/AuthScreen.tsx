@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography } from '../theme';
@@ -10,10 +10,12 @@ import { toUsE164 } from '../utils/format';
 
 const ROLES: { value: AppRole; label: string; blurb: string }[] = [
   { value: 'individual', label: 'I am a member of a sober living network', blurb: 'Track progress, pay membership fees, and find meetings.' },
-  { value: 'facilitator', label: 'I am a facilitator', blurb: 'Manage members, payments, and notes.' },
+  { value: 'facilitator', label: "I'm a sober living owner/manager", blurb: 'Manage your house(s), members, payments, forms & agreements.' },
 ];
 
-type Step = 'choose' | 'signin' | 'signup' | 'verify';
+const WEB_SIGNUP_URL = 'https://soberlivingcompanion.com';
+
+type Step = 'choose' | 'signin' | 'signup';
 
 /** Turn raw auth errors into friendly, human messages. */
 function friendlyAuthError(raw?: string): string {
@@ -42,7 +44,6 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [channel] = useState<'email' | 'sms'>('email'); // verification is email-only
   const [orgName, setOrgName] = useState('');
-  const [code, setCode] = useState('');
 
   const run = async (fn: () => Promise<void>) => {
     setError('');
@@ -59,24 +60,19 @@ export function AuthScreen() {
 
   const doSignUp = () =>
     run(async () => {
-      await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined });
-      setStep('verify');
-      Alert.alert(
-        channel === 'email' ? 'Check your email' : 'Check your texts',
-        channel === 'email'
-          ? 'We sent a 6-digit code to your email. Enter it below.'
-          : 'We sent a 6-digit code by SMS. Enter it below.',
-      );
-    });
-
-  const doVerify = () =>
-    run(async () => {
-      if (channel === 'email') await auth.verifyEmailOtp(email, code.trim());
-      else await auth.verifySmsOtp(toUsE164(phone) || phone, code.trim());
-      // onAuthStateChange will flip the app to the signed-in state.
+      const signedIn = await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined });
+      // With email confirmation off, signUp returns a session and
+      // onAuthStateChange flips the app to signed-in automatically. If
+      // confirmation is on, there's no session yet — send them to sign in.
+      if (!signedIn) {
+        Alert.alert('Account created', 'If asked, confirm your email from the link we sent, then sign in.');
+        setStep('signin');
+      }
     });
 
   const doSignIn = () => run(() => auth.signIn(email.trim().toLowerCase(), password));
+
+  const openWebSignup = () => Linking.openURL(WEB_SIGNUP_URL).catch(() => {});
 
   const doForgot = () => {
     if (!email.trim()) { setError('Enter your email above first, then tap “Forgot password?”'); return; }
@@ -126,35 +122,34 @@ export function AuthScreen() {
           <View>
             <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Your name" />
             {role === 'facilitator' ? (
-              <Field label="Sober living name" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
+              <Field label="Sober living name (your first house)" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
             ) : null}
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-            <Field label="Phone (optional)" value={phone} onChange={setPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" />
+            <Field
+              label={role === 'individual' ? 'Phone' : 'Phone (optional)'}
+              value={phone}
+              onChange={setPhone}
+              placeholder="(555) 123-4567"
+              keyboardType="phone-pad"
+            />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
 
             <View style={{ height: spacing.md }} />
             <Button
               title="Create account"
               onPress={doSignUp}
-              disabled={busy || !email || !password || !fullName || (role === 'facilitator' && !orgName.trim())}
+              disabled={
+                busy || !email || !password || !fullName ||
+                (role === 'individual' && !phone.trim()) ||
+                (role === 'facilitator' && !orgName.trim())
+              }
             />
+            {role === 'facilitator' ? (
+              <TouchableOpacity onPress={openWebSignup} style={styles.link}>
+                <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
+              </TouchableOpacity>
+            ) : null}
             <BackLink onPress={() => setStep('choose')} />
-          </View>
-        )}
-
-        {step === 'verify' && (
-          <View>
-            <Text style={styles.lead}>
-              Enter the 6-digit code we sent to {channel === 'email' ? email : phone}.
-            </Text>
-            <Field label="Verification code" value={code} onChange={setCode} placeholder="123456" keyboardType="number-pad" />
-            <Button title="Verify" onPress={doVerify} disabled={busy || code.length < 4} />
-            <TouchableOpacity
-              onPress={() => run(() => (channel === 'email' ? auth.requestEmailOtp(email) : auth.requestSmsOtp(toUsE164(phone) || phone)))}
-              style={styles.link}
-            >
-              <Text style={styles.linkText}>Resend code</Text>
-            </TouchableOpacity>
           </View>
         )}
 

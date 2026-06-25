@@ -78,6 +78,11 @@ export async function startPlatformSubscribe() {
   await openCheckout(url);
 }
 
+/** Facilitator: auto-send a member their app invite by email (best effort). */
+export async function sendMemberInvite(individualId: string): Promise<{ sent: boolean }> {
+  return call('/api/invite/send', 'POST', { individualId });
+}
+
 /** Resident: pay rent to their operator. recurring=true sets up monthly auto-pay. */
 export async function startRentCheckout(recurring: boolean, amountCents?: number) {
   const { url } = await call('/api/stripe/rent/checkout', 'POST', { recurring, amountCents });

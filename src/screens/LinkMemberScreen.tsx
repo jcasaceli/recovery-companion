@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, radius, typography } from '../theme';
 import { Button } from '../components/ui';
 import { useAppState } from '../state/store';
-import { redeemOrgCode, getMyNetworkName } from '../services/db';
+import { redeemJoinCode, redeemOrgCode, getMyNetworkName } from '../services/db';
 
 /** Connect-to-a-sober-living screen, shown as a modal from the "Enter sober
  *  living code" banner. A member can use the whole app without a code; entering
@@ -25,7 +25,15 @@ export function LinkMemberScreen() {
     if (!code.trim()) return;
     setBusy(true);
     try {
-      await redeemOrgCode(code);
+      // A facilitator-invited member gets a PER-MEMBER code that links them to
+      // the exact resident record their house manages (so agreements, forms &
+      // fees show up). Try that first; fall back to an org-wide code, which
+      // creates a fresh record for self-join members.
+      try {
+        await redeemJoinCode(code);
+      } catch {
+        await redeemOrgCode(code);
+      }
       await reloadCloud(); // pulls in the linked record → app unlocks community
       const name = await getMyNetworkName().catch(() => null);
       setLinkedName(name && name.trim() ? name.trim() : 'your sober living network');

@@ -43,6 +43,7 @@ import {
 import { notifyCareTeam, notifyCare, notifyCommunity, NotifyAudience } from '../services/push';
 import { useAuth } from './auth';
 import * as dbApi from '../services/db';
+import { sendMemberInvite } from '../services/payments';
 import {
   mockLovedOne,
   mockCheckIns,
@@ -648,7 +649,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (!cloud) return;
       if (!subscriptionActive) throw new Error('Subscribe ($60/mo) to add clients.');
       const orgId = await dbApi.ensureFacilitatorOrg(input.orgName?.trim() || 'My Organization');
-      await dbApi.createIndividual({
+      const created = await dbApi.createIndividual({
         orgId,
         firstName: input.firstName.trim(),
         lastName: input.lastName?.trim() || undefined,
@@ -663,6 +664,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         sobrietyDate: input.sobrietyDate || undefined,
         levelOfCare: input.levelOfCare || undefined,
       });
+      // Auto-send the email app invite (with their personal join code) — best
+      // effort, never blocks adding the member.
+      if (created?.id && input.email?.trim()) {
+        sendMemberInvite(created.id).catch(() => {});
+      }
       await loadCloud(); // refresh the client list (stays on the Clients page)
     };
 
