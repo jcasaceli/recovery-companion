@@ -287,6 +287,15 @@ export function DashboardScreen() {
           ))}
         </Card>
 
+        <SectionTitle>House forms</SectionTitle>
+        <Card>
+          <Text style={typography.bodySecondary}>
+            Blank, fillable forms for the house — Head of House Agreement, Definition of Terms, and more. Fill in &amp; e-sign without tying them to a resident.
+          </Text>
+          <View style={{ height: spacing.sm }} />
+          <Button title="Open house forms" variant="secondary" onPress={() => nav.navigate('Clients', { screen: 'HouseForms' })} />
+        </Card>
+
         {/* Flags */}
         {flags.length ? (
           <>

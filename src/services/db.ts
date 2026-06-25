@@ -683,7 +683,7 @@ export interface FormTemplate {
 
 export interface FormResponse {
   id: string;
-  individualId: string;
+  individualId?: string;   // undefined for house-level (resident-less) forms
   templateId?: string;
   title: string;
   fields: FormField[];
@@ -739,6 +739,23 @@ export async function assignForm(input: { individualId: string; orgId?: string; 
     title: input.title, fields: input.fields, answers: {}, status: 'pending', created_by: u.user?.id,
   });
   if (error) throw error;
+}
+
+/** Staff: create a house-level form (not tied to a resident) to fill in & sign. */
+export async function assignHouseForm(input: { orgId: string; templateId?: string; title: string; fields: FormField[] }) {
+  const { data: u } = await db().auth.getUser();
+  const { error } = await db().from('form_responses').insert({
+    org_id: input.orgId, individual_id: null, template_id: input.templateId ?? null,
+    title: input.title, fields: input.fields, answers: {}, status: 'pending', created_by: u.user?.id,
+  });
+  if (error) throw error;
+}
+
+/** Staff: house-level forms for the org (individual_id is null). */
+export async function listHouseForms(orgId: string): Promise<FormResponse[]> {
+  const { data, error } = await db().from('form_responses').select('*').is('individual_id', null).eq('org_id', orgId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapFormResponse);
 }
 
 /** Form responses on a resident's file (staff or the resident). */

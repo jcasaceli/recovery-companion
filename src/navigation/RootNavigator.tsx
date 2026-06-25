@@ -30,6 +30,7 @@ import { PassesScreen } from '../screens/PassesScreen';
 import { MemberDocumentsScreen } from '../screens/MemberDocumentsScreen';
 import { MemberFormsScreen } from '../screens/MemberFormsScreen';
 import { FormFillScreen } from '../screens/FormFillScreen';
+import { HouseFormsScreen } from '../screens/HouseFormsScreen';
 
 const Tab = createBottomTabNavigator();
 const FacTab = createBottomTabNavigator();
@@ -51,6 +52,7 @@ function ClientsStack() {
       <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member', headerBackTitle: 'Members' }} />
       <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement', headerBackTitle: 'Member' }} />
       <ClientsStackNav.Screen name="FormFill" component={FormFillScreen} options={{ title: 'Form', headerBackTitle: 'Member' }} />
+      <ClientsStackNav.Screen name="HouseForms" component={HouseFormsScreen} options={{ title: 'House forms', headerBackTitle: 'Members' }} />
     </ClientsStackNav.Navigator>
   );
 }

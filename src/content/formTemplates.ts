@@ -1,5 +1,6 @@
 import { FormField } from '../services/db';
 import { HOUSE_FORMS } from './houseForms';
+export { HOUSE_LEVEL_FORM_KEYS } from './houseForms';
 
 /** Ready-made forms staff can assign with one tap. Staff can also build custom
  *  forms field-by-field. Field `type` drives how the resident fills it in. */
