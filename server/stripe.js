@@ -19,7 +19,6 @@
  *   STRIPE_WEBHOOK_SECRET_CONNECT=whsec_...   (optional: "Connected accounts" destination secret,
  *                                              for residents paying membership fees by card)
  *   STRIPE_PLATFORM_PRICE_ID=price_...        ($60/mo recurring price you create)
- *   STRIPE_MANAGER_PRICE_ID=price_...         ($25/mo recurring price for manager seats)
  *   SUPABASE_URL=https://xxx.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY=eyJ...          (Project Settings → API → service_role)
  *   PUBLIC_RETURN_URL=https://your-return-page (where Stripe sends users back)

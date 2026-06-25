@@ -1,6 +1,6 @@
 /**
  * House-manager management (owner only). Calls the backend, which creates the
- * staff login server-side and syncs the Stripe seat count.
+ * staff login server-side. House managers are a free feature (no per-seat charge).
  */
 import { supabase } from './supabase';
 import { BACKEND_URL } from '../config';

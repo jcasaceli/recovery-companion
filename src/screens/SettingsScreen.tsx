@@ -27,7 +27,6 @@ export function SettingsScreen() {
   const [isOwner, setIsOwner] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [managers, setManagers] = useState<Manager[]>([]);
-  const [priceConfigured, setPriceConfigured] = useState(true);
   const [mgrOpen, setMgrOpen] = useState(false);
   const [mgrName, setMgrName] = useState('');
   const [mgrEmail, setMgrEmail] = useState('');
@@ -38,7 +37,7 @@ export function SettingsScreen() {
   const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
 
   const loadManagers = () => listManagers()
-    .then((r) => { setManagers(r.managers); setPriceConfigured(r.priceConfigured); })
+    .then((r) => { setManagers(r.managers); })
     .catch(() => {});
 
   useEffect(() => {
@@ -72,7 +71,7 @@ export function SettingsScreen() {
   };
 
   const removeMgr = (m: Manager) => {
-    Alert.alert('Remove house manager?', `${m.name ?? m.email} will lose access and their $25/mo seat will be removed.`, [
+    Alert.alert('Remove house manager?', `${m.name ?? m.email} will lose access to your home.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await removeManager(m.id).catch(() => {}); loadManagers(); } },
     ]);
@@ -234,7 +233,7 @@ export function SettingsScreen() {
           <Card>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
               Add staff who can manage residents, UAs, payments, and agreements — but not billing.
-              Each house manager is +$25/month.
+              House managers are free — add as many as you need.
             </Text>
             {managers.map((m) => (
               <View key={m.id} style={styles.mgrRow}>
@@ -252,13 +251,8 @@ export function SettingsScreen() {
                 Add or remove house managers from the web dashboard at soberlivingcompanion.com.
               </Text>
             ) : (
-              <Button title="➕ Add house manager (+$25/mo)" variant="secondary" onPress={() => setMgrOpen(true)} />
+              <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => setMgrOpen(true)} />
             )}
-            {Platform.OS === 'web' && !priceConfigured ? (
-              <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.warning }]}>
-                Note: the $25/mo seat price isn't configured yet, so managers won't be auto-billed until it's set up.
-              </Text>
-            ) : null}
           </Card>
 
           <HousesManager managers={managers} />
@@ -294,11 +288,11 @@ export function SettingsScreen() {
           <View style={styles.modal}>
             <Text style={typography.h3}>Add house manager</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              We'll create their login and show you a temporary password to share. +$25/month.
+              We'll create their login and show you a temporary password to share. House managers are free.
             </Text>
             <TextInput style={styles.input} value={mgrName} onChangeText={setMgrName} placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={mgrEmail} onChangeText={setMgrEmail} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
-            <Button title={mgrBusy ? 'Creating…' : 'Create manager (+$25/mo)'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
+            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
