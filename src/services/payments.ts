@@ -8,8 +8,20 @@
  */
 
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { BACKEND_URL } from '../config';
+
+// Open a Stripe hosted page. On native we use an in-app browser; on web we must
+// redirect the current tab — calling window.open() AFTER an await (the network
+// call) loses the user-activation and gets blocked by the popup blocker.
+async function openCheckout(url: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') window.location.assign(url);
+    return;
+  }
+  await WebBrowser.openBrowserAsync(url);
+}
 
 async function token(): Promise<string> {
   if (!supabase) throw new Error('Not signed in.');
@@ -45,7 +57,7 @@ export interface ConnectStatus {
 /** Facilitator: open Stripe Connect onboarding in the browser. */
 export async function startConnectOnboarding() {
   const { url } = await call('/api/stripe/connect/onboard', 'POST');
-  await WebBrowser.openBrowserAsync(url);
+  await openCheckout(url);
 }
 
 export async function getConnectStatus(): Promise<ConnectStatus> {
@@ -55,13 +67,13 @@ export async function getConnectStatus(): Promise<ConnectStatus> {
 /** Facilitator: subscribe to the platform ($60/mo). */
 export async function startPlatformSubscribe() {
   const { url } = await call('/api/stripe/platform/subscribe', 'POST');
-  await WebBrowser.openBrowserAsync(url);
+  await openCheckout(url);
 }
 
 /** Resident: pay rent to their operator. recurring=true sets up monthly auto-pay. */
 export async function startRentCheckout(recurring: boolean, amountCents?: number) {
   const { url } = await call('/api/stripe/rent/checkout', 'POST', { recurring, amountCents });
-  await WebBrowser.openBrowserAsync(url);
+  await openCheckout(url);
 }
 
 /** Returns a Stripe checkout URL (without opening it) — e.g. to share with a
