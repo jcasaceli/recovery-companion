@@ -10,7 +10,7 @@ import {
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { formatDate } from '../utils/format';
 
-const TYPE_ORDER: FormFieldType[] = ['text', 'longtext', 'phone', 'address', 'date', 'yesno', 'number', 'ssn_last4'];
+const TYPE_ORDER: FormFieldType[] = ['text', 'longtext', 'phone', 'address', 'date', 'yesno', 'number', 'ssn_last4', 'initial', 'heading', 'paragraph'];
 function slugify(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `field_${Math.floor(Date.now() % 100000)}`; }
 
 /** Staff: assign lease/intake forms to a resident (built-in, saved, or custom),
@@ -43,7 +43,7 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
       await assignForm({ individualId, orgId, templateId: t.templateId, title: t.title, fields: t.fields });
       setPickerOpen(false);
       load();
-      Alert.alert('Form sent ✅', `${memberName || 'The resident'} will see “${t.title}” to complete and sign.`);
+      Alert.alert('Form added ✅', `Open “${t.title}” below to fill in ${memberName || 'the resident'}’s details and sign — you can complete it yourself, or ${memberName || 'the resident'} can fill it in and e-sign.`);
     } catch (e: any) { Alert.alert('Could not assign', e?.message ?? 'Try again.'); }
     finally { setBusy(false); }
   };
@@ -76,10 +76,11 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
 
   return (
     <>
-      <SectionTitle>Lease &amp; Intake Form Templates/Custom</SectionTitle>
+      <SectionTitle>Forms &amp; Agreements</SectionTitle>
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Send {memberName || 'this resident'} a form to fill in and e-sign (lease, intake, emergency contact, etc.).
+          Choose a ready-made form (guest agreement, intake, head of house, write-up, house terms) or build your own.
+          Fill in {memberName || 'the resident'}’s details and e-sign — you can complete it yourself or have {memberName || 'the resident'} fill it in.
         </Text>
 
         {responses.length === 0 ? (

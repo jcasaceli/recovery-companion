@@ -63,12 +63,17 @@ export function FormFillScreen() {
       <ScreenTitle title={form.title} subtitle={done ? 'Completed' : 'Please complete and sign'} />
 
       <Card>
-        {form.fields.map((fld) => (
-          <View key={fld.key} style={{ marginBottom: spacing.md }}>
-            <Text style={styles.label}>{fld.label}{fld.required ? <Text style={{ color: colors.crisis }}> *</Text> : null}</Text>
-            <FieldInput field={fld} value={answers[fld.key]} onChange={(v) => set(fld.key, v)} disabled={done} />
-          </View>
-        ))}
+        {form.fields.map((fld) => {
+          // Display-only blocks render the agreement's legal text (no input).
+          if (fld.type === 'heading') return <Text key={fld.key} style={styles.formHeading}>{fld.label}</Text>;
+          if (fld.type === 'paragraph') return <Text key={fld.key} style={styles.formPara}>{fld.label}</Text>;
+          return (
+            <View key={fld.key} style={{ marginBottom: spacing.md }}>
+              <Text style={styles.label}>{fld.label}{fld.required ? <Text style={{ color: colors.crisis }}> *</Text> : null}</Text>
+              <FieldInput field={fld} value={answers[fld.key]} onChange={(v) => set(fld.key, v)} disabled={done} />
+            </View>
+          );
+        })}
       </Card>
 
       {done ? (
@@ -116,6 +121,8 @@ function FieldInput({ field, value, onChange, disabled }: { field: FormField; va
       );
     case 'ssn_last4':
       return <TextInput style={styles.input} value={value || ''} onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 4))} placeholder="••••" placeholderTextColor={colors.textMuted} keyboardType="number-pad" maxLength={4} />;
+    case 'initial':
+      return <TextInput style={[styles.input, styles.initial]} value={value || ''} onChangeText={(t) => onChange(t.toUpperCase().slice(0, 6))} placeholder="ABC" placeholderTextColor={colors.textMuted} autoCapitalize="characters" maxLength={6} />;
     case 'longtext':
     case 'address':
       return <TextInput style={[styles.input, { minHeight: 72, textAlignVertical: 'top' }]} value={value || ''} onChangeText={onChange} placeholder={field.type === 'address' ? 'Street, city, state, ZIP' : 'Type here…'} placeholderTextColor={colors.textMuted} multiline />;
@@ -131,6 +138,9 @@ function FieldInput({ field, value, onChange, disabled }: { field: FormField; va
 const styles = StyleSheet.create({
   label: { ...typography.bodySecondary, fontWeight: '600', marginBottom: spacing.xs },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary },
+  initial: { alignSelf: 'flex-start', minWidth: 96, letterSpacing: 4, fontWeight: '700' },
+  formHeading: { ...typography.h3, marginTop: spacing.md, marginBottom: spacing.sm },
+  formPara: { ...typography.bodySecondary, lineHeight: 21, marginBottom: spacing.md },
   yesno: { flexDirection: 'row' },
   yn: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
   ynOn: { backgroundColor: colors.primary, borderColor: colors.primary },

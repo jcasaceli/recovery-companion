@@ -1,4 +1,5 @@
 import { FormField } from '../services/db';
+import { HOUSE_FORMS } from './houseForms';
 
 /** Ready-made forms staff can assign with one tap. Staff can also build custom
  *  forms field-by-field. Field `type` drives how the resident fills it in. */
@@ -10,6 +11,8 @@ export interface BuiltInTemplate {
 }
 
 export const BUILT_IN_TEMPLATES: BuiltInTemplate[] = [
+  // Operator packet forms (intake, guest agreement, head of house, write-up, terms).
+  ...HOUSE_FORMS,
   {
     key: 'lease_intake',
     title: 'Lease / Intake Agreement',
@@ -55,4 +58,7 @@ export const FIELD_TYPE_LABELS: Record<FormField['type'], string> = {
   yesno: 'Yes / No',
   ssn_last4: 'Last 4 of SSN',
   address: 'Mailing address',
+  heading: 'Section heading',
+  paragraph: 'Paragraph text',
+  initial: 'Initials',
 };

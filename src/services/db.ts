@@ -660,7 +660,11 @@ export async function deleteMeetingAttendance(id: string) {
 // ── Fillable lease / intake forms ────────────────────────────────────────────
 
 export type FormFieldType =
-  | 'text' | 'longtext' | 'number' | 'phone' | 'date' | 'yesno' | 'ssn_last4' | 'address';
+  | 'text' | 'longtext' | 'number' | 'phone' | 'date' | 'yesno' | 'ssn_last4' | 'address'
+  // Display-only blocks (no answer collected) used to render legal/agreement text:
+  | 'heading' | 'paragraph'
+  // Small inline input for the "INITIAL: ___" lines in agreements:
+  | 'initial';
 
 export interface FormField {
   key: string;
