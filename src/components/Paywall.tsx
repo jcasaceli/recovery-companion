@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, Platform, TouchableOpacity } from 'react-native';
 import { Card, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { startPlatformSubscribe } from '../services/payments';
@@ -16,6 +16,29 @@ const PERKS = [
  *  purchase) so the operator keeps 100% of resident rent. */
 export function Paywall({ onChanged }: { onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  // After payment the Stripe webhook activates the org server-side, but it can
+  // take a few seconds. Poll the status so the paywall clears on its own.
+  // (Once active, this component unmounts and the loop stops.)
+  const refresh = async () => {
+    setChecking(true);
+    for (let i = 0; i < 8 && mounted.current; i++) {
+      onChanged?.();
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (mounted.current) setChecking(false);
+  };
+
+  // Auto-run the poll when we return from Stripe checkout (web ?paid=1).
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && /[?&]paid=1/.test(window.location.search)) {
+      refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const subscribe = async () => {
     setBusy(true);
@@ -58,6 +81,12 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
           <Text style={styles.fine}>Secure checkout. Rent paid by your residents goes 100% to you.</Text>
         </>
       )}
+      <TouchableOpacity onPress={refresh} disabled={checking} style={{ marginTop: spacing.md }}>
+        <Text style={styles.refresh}>
+          {checking ? 'Checking your subscription…' : 'Already paid? Tap to refresh'}
+        </Text>
+      </TouchableOpacity>
+      {checking ? <ActivityIndicator style={{ marginTop: spacing.xs }} color={colors.primary} /> : null}
     </Card>
   );
 }
@@ -70,4 +99,5 @@ const styles = StyleSheet.create({
   perks: { alignSelf: 'stretch', marginBottom: spacing.md },
   perk: { ...typography.body, marginVertical: 2 },
   fine: { ...typography.caption, textAlign: 'center', marginTop: spacing.sm },
+  refresh: { ...typography.body, color: colors.primary, fontWeight: '700', textAlign: 'center' },
 });

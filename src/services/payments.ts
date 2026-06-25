@@ -66,7 +66,15 @@ export async function getConnectStatus(): Promise<ConnectStatus> {
 
 /** Facilitator: subscribe to the platform ($60/mo). */
 export async function startPlatformSubscribe() {
-  const { url } = await call('/api/stripe/platform/subscribe', 'POST');
+  // On web, send Stripe back to the app with ?paid=1 so it can re-check status
+  // (instead of landing on the backend's generic return page).
+  const body: { successUrl?: string; cancelUrl?: string } = {};
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const base = window.location.origin + window.location.pathname;
+    body.successUrl = `${base}?paid=1`;
+    body.cancelUrl = base;
+  }
+  const { url } = await call('/api/stripe/platform/subscribe', 'POST', body);
   await openCheckout(url);
 }
 
