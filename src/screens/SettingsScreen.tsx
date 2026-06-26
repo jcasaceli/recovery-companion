@@ -6,7 +6,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
@@ -20,6 +20,8 @@ export function SettingsScreen() {
   const isFacilitator = auth.profile?.role === 'facilitator';
   const [networkName, setNetworkName] = useState<string | null>(null); // member's current sober living
   const [leaving, setLeaving] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -39,6 +41,18 @@ export function SettingsScreen() {
   const [notifyActivity, setNotifyActivity] = useState(true);
 
   const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
+
+  useEffect(() => { setNameInput(auth.profile?.fullName ?? ''); }, [auth.profile?.fullName]);
+  const saveName = async () => {
+    if (!nameInput.trim()) return;
+    setSavingName(true);
+    try {
+      await updateMyProfileName(nameInput.trim());
+      await auth.refreshProfile();
+      Alert.alert('Saved ✅', 'Your name was updated.');
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    finally { setSavingName(false); }
+  };
 
   const loadManagers = () => listManagers()
     .then((r) => { setManagers(r.managers); })
@@ -205,6 +219,13 @@ export function SettingsScreen() {
 
       {isFacilitator ? (
         <>
+          <SectionTitle>Your account</SectionTitle>
+          <Card>
+            <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Your name (shown to your team and residents)</Text>
+            <TextInput style={styles.input} value={nameInput} onChangeText={setNameInput} placeholder="Your name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+            <Button title={savingName ? 'Saving…' : 'Save name'} variant="secondary" onPress={saveName} disabled={savingName || !nameInput.trim()} />
+          </Card>
+
           <SectionTitle>Notifications</SectionTitle>
           <Card style={styles.switchRow}>
             <View style={{ flex: 1, paddingRight: spacing.md }}>

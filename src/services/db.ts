@@ -142,6 +142,15 @@ export async function getSession() {
   return data.session;
 }
 
+/** Update the signed-in user's display name (facilitator, manager, or member). */
+export async function updateMyProfileName(fullName: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) throw new Error('Not signed in.');
+  const { error } = await db().from('profiles').update({ full_name: fullName.trim() }).eq('id', uid);
+  if (error) throw error;
+}
+
 export async function getMyProfile() {
   const { data: u } = await db().auth.getUser();
   if (!u.user) return null;
