@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -417,6 +417,10 @@ export function DashboardScreen() {
 
         <View style={{ height: spacing.sm }} />
         <Button title="View all members" variant="secondary" onPress={() => nav.navigate('Clients')} />
+
+        <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})} style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+          <Text style={styles.siteLink}>Visit soberlivingcompanion.com →</Text>
+        </TouchableOpacity>
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
@@ -469,6 +473,7 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  siteLink: { ...typography.body, color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -spacing.xs, marginBottom: spacing.sm },
   kpi: { width: '33.33%', padding: spacing.xs },
   kpiValue: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
