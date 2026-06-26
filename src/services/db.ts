@@ -245,11 +245,19 @@ export async function redeemJoinCode(code: string): Promise<string> {
   return data as string;
 }
 
-/** Member: redeem the ORG join code (one per sober living) → creates their record. */
-export async function redeemOrgCode(code: string): Promise<string> {
-  const { data, error } = await db().rpc('redeem_org_code', { p_code: code.trim() });
+/** Member: redeem the master sober-living code. Optionally pick a house. The
+ *  RPC smart-matches an operator-created record by email/phone, else creates one. */
+export async function redeemOrgCode(code: string, houseId?: string): Promise<string> {
+  const { data, error } = await db().rpc('redeem_org_code', { p_code: code.trim(), p_house_id: houseId ?? null });
   if (error) throw error;
   return data as string;
+}
+
+/** The houses behind a join code (so a joining member can pick which one). */
+export async function housesForCode(code: string): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await db().rpc('houses_for_code', { p_code: code.trim() });
+  if (error) throw error;
+  return (data ?? []) as { id: string; name: string }[];
 }
 
 /** Member: leave the sober living they're linked to so they can join another

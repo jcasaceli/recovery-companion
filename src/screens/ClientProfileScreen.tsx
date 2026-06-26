@@ -9,7 +9,7 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
-  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, getJoinCode,
+  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House,
 } from '../services/db';
 import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate } from '../utils/format';
@@ -31,7 +31,7 @@ function currentPeriod() {
 export function ClientProfileScreen() {
   const route = useRoute<any>();
   const { id } = route.params;
-  const { clients, setRent, setClientStatus } = useAppState();
+  const { clients, setRent, setClientStatus, reloadCloud } = useAppState();
   const client = clients.find((c) => c.id === id);
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
@@ -40,8 +40,9 @@ export function ClientProfileScreen() {
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
-  const [memberCode, setMemberCode] = useState<string | undefined>(undefined); // this member's personal join code
   const [inviting, setInviting] = useState(false);
+  const [houseList, setHouseList] = useState<House[]>([]);
+  const [houseId, setHouseId] = useState<string | undefined>(client?.houseId);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -113,8 +114,7 @@ export function ClientProfileScreen() {
   useEffect(() => {
     listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
-    listHouses().then((hs) => { const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
-    getJoinCode(id).then(setMemberCode).catch(() => {});
+    listHouses().then((hs) => { setHouseList(hs); const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
     loadUA();
     loadCrm();
@@ -138,6 +138,18 @@ export function ClientProfileScreen() {
         },
       },
     ]);
+  };
+
+  const changeHouse = async (newHouseId: string) => {
+    const prev = houseId;
+    setHouseId(newHouseId); // optimistic
+    try {
+      await setMemberBed(id, { houseId: newHouseId });
+      await reloadCloud();
+    } catch (e: any) {
+      setHouseId(prev);
+      Alert.alert('Could not change house', e?.message ?? 'Try again.');
+    }
   };
 
   const saveBed = async () => {
@@ -214,7 +226,7 @@ export function ClientProfileScreen() {
   // Personal code links them to THIS record (so agreements/forms follow). Plain
   // ASCII only — some phones don't decode percent-encoding in an sms: link.
   const inviteMsg = () => {
-    const joinCode = memberCode || houseCode || org?.join_code;
+    const joinCode = org?.join_code || houseCode;
     const code = joinCode ? ` Your join code is ${joinCode}.` : '';
     const who = client.firstName?.trim() || 'there';
     return `Hi ${who}, you've been invited to join ${houseName} on the Sober Living Companion app. Download it to track your progress, see house meetings, and pay your membership fees.${code} Get the app: https://app.soberlivingcompanion.com`;
@@ -548,6 +560,22 @@ export function ClientProfileScreen() {
       {/* Bed & intake */}
       <SectionTitle>Bed &amp; intake</SectionTitle>
       <Card>
+        {houseList.length > 1 ? (
+          <>
+            <Text style={styles.label}>House</Text>
+            <View style={styles.houseChips}>
+              {houseList.map((h) => (
+                <TouchableOpacity
+                  key={h.id}
+                  style={[styles.houseChip, houseId === h.id && styles.houseChipOn]}
+                  onPress={() => changeHouse(h.id)}
+                >
+                  <Text style={[styles.houseChipText, houseId === h.id && { color: colors.textInverse }]}>{h.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
         <Text style={styles.label}>Bed / room label</Text>
         <TextInput style={styles.input} value={bedLabel} onChangeText={setBedLabel} placeholder="e.g. Room 2 · Bed A" placeholderTextColor={colors.textMuted} />
         <Text style={styles.label}>Move-in (intake) date</Text>
@@ -578,8 +606,8 @@ export function ClientProfileScreen() {
           <Text style={[typography.body, { fontWeight: '600' }]}>Invite to the app</Text>
           <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
             {client.email
-              ? `We email an invite automatically when you add a member. Use these to resend ${client.firstName}'s invite (join code ${memberCode || '…'}).`
-              : `Send ${client.firstName} their join code (${memberCode || '…'}) to download and join.`}
+              ? `We email an invite automatically when you add a member. Use these to resend ${client.firstName}'s invite (master code ${org?.join_code || '…'}).`
+              : `Send ${client.firstName} your master join code (${org?.join_code || '…'}) to download and join.`}
           </Text>
           {client.email ? (
             <>
@@ -606,6 +634,10 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: colors.border },
   chipText: { ...typography.caption, fontWeight: '700', color: colors.primary },
+  houseChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  houseChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  houseChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  houseChipText: { ...typography.caption, fontWeight: '700', color: colors.textSecondary },
   label: { ...typography.caption, marginBottom: spacing.xs },
   statusLine: { fontSize: 16, fontWeight: '700' },
   amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.md },

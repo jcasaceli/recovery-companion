@@ -42,7 +42,7 @@ function inviteHtml({ firstName, houseName, joinCode }) {
     <div style="border:1px solid #e3e0d9;border-top:0;border-radius:0 0 14px 14px;padding:24px;line-height:1.6">
       <p style="margin:0 0 12px">Hi ${who}, you've been invited to join <strong>${house}</strong> on the free Sober Living Companion app.</p>
       <p style="margin:0 0 12px">With the app you can track your sober days, see house meetings &amp; schedules, complete and sign agreements, and pay your membership fees — all from your phone.</p>
-      <p style="margin:0 0 8px;font-weight:700">Your personal join code:</p>
+      <p style="margin:0 0 8px;font-weight:700">Your join code:</p>
       <p style="margin:0 0 16px;font-size:26px;font-weight:800;letter-spacing:3px;color:#2F6B5F">${joinCode}</p>
       <p style="margin:0 0 14px">Download the app, create your account, then enter the code above to connect to ${house}:</p>
       <p style="margin:0 0 16px">
@@ -85,15 +85,11 @@ inviteRouter.post('/send', async (req, res) => {
     if (!ind.email) return res.json({ sent: false, reason: 'no email on file' });
     if (!RESEND_API_KEY) return res.json({ sent: false, reason: 'email not configured' });
 
-    // Prefer the resident's personal code; fall back to the org code so the
-    // invite always carries a working code.
-    let joinCode = ind.join_code;
-    let houseName = ind.house_name;
-    if (!joinCode || !houseName) {
-      const { data: org } = await admin.from('organizations').select('name, join_code').eq('id', ind.org_id).maybeSingle();
-      if (!joinCode) joinCode = org?.join_code || '';
-      if (!houseName) houseName = org?.name || '';
-    }
+    // One master code per sober living (the org code). When the resident redeems
+    // it, the app smart-matches them to this record by email/phone.
+    const { data: org } = await admin.from('organizations').select('name, join_code').eq('id', ind.org_id).maybeSingle();
+    const joinCode = org?.join_code || ind.join_code || '';
+    const houseName = ind.house_name || org?.name || '';
 
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',

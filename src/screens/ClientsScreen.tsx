@@ -115,9 +115,9 @@ export function ClientsScreen() {
       {!locked && org?.join_code ? (
         <TouchableOpacity
           style={styles.codeBar}
-          onPress={() => Alert.alert('Resident join code', `Share this one code with all your residents. They sign up as a member and enter it to join ${org?.name || 'your sober living'}:\n\n${org.join_code}`)}
+          onPress={() => Alert.alert('Master join code', `Share this ONE code with all your residents. They download the app, sign up, and enter it to join ${org?.name || 'your sober living'}. If you have more than one house, they'll pick their house after entering the code:\n\n${org.join_code}`)}
         >
-          <Text style={styles.codeText}>Resident join code: <Text style={styles.codeStrong}>{org.join_code}</Text></Text>
+          <Text style={styles.codeText}>Master join code: <Text style={styles.codeStrong}>{org.join_code}</Text></Text>
           <Text style={styles.codeHint}>tap for details · one code for everyone</Text>
         </TouchableOpacity>
       ) : null}
