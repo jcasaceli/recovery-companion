@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator, Share } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
@@ -219,10 +219,47 @@ export function ClientProfileScreen() {
     const who = client.firstName?.trim() || 'there';
     return `Hi ${who}, you've been invited to join ${houseName} on the Sober Living Companion app. Download it to track your progress, see house meetings, and pay your membership fees.${code} Get the app: https://app.soberlivingcompanion.com`;
   };
+  const g: any = globalThis;
+  // Copy text — uses the browser clipboard on web; on native falls back to the
+  // share sheet (which includes Copy).
+  const copyText = async (text: string, label: string) => {
+    try {
+      if (Platform.OS === 'web' && g.navigator?.clipboard) {
+        await g.navigator.clipboard.writeText(text);
+        Alert.alert('Copied', `${label} copied to the clipboard.`);
+        return;
+      }
+    } catch { /* fall through */ }
+    try { await Share.share({ message: text }); } catch { Alert.alert(label, text); }
+  };
   const textInvite = () => {
     if (!client.phone) return;
+    // On web, an sms: link shows the raw %-encoded text in the composer, so we
+    // copy the message instead. On phones we open Messages pre-filled.
+    if (Platform.OS === 'web') {
+      copyText(inviteMsg(), 'Invite message');
+      Alert.alert('Invite copied', `Paste it into a text to ${client.firstName}. (On a phone, the Text button opens Messages for you.)`);
+      return;
+    }
     const sep = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open Messages'));
+  };
+  const callPerson = () => { if (client.phone) Linking.openURL(`tel:${client.phone}`).catch(() => {}); };
+  const emailPerson = () => { if (client.email) Linking.openURL(`mailto:${client.email}`).catch(() => Alert.alert('Could not open email')); };
+  const addToContacts = async () => {
+    const fn = `${client.firstName ?? ''} ${client.lastName ?? ''}`.trim();
+    const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `N:${client.lastName ?? ''};${client.firstName ?? ''}`, `FN:${fn}`,
+      client.phone ? `TEL;TYPE=CELL:${client.phone}` : '', client.email ? `EMAIL:${client.email}` : '', 'END:VCARD']
+      .filter(Boolean).join('\n');
+    if (Platform.OS === 'web' && g.document) {
+      const blob = new g.Blob([vcf], { type: 'text/vcard' });
+      const url = g.URL.createObjectURL(blob);
+      const a = g.document.createElement('a');
+      a.href = url; a.download = `${fn || 'contact'}.vcf`;
+      g.document.body.appendChild(a); a.click(); a.remove(); g.URL.revokeObjectURL(url);
+      return;
+    }
+    try { await Share.share({ message: vcf }); } catch { Alert.alert('Contact', vcf); }
   };
   // Email goes through the server (Resend) so the resident gets a real, branded
   // invite with their personal code — no need to open a mail app.
@@ -306,6 +343,32 @@ export function ClientProfileScreen() {
         title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
         subtitle={client.houseName || 'Sober Living'}
       />
+
+      {/* Contact info + quick actions */}
+      <SectionTitle>Contact</SectionTitle>
+      <Card>
+        <Text style={typography.body}>
+          <Text style={{ fontWeight: '700' }}>Name: </Text>
+          {client.firstName}{client.lastName ? ` ${client.lastName}` : ''}
+        </Text>
+        {client.phone ? (
+          <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Phone: </Text>{client.phone}</Text>
+        ) : null}
+        {client.email ? (
+          <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Email: </Text>{client.email}</Text>
+        ) : null}
+        {!client.phone && !client.email ? (
+          <Text style={[typography.caption, { marginTop: 4 }]}>No phone or email on file. Add them by editing this member.</Text>
+        ) : null}
+        <View style={styles.chipRow}>
+          {client.phone ? <Chip icon="📞" label="Call" onPress={callPerson} /> : null}
+          {client.phone ? <Chip icon="📲" label="Text" onPress={textInvite} /> : null}
+          {client.email ? <Chip icon="✉️" label="Email" onPress={emailPerson} /> : null}
+          {client.phone ? <Chip icon="📋" label="Copy phone" onPress={() => copyText(client.phone!, 'Phone number')} /> : null}
+          {client.email ? <Chip icon="📋" label="Copy email" onPress={() => copyText(client.email!, 'Email')} /> : null}
+          {client.phone || client.email ? <Chip icon="👤" label="Add to contacts" onPress={addToContacts} /> : null}
+        </View>
+      </Card>
 
       {/* Alerts the client flagged for the facilitator */}
       {alerts.length ? (
@@ -531,7 +594,18 @@ export function ClientProfileScreen() {
   );
 }
 
+function Chip({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.chip} onPress={onPress} activeOpacity={0.7}>
+      <Text style={styles.chipText}>{icon} {label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  chipText: { ...typography.caption, fontWeight: '700', color: colors.primary },
   label: { ...typography.caption, marginBottom: spacing.xs },
   statusLine: { fontSize: 16, fontWeight: '700' },
   amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.md },

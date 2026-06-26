@@ -1,21 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch, Linking } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
 import { HousesManager } from '../components/HousesManager';
 
 export function SettingsScreen() {
-  const { resetApp } = useAppState();
+  const { resetApp, reloadCloud, subscriptionActive } = useAppState();
+  const nav = useNavigation<any>();
 
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
+  const [networkName, setNetworkName] = useState<string | null>(null); // member's current sober living
+  const [leaving, setLeaving] = useState(false);
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -52,8 +56,36 @@ export function SettingsScreen() {
           if (owner) loadManagers();
         }
       }).catch(() => {});
+    } else {
+      // Members: show which sober living they've joined (if any).
+      getMyNetworkName().then(setNetworkName).catch(() => {});
     }
   }, [isFacilitator]);
+
+  const leaveHome = () => {
+    Alert.alert(
+      'Leave this sober living?',
+      `You'll be disconnected from ${networkName || 'your sober living'} and can join a different home with a new code. Your sober-day count and personal data stay with you.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            setLeaving(true);
+            try {
+              await leaveSoberLiving();
+              await reloadCloud();
+              setNetworkName(null);
+              nav.navigate('LinkMember'); // let them enter a new code right away
+            } catch (e: any) {
+              Alert.alert('Could not leave', e?.message ?? 'Please try again.');
+            } finally { setLeaving(false); }
+          },
+        },
+      ],
+    );
+  };
 
   const addMgr = async () => {
     if (!mgrName.trim() || !mgrEmail.trim()) return;
@@ -229,6 +261,20 @@ export function SettingsScreen() {
             )}
           </Card>
 
+          {!subscriptionActive ? (
+            <Card style={{ borderWidth: 1, borderColor: colors.primary }}>
+              <Text style={[typography.body, { fontWeight: '700' }]}>Activate to add members &amp; houses</Text>
+              <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+                Your subscription isn't active, so adding members, houses, and join codes is locked.
+              </Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})}>
+                <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
+              </TouchableOpacity>
+            </Card>
+          ) : null}
+
+          {subscriptionActive ? (
+          <>
           <SectionTitle>House managers</SectionTitle>
           <Card>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
@@ -256,9 +302,36 @@ export function SettingsScreen() {
           </Card>
 
           <HousesManager managers={managers} />
+          </>
+          ) : null}
         </>
       ) : null}
 
+      {/* Member: their sober living — leave & join a different home */}
+      {!isFacilitator && auth.configured && auth.status === 'signedIn' ? (
+        <>
+          <SectionTitle>Your sober living</SectionTitle>
+          <Card>
+            {networkName ? (
+              <>
+                <Text style={typography.body}>You're connected to <Text style={{ fontWeight: '700' }}>{networkName}</Text>.</Text>
+                <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+                  Moving to a different home? Leave this one, then enter your new join code.
+                </Text>
+                <Button title={leaving ? 'Leaving…' : 'Leave & join a different home'} variant="secondary" onPress={leaveHome} disabled={leaving} />
+              </>
+            ) : (
+              <>
+                <Text style={typography.body}>You haven't joined a sober living yet.</Text>
+                <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+                  Enter the join code your home gave you to connect.
+                </Text>
+                <Button title="Enter a sober living code" variant="secondary" onPress={() => nav.navigate('LinkMember')} />
+              </>
+            )}
+          </Card>
+        </>
+      ) : null}
 
       <View style={{ height: spacing.md }} />
       {auth.configured && auth.status === 'signedIn' ? (
@@ -323,6 +396,7 @@ export function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  signupLink: { ...typography.body, color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,

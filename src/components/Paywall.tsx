@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, Platform, TouchableOpacity, Linking } from 'react-native';
 import { Card, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { startPlatformSubscribe } from '../services/payments';
+
+const SIGNUP_URL = 'https://soberlivingcompanion.com';
 
 const PERKS = [
   'Add and manage your residents',
@@ -81,6 +83,10 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
           <Text style={styles.fine}>Secure checkout. Rent paid by your residents goes 100% to you.</Text>
         </>
       )}
+      <TouchableOpacity onPress={() => Linking.openURL(SIGNUP_URL).catch(() => {})} style={{ marginTop: spacing.md }}>
+        <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={refresh} disabled={checking} style={{ marginTop: spacing.md }}>
         <Text style={styles.refresh}>
           {checking ? 'Checking your subscription…' : 'Already paid? Tap to refresh'}
@@ -100,4 +106,5 @@ const styles = StyleSheet.create({
   perk: { ...typography.body, marginVertical: 2 },
   fine: { ...typography.caption, textAlign: 'center', marginTop: spacing.sm },
   refresh: { ...typography.body, color: colors.primary, fontWeight: '700', textAlign: 'center' },
+  signupLink: { ...typography.body, color: colors.primary, fontWeight: '800', textAlign: 'center', textDecorationLine: 'underline' },
 });

@@ -402,9 +402,11 @@ export async function stripeWebhook(req, res) {
             unpaid: 'past_due', paused: 'past_due', incomplete: 'past_due',
             canceled: 'canceled', incomplete_expired: 'canceled',
           };
-          const status = event.type === 'customer.subscription.deleted'
-            ? 'canceled'
-            : (map[sub.status] || 'past_due');
+          // Revoke access as soon as the operator cancels — whether it's an
+          // immediate cancel (deleted) or "cancel at period end" (which Stripe
+          // marks on the still-"active" subscription via cancel_at_period_end).
+          const canceling = event.type === 'customer.subscription.deleted' || sub.cancel_at_period_end === true;
+          const status = canceling ? 'canceled' : (map[sub.status] || 'past_due');
           await supabaseAdmin
             .from('organizations')
             .update({ subscription_status: status })

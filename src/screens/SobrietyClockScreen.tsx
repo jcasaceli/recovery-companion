@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { colors, spacing, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { sobrietyParts, daysSince } from '../utils/format';
+import { DateField } from '../components/PickerFields';
+import { Button } from '../components/ui';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -13,9 +14,14 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
  *  how long the user has been sober, down to the second. The ring fills once per
  *  minute (one sweep = 60 seconds) so it visibly ticks. */
 export function SobrietyClockScreen() {
-  const nav = useNavigation<any>();
-  const { lovedOne } = useAppState();
+  const { lovedOne, resetSobrietyDate } = useAppState();
   const date = lovedOne.sobrietyDate;
+
+  // Edit the sobriety date right here (members no longer have to go to Home).
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const openEdit = () => { setDraft(date || ''); setEditing(true); };
+  const saveEdit = () => { if (draft) resetSobrietyDate(draft); setEditing(false); };
 
   // Re-render every second to keep the clock live.
   const [, tick] = useState(0);
@@ -37,9 +43,22 @@ export function SobrietyClockScreen() {
   const progress = parts ? parts.seconds / 60 : 0;
   const offset = c * (1 - progress);
 
+  // Inline date editor (shared by the empty + populated states).
+  const editor = (
+    <View style={styles.editor}>
+      <Text style={styles.editorLabel}>Your sobriety date</Text>
+      <DateField value={draft} onChange={setDraft} placeholder="Pick your sobriety date" />
+      <View style={{ height: spacing.sm }} />
+      <Button title="Save sobriety date" onPress={saveEdit} disabled={!draft} />
+      <TouchableOpacity onPress={() => setEditing(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+        <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your Sobriety Clock</Text>
 
         {!date ? (
@@ -49,9 +68,11 @@ export function SobrietyClockScreen() {
             <Text style={styles.emptyBody}>
               Set the date you’re counting from and watch every second of your recovery add up.
             </Text>
-            <TouchableOpacity style={styles.cta} onPress={() => nav.navigate('Home')}>
-              <Text style={styles.ctaText}>Set my sobriety date →</Text>
-            </TouchableOpacity>
+            {editing ? editor : (
+              <TouchableOpacity style={styles.cta} onPress={openEdit}>
+                <Text style={styles.ctaText}>Set my sobriety date →</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <>
@@ -96,9 +117,15 @@ export function SobrietyClockScreen() {
             </View>
 
             <Text style={styles.encourage}>One second at a time. Keep going. 💚</Text>
+
+            {editing ? editor : (
+              <TouchableOpacity onPress={openEdit} style={styles.editBtn}>
+                <Text style={styles.editBtnText}>✏️ Edit sobriety date</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -114,7 +141,11 @@ function Stat({ n, label }: { n: number; label: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  content: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  editor: { alignSelf: 'stretch', marginTop: spacing.lg },
+  editorLabel: { ...typography.bodySecondary, fontWeight: '700', marginBottom: spacing.xs, textAlign: 'center' },
+  editBtn: { marginTop: spacing.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
+  editBtnText: { color: colors.primary, fontWeight: '700' },
   title: { ...typography.h2, marginBottom: spacing.xl, textAlign: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   bigDays: { fontSize: 64, fontWeight: '800', color: colors.textPrimary, lineHeight: 68, fontVariant: ['tabular-nums'] },

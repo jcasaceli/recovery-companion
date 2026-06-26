@@ -243,6 +243,20 @@ export async function redeemOrgCode(code: string): Promise<string> {
   return data as string;
 }
 
+/** Member: leave the sober living they're linked to so they can join another
+ *  home with a new code. Unlinks their profile from the resident record. */
+export async function leaveSoberLiving(): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return;
+  const me = await resolveMyIndividual();
+  if (!me) return;
+  // Remove the care relationship first (while we still pass RLS), then unlink.
+  await db().from('care_relationships').delete().eq('individual_id', me.individualId).eq('profile_id', uid);
+  const { error } = await db().from('individuals').update({ profile_id: null }).eq('id', me.individualId).eq('profile_id', uid);
+  if (error) throw error;
+}
+
 /** Member: the name of the sober living network/org they're linked to (or null
  *  if they haven't connected a code yet). Used for the "you're now connected to
  *  …" confirmation. RLS policy "resident sees their org" allows this read. */

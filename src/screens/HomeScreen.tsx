@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses, getMyNetworkName } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -52,14 +52,17 @@ export function HomeScreen() {
   const [curfew, setCurfew] = useState<Curfew | null>(null);
   const [curfewToday, setCurfewToday] = useState<any[]>([]);
   const [curfewBusy, setCurfewBusy] = useState(false);
-  const [toSign, setToSign] = useState(0); // pending agreements + forms awaiting the member's signature
+  // Pending agreements + forms awaiting the member's signature (tracked
+  // separately so the banner opens the RIGHT screen).
+  const [pendingAgr, setPendingAgr] = useState(0);
+  const [pendingForms, setPendingForms] = useState(0);
+  const toSign = pendingAgr + pendingForms;
+  const [networkName, setNetworkName] = useState<string | null>(null); // the sober living the member joined
 
   const loadToSign = useCallback(() => {
-    if (!connected) { setToSign(0); return; }
-    Promise.all([
-      listMyAgreements().then((a) => a.filter((x) => x.status !== 'signed').length).catch(() => 0),
-      listMyFormResponses().then((f) => f.filter((x) => x.status !== 'completed').length).catch(() => 0),
-    ]).then(([a, f]) => setToSign(a + f)).catch(() => {});
+    if (!connected) { setPendingAgr(0); setPendingForms(0); return; }
+    listMyAgreements().then((a) => setPendingAgr(a.filter((x) => x.status !== 'signed').length)).catch(() => {});
+    listMyFormResponses().then((f) => setPendingForms(f.filter((x) => x.status !== 'completed').length)).catch(() => {});
   }, [connected]);
   useEffect(() => { loadToSign(); }, [loadToSign]);
 
@@ -86,8 +89,9 @@ export function HomeScreen() {
       getPassesEnabled().then(setPassesEnabled).catch(() => {});
       loadCurfew();
       loadToSign(); // refresh the "to sign" banner when returning to Home
+      if (connected) getMyNetworkName().then(setNetworkName).catch(() => {});
     }
-  }, [loadCheckins, loadCurfew, loadToSign, isFacilitator]));
+  }, [loadCheckins, loadCurfew, loadToSign, isFacilitator, connected]));
 
   const confirmDeleteCheckin = (c: any) => {
     Alert.alert(
@@ -263,21 +267,30 @@ export function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* New agreements / forms to sign */}
+      {/* Welcome to the sober living they joined */}
+      {selfView && networkName ? (
+        <Text style={styles.welcomeHome}>🏡 Welcome to {networkName}</Text>
+      ) : null}
+
+      {/* New agreements / forms to sign — open Forms first, then Agreements */}
       {selfView && toSign > 0 ? (
-        <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('Agreements')}>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate(pendingForms > 0 ? 'Forms' : 'Agreements')}>
           <Card style={styles.toSignCard}>
             <Text style={styles.toSignTitle}>📝 {toSign} {toSign === 1 ? 'item needs' : 'items need'} your signature</Text>
-            <Text style={styles.toSignBody}>You have agreements or forms from your sober living to review and sign. Tap to open.</Text>
+            <Text style={styles.toSignBody}>
+              You have {pendingForms > 0 ? `${pendingForms} form${pendingForms === 1 ? '' : 's'}` : ''}
+              {pendingForms > 0 && pendingAgr > 0 ? ' and ' : ''}
+              {pendingAgr > 0 ? `${pendingAgr} agreement${pendingAgr === 1 ? '' : 's'}` : ''} from your sober living to review and sign. Tap to open.
+            </Text>
           </Card>
         </TouchableOpacity>
       ) : null}
 
-      {/* Hero: recovery summary */}
-      <Card style={styles.hero}>
+      {/* Hero: recovery summary — tap (members) to open the Sobriety Clock */}
+      <Card style={styles.hero} onPress={selfView ? () => nav.navigate('Clock') : undefined}>
         <Text style={styles.heroName}>{lovedOne.firstName || (selfView ? 'Welcome' : '')}</Text>
         <Text style={styles.heroProgram}>
-          {lovedOne.programName || 'Sober Living'}
+          {networkName || lovedOne.programName || 'Sober Living'}
         </Text>
         {sober !== null ? (
           <>
@@ -290,6 +303,7 @@ export function HomeScreen() {
                 {parts.months} {parts.months === 1 ? 'month' : 'months'} · {parts.days} {parts.days === 1 ? 'day' : 'days'} · {pad2(parts.hours)}:{pad2(parts.minutes)}:{pad2(parts.seconds)}
               </Text>
             ) : null}
+            {selfView ? <Text style={styles.heroTapHint}>Tap to open your Sobriety Clock ⏱️</Text> : null}
           </>
         ) : (
           <Text style={styles.heroBreakdown}>
@@ -636,6 +650,8 @@ const styles = StyleSheet.create({
   heroNumber: { fontSize: 40, fontWeight: '800', color: colors.textInverse },
   heroLabel: { fontSize: 15, color: colors.primaryLight, marginLeft: spacing.sm },
   heroBreakdown: { marginTop: 6, fontSize: 15, fontWeight: '600', color: colors.textInverse, opacity: 0.92, fontVariant: ['tabular-nums'] },
+  heroTapHint: { marginTop: spacing.sm, fontSize: 12, fontWeight: '700', color: colors.textInverse, opacity: 0.85 },
+  welcomeHome: { ...typography.body, fontWeight: '800', color: colors.primary, marginBottom: spacing.sm },
   moodRow: { flexDirection: 'row', alignItems: 'center' },
   moodEmoji: { fontSize: 40, marginRight: spacing.md },
   milestoneCard: { backgroundColor: colors.accentLight },
