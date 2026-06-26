@@ -166,6 +166,10 @@ export function AuthScreen() {
         )}
 
         {busy ? <ActivityIndicator style={{ marginTop: spacing.lg }} color={colors.primary} /> : null}
+
+        <TouchableOpacity onPress={openWebSignup} style={styles.siteLinkWrap}>
+          <Text style={styles.siteLink}>Visit soberlivingcompanion.com →</Text>
+        </TouchableOpacity>
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -239,4 +243,6 @@ const styles = StyleSheet.create({
   forgot: { alignSelf: 'flex-end', paddingVertical: spacing.sm, marginBottom: spacing.xs },
   linkText: { color: colors.primary, fontWeight: '600' },
   error: { color: colors.crisis, backgroundColor: '#FCECEA', borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.md, textAlign: 'center', fontWeight: '600' },
+  siteLinkWrap: { alignItems: 'center', paddingVertical: spacing.lg, marginTop: spacing.lg },
+  siteLink: { color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
 });
