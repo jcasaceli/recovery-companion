@@ -20,6 +20,17 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [capDraft, setCapDraft] = useState<Record<string, string>>({});
+  const [nameDraft, setNameDraft] = useState<Record<string, string>>({});
+
+  const saveName = async (houseId: string) => {
+    const v = (nameDraft[houseId] ?? '').trim();
+    if (!v) return;
+    try {
+      await renameHouse(houseId, v);
+      setHouses((hs) => hs.map((h) => (h.id === houseId ? { ...h, name: v } : h)));
+      Alert.alert('Saved ✅', 'House name updated.');
+    } catch (e: any) { Alert.alert('Could not rename', e?.message ?? 'Try again.'); }
+  };
 
   const saveCap = async (houseId: string) => {
     const raw = capDraft[houseId];
@@ -85,7 +96,19 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
               </TouchableOpacity>
               {open ? (
                 <View style={styles.assignArea}>
-                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>Bed capacity</Text>
+                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>House name</Text>
+                  <View style={styles.capRow}>
+                    <TextInput
+                      style={styles.capInput}
+                      defaultValue={h.name}
+                      onChangeText={(t) => setNameDraft((d) => ({ ...d, [h.id]: t }))}
+                      placeholder="House name"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="words"
+                    />
+                    <TouchableOpacity style={styles.capSave} onPress={() => saveName(h.id)}><Text style={styles.capSaveText}>Save</Text></TouchableOpacity>
+                  </View>
+                  <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4, marginTop: spacing.sm }]}>Bed capacity</Text>
                   <View style={styles.capRow}>
                     <TextInput
                       style={styles.capInput}

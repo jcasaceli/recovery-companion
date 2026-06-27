@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses, getMyNetworkName } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -57,7 +57,7 @@ export function HomeScreen() {
   const [pendingAgr, setPendingAgr] = useState(0);
   const [pendingForms, setPendingForms] = useState(0);
   const toSign = pendingAgr + pendingForms;
-  const [networkName, setNetworkName] = useState<string | null>(null); // the sober living the member joined
+  const [networkName, setNetworkName] = useState<string | null>(null); // the member's actual house name
 
   const loadToSign = useCallback(() => {
     if (!connected) { setPendingAgr(0); setPendingForms(0); return; }
@@ -89,7 +89,7 @@ export function HomeScreen() {
       getPassesEnabled().then(setPassesEnabled).catch(() => {});
       loadCurfew();
       loadToSign(); // refresh the "to sign" banner when returning to Home
-      if (connected) getMyNetworkName().then(setNetworkName).catch(() => {});
+      if (connected) getMyHouseName().then(setNetworkName).catch(() => {});
     }
   }, [loadCheckins, loadCurfew, loadToSign, isFacilitator, connected]));
 

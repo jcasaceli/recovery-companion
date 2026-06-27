@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, PanResponder, TouchableOpacity, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, PanResponder, TouchableOpacity, LayoutChangeEvent, Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, radius, typography } from '../theme';
 
@@ -23,19 +23,40 @@ export function SignaturePad({
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
 
+  // Origin of the pad in window coords — used to compute local x/y on web,
+  // where nativeEvent.locationX/Y can be missing/relative to the page.
+  const padRef = useRef<View>(null);
+  const origin = useRef({ x: 0, y: 0 });
+  const measure = () => { try { (padRef.current as any)?.measureInWindow?.((x: number, y: number) => { origin.current = { x, y }; }); } catch {} };
+
+  const coords = (e: any) => {
+    const ne = e.nativeEvent || {};
+    let x = ne.locationX;
+    let y = ne.locationY;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const px = ne.pageX ?? ne.changedTouches?.[0]?.pageX;
+      const py = ne.pageY ?? ne.changedTouches?.[0]?.pageY;
+      x = (px ?? 0) - origin.current.x;
+      y = (py ?? 0) - origin.current.y;
+    }
+    return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
+  };
+
   const responder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (e) => {
-          const { locationX, locationY } = e.nativeEvent;
-          current.current = `M${locationX.toFixed(1)},${locationY.toFixed(1)}`;
+          measure();
+          const { x, y } = coords(e);
+          current.current = `M${x.toFixed(1)},${y.toFixed(1)}`;
           rerender();
         },
         onPanResponderMove: (e) => {
-          const { locationX, locationY } = e.nativeEvent;
-          current.current += ` L${locationX.toFixed(1)},${locationY.toFixed(1)}`;
+          const { x, y } = coords(e);
+          current.current += ` L${x.toFixed(1)},${y.toFixed(1)}`;
           rerender();
         },
         onPanResponderRelease: () => {
@@ -61,13 +82,18 @@ export function SignaturePad({
 
   return (
     <View>
-      <View style={[styles.pad, { height }]} {...responder.panHandlers}>
-        <Svg width="100%" height="100%">
+      <View
+        ref={padRef}
+        onLayout={measure}
+        style={[styles.pad, { height }, Platform.OS === 'web' ? webPadStyle : null]}
+        {...responder.panHandlers}
+      >
+        <Svg width="100%" height="100%" pointerEvents="none">
           {all.map((d, i) => (
             <Path key={i} d={d} stroke={colors.textPrimary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           ))}
         </Svg>
-        {all.length === 0 ? <Text style={styles.hint}>Sign here with your finger</Text> : null}
+        {all.length === 0 ? <Text style={styles.hint} pointerEvents="none">Sign here with your finger or mouse</Text> : null}
       </View>
       <TouchableOpacity onPress={clear} style={styles.clear}>
         <Text style={styles.clearText}>Clear</Text>
@@ -96,6 +122,10 @@ export function SignatureView({
     </View>
   );
 }
+
+// Web only: stop the browser from hijacking the drag (scroll/select) so the
+// pan gesture reaches the responder, and show a drawing cursor.
+const webPadStyle: any = { touchAction: 'none', userSelect: 'none', cursor: 'crosshair' };
 
 const styles = StyleSheet.create({
   pad: {

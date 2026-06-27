@@ -353,7 +353,7 @@ export function ClientProfileScreen() {
     <Screen edges={[]}>
       <ScreenTitle
         title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
-        subtitle={client.houseName || 'Sober Living'}
+        subtitle={houseList.find((h) => h.id === houseId)?.name || client.houseName || 'Sober Living'}
       />
 
       {/* Contact info + quick actions */}
@@ -373,9 +373,10 @@ export function ClientProfileScreen() {
           <Text style={[typography.caption, { marginTop: 4 }]}>No phone or email on file. Add them by editing this member.</Text>
         ) : null}
         <View style={styles.chipRow}>
+          {client.email ? <Chip icon="✉️" label={inviting ? 'Sending…' : 'Email invite'} onPress={emailInvite} /> : null}
+          {client.phone ? <Chip icon="📲" label="Text invite" onPress={textInvite} /> : null}
           {client.phone ? <Chip icon="📞" label="Call" onPress={callPerson} /> : null}
-          {client.phone ? <Chip icon="📲" label="Text" onPress={textInvite} /> : null}
-          {client.email ? <Chip icon="✉️" label="Email" onPress={emailPerson} /> : null}
+          {client.email ? <Chip icon="📧" label="Email" onPress={emailPerson} /> : null}
           {client.phone ? <Chip icon="📋" label="Copy phone" onPress={() => copyText(client.phone!, 'Phone number')} /> : null}
           {client.email ? <Chip icon="📋" label="Copy email" onPress={() => copyText(client.email!, 'Email')} /> : null}
           {client.phone || client.email ? <Chip icon="👤" label="Add to contacts" onPress={addToContacts} /> : null}

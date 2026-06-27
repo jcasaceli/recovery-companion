@@ -274,6 +274,27 @@ export async function leaveSoberLiving(): Promise<void> {
   if (error) throw error;
 }
 
+/** Member: the name of the HOUSE they actually live in (resolved from house_id,
+ *  which is correct even when they joined a different house than the org name).
+ *  Falls back to the free-text house field, then the org name. */
+export async function getMyHouseName(): Promise<string | null> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return null;
+  const { data: ind } = await db()
+    .from('individuals')
+    .select('house_id, org_id, house_name')
+    .eq('profile_id', u.user.id)
+    .maybeSingle();
+  if (!ind) return null;
+  if (ind.house_id) {
+    const { data: h } = await db().from('houses').select('name').eq('id', ind.house_id).maybeSingle();
+    if (h?.name) return h.name;
+  }
+  if (ind.house_name) return ind.house_name;
+  const { data: org } = await db().from('organizations').select('name').eq('id', ind.org_id).maybeSingle();
+  return org?.name ?? null;
+}
+
 /** Member: the name of the sober living network/org they're linked to (or null
  *  if they haven't connected a code yet). Used for the "you're now connected to
  *  …" confirmation. RLS policy "resident sees their org" allows this read. */
