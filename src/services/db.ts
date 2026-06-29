@@ -98,6 +98,12 @@ export async function signInWithPassword(email: string, password: string) {
   return data;
 }
 
+/** Change the signed-in user's password (no email round-trip needed). */
+export async function updatePassword(newPassword: string) {
+  const { error } = await db().auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 /** Send a password-reset email. We pass an explicit redirectTo so the link
  *  always lands on the live web app — otherwise Supabase falls back to the
  *  project Site URL (which defaulted to localhost). This URL must also be in

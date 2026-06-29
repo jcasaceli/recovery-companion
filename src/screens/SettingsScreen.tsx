@@ -6,7 +6,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
@@ -22,6 +22,9 @@ export function SettingsScreen() {
   const [leaving, setLeaving] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [savingPw, setSavingPw] = useState(false);
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -52,6 +55,18 @@ export function SettingsScreen() {
       Alert.alert('Saved ✅', 'Your name was updated.');
     } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
     finally { setSavingName(false); }
+  };
+
+  const savePassword = async () => {
+    if (pw1.length < 6) { Alert.alert('Too short', 'Use at least 6 characters.'); return; }
+    if (pw1 !== pw2) { Alert.alert('Passwords don’t match', 'Re-enter the same password twice.'); return; }
+    setSavingPw(true);
+    try {
+      await updatePassword(pw1);
+      setPw1(''); setPw2('');
+      Alert.alert('Password changed ✅', 'Use your new password next time you sign in.');
+    } catch (e: any) { Alert.alert('Could not change password', e?.message ?? 'Try again.'); }
+    finally { setSavingPw(false); }
   };
 
   const loadManagers = () => listManagers()
@@ -239,6 +254,35 @@ export function SettingsScreen() {
           </Card>
         </>
       ) : null}
+
+      <SectionTitle>Password</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.xs }]}>New password (at least 6 characters)</Text>
+        <TextInput
+          style={styles.input}
+          value={pw1}
+          onChangeText={setPw1}
+          placeholder="New password"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
+          value={pw2}
+          onChangeText={setPw2}
+          placeholder="Confirm new password"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+          autoCapitalize="none"
+        />
+        <Button
+          title={savingPw ? 'Saving…' : 'Change password'}
+          variant="secondary"
+          onPress={savePassword}
+          disabled={savingPw || !pw1 || !pw2}
+        />
+      </Card>
 
       {isOwner ? (
         <>
