@@ -98,10 +98,15 @@ export async function signInWithPassword(email: string, password: string) {
   return data;
 }
 
-/** Send a password-reset email. The link in the email opens the Supabase
- *  recovery flow (configure the redirect URL in Supabase Auth settings). */
+/** Send a password-reset email. We pass an explicit redirectTo so the link
+ *  always lands on the live web app — otherwise Supabase falls back to the
+ *  project Site URL (which defaulted to localhost). This URL must also be in
+ *  the Supabase Auth "Redirect URLs" allowlist. */
+const RESET_REDIRECT = 'https://app.soberlivingcompanion.com';
 export async function resetPassword(email: string) {
-  const { error } = await db().auth.resetPasswordForEmail(email.trim().toLowerCase());
+  const { error } = await db().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: RESET_REDIRECT,
+  });
   if (error) throw error;
 }
 
