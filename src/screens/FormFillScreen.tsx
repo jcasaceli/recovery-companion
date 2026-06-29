@@ -115,10 +115,17 @@ function autofill(field: FormField): { textContentType?: any; autoComplete?: any
 function FieldInput({ field, value, onChange, disabled }: { field: FormField; value: any; onChange: (v: any) => void; disabled?: boolean }) {
   const af = autofill(field);
   if (disabled) {
+    if (field.type === 'signature') return <SignatureView paths={Array.isArray(value) ? value : []} />;
     const shown = field.type === 'yesno' ? (value ? 'Yes' : value === false ? 'No' : '—') : (String(value ?? '').trim() || '—');
     return <Text style={[typography.body, { color: colors.textSecondary }]}>{shown}</Text>;
   }
   switch (field.type) {
+    case 'signature':
+      return (
+        <View>
+          <SignaturePad height={150} onChange={(paths) => onChange(paths)} />
+        </View>
+      );
     case 'date':
       return <DateField value={value || ''} onChange={onChange} placeholder="Pick a date" />;
     case 'yesno':

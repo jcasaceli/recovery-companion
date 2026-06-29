@@ -2,7 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
+import { FacilitatorSidebar } from './FacilitatorSidebar';
+import { FacilitatorFormsScreen } from '../screens/FacilitatorFormsScreen';
+import { ReferFriendScreen } from '../screens/ReferFriendScreen';
 import { colors } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
@@ -122,30 +125,43 @@ export function RootNavigator() {
 const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Dashboard: { active: 'grid', inactive: 'grid-outline' },
   Clients: { active: 'people', inactive: 'people-outline' },
+  Forms: { active: 'document-text', inactive: 'document-text-outline' },
   Payments: { active: 'card', inactive: 'card-outline' },
   Messages: { active: 'megaphone', inactive: 'megaphone-outline' },
+  ReferFriend: { active: 'gift', inactive: 'gift-outline' },
   Account: { active: 'person-circle', inactive: 'person-circle-outline' },
 };
 
 function FacilitatorTabs() {
+  // On wide web screens, show a CRM-style left sidebar instead of the bottom
+  // tab bar. Native and narrow web keep the familiar bottom tabs.
+  const { width } = useWindowDimensions();
+  const sidebar = Platform.OS === 'web' && width >= 900;
+
   return (
     <FacTab.Navigator
       initialRouteName="Dashboard"
+      tabBar={sidebar ? (props) => <FacilitatorSidebar {...props} /> : undefined}
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarPosition: sidebar ? 'left' : 'bottom',
         tabBarActiveTintColor: colors.primaryDark,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarIcon: ({ focused, color, size }) => {
           const cfg = FAC_ICONS[route.name];
+          if (!cfg) return <Ionicons name={focused ? 'ellipse' : 'ellipse-outline'} size={size} color={color} />;
           return <Ionicons name={focused ? cfg.active : cfg.inactive} size={size} color={color} />;
         },
       })}
     >
       <FacTab.Screen name="Dashboard" component={DashboardScreen} />
       <FacTab.Screen name="Clients" component={ClientsStack} options={{ tabBarLabel: 'Members' }} />
+      <FacTab.Screen name="Forms" component={FacilitatorFormsScreen} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
       <FacTab.Screen name="Messages" component={MessagesScreen} />
+      {/* Refer a Friend + Account live in the sidebar; hidden from the bottom bar to keep it uncluttered on mobile. */}
+      <FacTab.Screen name="ReferFriend" component={ReferFriendScreen} options={{ tabBarItemStyle: sidebar ? undefined : { display: 'none' }, tabBarLabel: 'Refer' }} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
     </FacTab.Navigator>
   );

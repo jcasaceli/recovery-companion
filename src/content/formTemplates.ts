@@ -62,4 +62,5 @@ export const FIELD_TYPE_LABELS: Record<FormField['type'], string> = {
   heading: 'Section heading',
   paragraph: 'Paragraph text',
   initial: 'Initials',
+  signature: 'Signature',
 };

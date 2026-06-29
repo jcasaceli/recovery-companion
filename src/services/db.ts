@@ -727,7 +727,9 @@ export type FormFieldType =
   // Display-only blocks (no answer collected) used to render legal/agreement text:
   | 'heading' | 'paragraph'
   // Small inline input for the "INITIAL: ___" lines in agreements:
-  | 'initial';
+  | 'initial'
+  // A signature space — the resident draws their signature for this field.
+  | 'signature';
 
 export interface FormField {
   key: string;
@@ -817,6 +819,13 @@ export async function assignHouseForm(input: { orgId: string; templateId?: strin
 /** Staff: house-level forms for the org (individual_id is null). */
 export async function listHouseForms(orgId: string): Promise<FormResponse[]> {
   const { data, error } = await db().from('form_responses').select('*').is('individual_id', null).eq('org_id', orgId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapFormResponse);
+}
+
+/** Staff: every form response across the org (the Forms hub "submissions" list). */
+export async function listOrgFormResponses(): Promise<FormResponse[]> {
+  const { data, error } = await db().from('form_responses').select('*').order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapFormResponse);
 }
