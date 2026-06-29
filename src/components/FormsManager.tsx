@@ -15,7 +15,7 @@ function slugify(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '_')
 
 /** Staff: assign lease/intake forms to a resident (built-in, saved, or custom),
  *  and review what they've signed. */
-export function FormsManager({ individualId, orgId, memberName }: { individualId: string; orgId?: string; memberName?: string }) {
+export function FormsManager({ individualId, orgId, memberName, hideHeader }: { individualId: string; orgId?: string; memberName?: string; hideHeader?: boolean }) {
   const nav = useNavigation<any>();
   const [responses, setResponses] = useState<FormResponse[]>([]);
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
@@ -86,7 +86,7 @@ export function FormsManager({ individualId, orgId, memberName }: { individualId
 
   return (
     <>
-      <SectionTitle>Forms &amp; Agreements</SectionTitle>
+      {hideHeader ? null : <SectionTitle>Forms &amp; Agreements</SectionTitle>}
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Choose a ready-made form (guest agreement, intake, head of house, write-up, house terms) or build your own.

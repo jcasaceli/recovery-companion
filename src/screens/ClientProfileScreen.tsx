@@ -9,7 +9,7 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
-  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House,
+  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient,
 } from '../services/db';
 import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate } from '../utils/format';
@@ -58,6 +58,20 @@ export function ClientProfileScreen() {
   const [moveInDate, setMoveInDate] = useState('');
   const [dischargeDate, setDischargeDate] = useState<string | undefined>(undefined);
   const [bedSaving, setBedSaving] = useState(false);
+  const [editContact, setEditContact] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [contactSaving, setContactSaving] = useState(false);
+  const startEditContact = () => { setPhoneInput(client?.phone ?? ''); setEmailInput(client?.email ?? ''); setEditContact(true); };
+  const saveContact = async () => {
+    setContactSaving(true);
+    try {
+      await updateClient(id, { phone: phoneInput.trim(), email: emailInput.trim() });
+      await reloadCloud();
+      setEditContact(false);
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    finally { setContactSaving(false); }
+  };
   const loadCrm = () => getIndividual(id).then((r: any) => {
     if (!r) return;
     setBedLabel(r.bed_label ?? '');
@@ -359,19 +373,46 @@ export function ClientProfileScreen() {
       {/* Contact info + quick actions */}
       <SectionTitle>Contact</SectionTitle>
       <Card>
-        <Text style={typography.body}>
-          <Text style={{ fontWeight: '700' }}>Name: </Text>
-          {client.firstName}{client.lastName ? ` ${client.lastName}` : ''}
-        </Text>
-        {client.phone ? (
-          <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Phone: </Text>{client.phone}</Text>
-        ) : null}
-        {client.email ? (
-          <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Email: </Text>{client.email}</Text>
-        ) : null}
-        {!client.phone && !client.email ? (
-          <Text style={[typography.caption, { marginTop: 4 }]}>No phone or email on file. Add them by editing this member.</Text>
-        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <Text style={[typography.body, { flex: 1 }]}>
+            <Text style={{ fontWeight: '700' }}>Name: </Text>
+            {client.firstName}{client.lastName ? ` ${client.lastName}` : ''}
+          </Text>
+          {!editContact ? (
+            <TouchableOpacity onPress={startEditContact} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>✏️ Edit</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {editContact ? (
+          <View style={{ marginTop: spacing.sm }}>
+            <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Phone</Text>
+            <TextInput style={styles.input} value={phoneInput} onChangeText={setPhoneInput} placeholder="(555) 123-4567" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+            <Text style={[typography.caption, { marginTop: spacing.sm, marginBottom: spacing.xs }]}>Email</Text>
+            <TextInput style={styles.input} value={emailInput} onChangeText={setEmailInput} placeholder="name@email.com" placeholderTextColor={colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
+            <View style={{ flexDirection: 'row', marginTop: spacing.sm }}>
+              <View style={{ flex: 1, marginRight: spacing.sm }}>
+                <Button title={contactSaving ? 'Saving…' : 'Save'} onPress={saveContact} disabled={contactSaving} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button title="Cancel" variant="secondary" onPress={() => setEditContact(false)} disabled={contactSaving} />
+              </View>
+            </View>
+          </View>
+        ) : (
+          <>
+            {client.phone ? (
+              <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Phone: </Text>{client.phone}</Text>
+            ) : null}
+            {client.email ? (
+              <Text style={[typography.body, { marginTop: 4 }]}><Text style={{ fontWeight: '700' }}>Email: </Text>{client.email}</Text>
+            ) : null}
+            {!client.phone && !client.email ? (
+              <Text style={[typography.caption, { marginTop: 4 }]}>No phone or email on file. Tap ✏️ Edit to add them.</Text>
+            ) : null}
+          </>
+        )}
         <View style={styles.chipRow}>
           {client.email ? <Chip icon="✉️" label={inviting ? 'Sending…' : 'Email invite'} onPress={emailInvite} /> : null}
           {client.phone ? <Chip icon="📲" label="Text invite" onPress={textInvite} /> : null}
@@ -426,9 +467,11 @@ export function ClientProfileScreen() {
         <Button title="Save membership fee" onPress={saveRent} />
       </Card>
 
-      {/* Membership agreements */}
-      <SectionTitle>Membership agreements</SectionTitle>
+      {/* Forms & Documents — one unified section: send agreements to sign,
+          assign forms, and store paperwork all in one place. */}
+      <SectionTitle>Forms &amp; Documents</SectionTitle>
       <Card>
+        <Text style={[typography.body, { fontWeight: '700', marginBottom: 2 }]}>Agreements to sign</Text>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Upload an agreement for {client.firstName} to review and sign. Signed copies appear here.
         </Text>
@@ -473,8 +516,9 @@ export function ClientProfileScreen() {
         </View>
       </Modal>
 
-      {/* Lease & intake form templates / custom */}
-      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
+      {/* Lease & intake forms + document storage — same "Forms & Documents" section. */}
+      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
+      <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
 
       {/* Curfew check-ins */}
       <CurfewManager individualId={id} memberName={client.firstName} />
@@ -536,9 +580,6 @@ export function ClientProfileScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Document storage */}
-      <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} />
 
       {/* Meeting check-ins (staff view) */}
       <SectionTitle>Meeting check-ins</SectionTitle>

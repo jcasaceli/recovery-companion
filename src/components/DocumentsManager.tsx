@@ -23,7 +23,7 @@ function iconFor(mime?: string, name?: string) {
 
 /** Staff: store and review documents (PDFs, Word docs, photos) on a resident's
  *  file. Files live in a private Storage bucket; residents can view their own. */
-export function DocumentsManager({ individualId, orgId, memberName }: { individualId: string; orgId?: string; memberName?: string }) {
+export function DocumentsManager({ individualId, orgId, memberName, hideHeader }: { individualId: string; orgId?: string; memberName?: string; hideHeader?: boolean }) {
   const [docs, setDocs] = useState<Document[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [title, setTitle] = useState('');
@@ -104,7 +104,7 @@ export function DocumentsManager({ individualId, orgId, memberName }: { individu
 
   return (
     <>
-      <SectionTitle>Documents</SectionTitle>
+      {hideHeader ? null : <SectionTitle>Documents</SectionTitle>}
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Store {memberName ? `${memberName}’s` : 'this resident’s'} paperwork — PDFs, Word docs, IDs, insurance, house rules. They can view these too.
