@@ -39,6 +39,7 @@ export function SettingsScreen() {
   const [mgrOpen, setMgrOpen] = useState(false);
   const [mgrName, setMgrName] = useState('');
   const [mgrEmail, setMgrEmail] = useState('');
+  const [mgrPhone, setMgrPhone] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
   const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
   const [notifyActivity, setNotifyActivity] = useState(true);
@@ -117,12 +118,12 @@ export function SettingsScreen() {
   };
 
   const addMgr = async () => {
-    if (!mgrName.trim() || !mgrEmail.trim()) return;
+    if (!mgrName.trim() || !mgrEmail.trim() || !mgrPhone.trim()) return;
     setMgrBusy(true);
     try {
-      const r = await addManager(mgrName.trim(), mgrEmail.trim());
+      const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim());
       setNewCreds({ email: r.email, password: r.password });
-      setMgrOpen(false); setMgrName(''); setMgrEmail('');
+      setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone('');
       loadManagers();
     } catch (e: any) {
       Alert.alert('Could not add manager', e?.message ?? 'Try again.');
@@ -430,7 +431,8 @@ export function SettingsScreen() {
             </Text>
             <TextInput style={styles.input} value={mgrName} onChangeText={setMgrName} placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={mgrEmail} onChangeText={setMgrEmail} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
-            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
+            <TextInput style={styles.input} value={mgrPhone} onChangeText={setMgrPhone} placeholder="Phone number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim() || !mgrPhone.trim()} />
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
