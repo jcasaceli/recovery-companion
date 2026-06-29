@@ -59,6 +59,10 @@ interface AuthContextValue {
   verifySmsOtp: (phone: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** True when the app was opened via a password-reset link — show the
+   *  "set a new password" screen instead of silently logging the user in. */
+  recovery: boolean;
+  completeRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -67,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(isSupabaseConfigured ? 'loading' : 'local');
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [recovery, setRecovery] = useState(false);
 
   const loadProfile = async (attempt = 0) => {
     try {
@@ -114,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (access_token && refresh_token && supabase) {
             await supabase.auth.setSession({ access_token, refresh_token });
           }
+          // A reset link carries type=recovery — prompt for a new password
+          // instead of silently dropping the user into the app.
+          if (p.get('type') === 'recovery') setRecovery(true);
         } catch (e) {
           console.warn('[auth] hash session adopt failed', e);
         }
@@ -128,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       setStatus(s ? 'signedIn' : 'signedOut');
+      if (_e === 'PASSWORD_RECOVERY') setRecovery(true);
       if (s) loadProfile();
       else setProfile(null);
     });
@@ -154,8 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifySmsOtp: (phone, token) => dbApi.verifySmsOtp(phone, token).then(() => {}),
       signOut: () => dbApi.signOut(),
       refreshProfile: loadProfile,
+      recovery,
+      completeRecovery: () => setRecovery(false),
     }),
-    [status, session, profile],
+    [status, session, profile, recovery],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

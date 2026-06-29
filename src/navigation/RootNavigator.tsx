@@ -7,6 +7,7 @@ import { colors } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { AuthScreen } from '../screens/AuthScreen';
+import { SetPasswordScreen } from '../screens/SetPasswordScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SobrietyClockScreen } from '../screens/SobrietyClockScreen';
 import { NightlyReviewScreen } from '../screens/NightlyReviewScreen';
@@ -97,6 +98,9 @@ export function RootNavigator() {
   // Cloud mode (Supabase configured): gate on authentication.
   if (auth.configured) {
     if (auth.status === 'loading') return null;
+    // Arrived via a password-reset link: force the "set a new password" screen
+    // even though the link already created a session.
+    if (auth.recovery) return <SetPasswordScreen />;
     if (auth.status === 'signedOut') return <AuthScreen />;
     // Facilitators get an admin console (Clients / Payments / Resources /
     // Account) until they open a client, at which point they enter its app.
