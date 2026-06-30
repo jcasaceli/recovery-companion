@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -11,6 +11,7 @@ import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
 import { ordinal } from '../utils/format';
+import { toCsv, downloadCsv, pickCsvText, parseCsv, rowsToMembers } from '../utils/csv';
 
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : 'No fee set';
@@ -67,6 +68,48 @@ export function ClientsScreen() {
     completed: sourceClients.filter((c) => c.status === 'completed').length,
   };
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
+
+  const [importing, setImporting] = useState(false);
+  const onWeb = Platform.OS === 'web';
+
+  const exportMembers = () => {
+    const headers = ['First Name', 'Last Name', 'Phone', 'Email', 'House', 'Status', 'Level of Care', 'Monthly Fee', 'Rent Due Day'];
+    const rows = clients.map((c) => [
+      c.firstName, c.lastName ?? '', c.phone ?? '', c.email ?? '',
+      houseLabel(c.houseId) ?? c.houseName ?? '',
+      c.status === 'in_care' ? 'In Care' : 'Completed',
+      c.levelOfCare ?? '',
+      c.monthlyRentCents != null ? (c.monthlyRentCents / 100).toFixed(2) : '',
+      c.rentDueDay ?? '',
+    ]);
+    try {
+      downloadCsv(`members-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
+    } catch (e: any) { Alert.alert('Export', e?.message ?? 'Could not export.'); }
+  };
+
+  const importMembers = async () => {
+    try {
+      const text = await pickCsvText();
+      if (!text) return;
+      const members = rowsToMembers(parseCsv(text));
+      if (!members.length) { Alert.alert('Nothing to import', 'No names were found. Make sure there is a name column.'); return; }
+      const go = async () => {
+        setImporting(true);
+        let ok = 0; let fail = 0;
+        for (const m of members) {
+          try { await createClient({ firstName: m.firstName, lastName: m.lastName, phone: m.phone, email: m.email, houseId: addHouseId }); ok++; }
+          catch { fail++; }
+        }
+        await reloadCloud();
+        setImporting(false);
+        Alert.alert('Import complete ✅', `Added ${ok} member${ok === 1 ? '' : 's'}${fail ? ` · ${fail} failed` : ''}.`);
+      };
+      Alert.alert('Import members', `Found ${members.length} member${members.length === 1 ? '' : 's'} to add. Continue?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Import', onPress: go },
+      ]);
+    } catch (e: any) { Alert.alert('Import', e?.message ?? 'Could not read that file.'); }
+  };
 
   const add = async () => {
     if (!firstName.trim()) return;
@@ -142,7 +185,21 @@ export function ClientsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {locked ? <Paywall onChanged={reloadCloud} /> : null}
-        {!locked && !selectMode && !adding ? <Button title="+ Add member" onPress={() => setAdding(true)} /> : null}
+        {!locked && !selectMode && !adding ? (
+          <>
+            <Button title="+ Add member" onPress={() => setAdding(true)} />
+            {onWeb ? (
+              <View style={styles.ioRow}>
+                <View style={{ flex: 1, marginRight: spacing.sm }}>
+                  <Button title={importing ? 'Importing…' : '⬆️ Import CSV'} variant="secondary" onPress={importMembers} disabled={importing} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button title="⬇️ Export CSV" variant="secondary" onPress={exportMembers} disabled={!clients.length} />
+                </View>
+              </View>
+            ) : null}
+          </>
+        ) : null}
 
         {adding ? (
           <Card>
@@ -286,6 +343,7 @@ const styles = StyleSheet.create({
   filterText: { color: colors.textSecondary, fontWeight: '600', fontSize: 13 },
   filterTextActive: { color: colors.textInverse },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  ioRow: { flexDirection: 'row', marginTop: spacing.sm },
   empty: { ...typography.bodySecondary, textAlign: 'center', marginTop: spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.card },
   check: { fontSize: 22, marginRight: spacing.md },
