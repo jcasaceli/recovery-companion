@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SignaturePad } from './SignaturePad';
 import { colors, spacing, radius, typography } from '../theme';
-import { decorateAgreementHtml, agreementFieldLabel } from '../utils/agreementFields';
+import { decorateAgreementHtml, agreementFieldLabel, isFieldFilled } from '../utils/agreementFields';
+
+const kbType = (t: string): any => (t === 'number' ? 'number-pad' : t === 'phone' ? 'phone-pad' : t === 'email' ? 'email-address' : 'default');
 
 /**
  * Web: render the rich-text agreement with its inline fields. In sign mode the
@@ -40,7 +42,10 @@ export function SignableAgreement({
     if (mode !== 'sign') return;
     const el = (e.target as any)?.closest?.('[data-sl-field]');
     if (!el) return;
-    open(el.getAttribute('data-sl-key'), el.getAttribute('data-sl-field'));
+    const key = el.getAttribute('data-sl-key');
+    const type = el.getAttribute('data-sl-field');
+    if (type === 'checkbox') { onChangeValue(key, isFieldFilled('checkbox', values[key]) ? '' : 'checked'); return; }
+    open(key, type);
   };
 
   return (
@@ -70,9 +75,10 @@ export function SignableAgreement({
                   style={styles.input}
                   value={text}
                   onChangeText={setText}
-                  placeholder={active.type === 'initials' ? 'ABC' : active.type === 'date' ? '2026-01-31' : 'Type here'}
+                  placeholder={active.type === 'initials' ? 'ABC' : active.type === 'date' ? '2026-01-31' : active.type === 'email' ? 'name@email.com' : active.type === 'phone' ? '(555) 123-4567' : 'Type here'}
                   placeholderTextColor={colors.textMuted}
-                  autoCapitalize={active.type === 'initials' ? 'characters' : 'sentences'}
+                  keyboardType={kbType(active.type)}
+                  autoCapitalize={active.type === 'initials' ? 'characters' : active.type === 'email' ? 'none' : 'sentences'}
                 />
               </>
             ) : null}

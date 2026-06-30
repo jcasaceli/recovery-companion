@@ -5,6 +5,8 @@ import { RichTextView } from './RichTextView';
 import { colors, spacing, radius, typography } from '../theme';
 import { parseAgreementFields, agreementFieldLabel, isFieldFilled } from '../utils/agreementFields';
 
+const kbType = (t: string): any => (t === 'number' ? 'number-pad' : t === 'phone' ? 'phone-pad' : t === 'email' ? 'email-address' : 'default');
+
 /**
  * Native fallback: render the agreement text, then list its fields below for the
  * resident to sign/fill (inline-in-document tapping is the web experience).
@@ -49,12 +51,16 @@ export function SignableAgreement({
               <TouchableOpacity
                 key={f.key}
                 style={[styles.fieldRow, filled && styles.fieldRowDone]}
-                onPress={() => mode === 'sign' && open(f.key, f.type)}
+                onPress={() => {
+                  if (mode !== 'sign') return;
+                  if (f.type === 'checkbox') { onChangeValue(f.key, filled ? '' : 'checked'); return; }
+                  open(f.key, f.type);
+                }}
                 disabled={mode !== 'sign'}
               >
                 <Text style={[typography.body, { flex: 1 }]}>{agreementFieldLabel(f.type)} {i + 1}</Text>
                 <Text style={{ fontWeight: '700', color: filled ? colors.success : colors.warning }}>
-                  {filled ? (f.type === 'signature' ? '✓ Signed' : String(values[f.key])) : (mode === 'sign' ? 'Tap to fill' : '—')}
+                  {filled ? (f.type === 'signature' ? '✓ Signed' : f.type === 'checkbox' ? '☑ Checked' : String(values[f.key])) : (mode === 'sign' ? 'Tap to fill' : '—')}
                 </Text>
               </TouchableOpacity>
             );
@@ -80,9 +86,10 @@ export function SignableAgreement({
                   style={styles.input}
                   value={text}
                   onChangeText={setText}
-                  placeholder={active.type === 'initials' ? 'ABC' : active.type === 'date' ? '2026-01-31' : 'Type here'}
+                  placeholder={active.type === 'initials' ? 'ABC' : active.type === 'date' ? '2026-01-31' : active.type === 'email' ? 'name@email.com' : active.type === 'phone' ? '(555) 123-4567' : 'Type here'}
                   placeholderTextColor={colors.textMuted}
-                  autoCapitalize={active.type === 'initials' ? 'characters' : 'sentences'}
+                  keyboardType={kbType(active.type)}
+                  autoCapitalize={active.type === 'initials' ? 'characters' : active.type === 'email' ? 'none' : 'sentences'}
                 />
               </>
             ) : null}

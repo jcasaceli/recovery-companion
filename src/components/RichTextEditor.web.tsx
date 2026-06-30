@@ -2,34 +2,32 @@ import React, { useEffect, useRef } from 'react';
 import { colors } from '../theme';
 
 /**
- * Word-style rich-text editor for the web CRM. Built on a contentEditable
- * surface + document.execCommand (no dependency). Supports font size,
- * bold/italic/underline, alignment, bullet & numbered lists, pasting from Word,
- * and inserting Signature / Initials / Date / Text fields the resident fills in
- * — by clicking a chip or dragging it onto the document.
+ * Word-style rich-text editor for the web CRM. contentEditable + execCommand
+ * (no dependency). Font size, bold/italic/underline, alignment, lists, paste
+ * from Word, and Signature/Initials/Date/Text fields you click or drag in.
  */
 
 const FIELD_TYPES: { type: string; label: string }[] = [
   { type: 'signature', label: '✍️ Signature' },
   { type: 'initials', label: '🅰️ Initials' },
-  { type: 'date', label: '📅 Date' },
   { type: 'text', label: '🔤 Text' },
+  { type: 'number', label: '🔢 Number' },
+  { type: 'date', label: '📅 Date' },
+  { type: 'phone', label: '📞 Phone' },
+  { type: 'email', label: '✉️ Email' },
+  { type: 'checkbox', label: '☑️ Checkbox' },
 ];
-
 const fieldLabel = (type: string) => FIELD_TYPES.find((f) => f.type === type)?.label || 'Field';
 
-/** Inline, non-editable token inserted into the document for a fillable field. */
 function fieldTokenHtml(type: string) {
   const key = `f_${type}_${Math.random().toString(36).slice(2, 8)}`;
   const style = 'display:inline-block;background:#FCE8A6;border:1px solid #E0B33A;border-radius:4px;padding:0 8px;margin:0 2px;font-weight:700;color:#7a5b00;';
   return `<span data-sl-field="${type}" data-sl-key="${key}" contenteditable="false" style="${style}">${fieldLabel(type)}</span>&nbsp;`;
 }
 
-// Small inline SVG icons so toolbar buttons render identically in every browser
-// (the previous unicode arrows showed as missing-glyph boxes).
-const Icon = ({ d, lines }: { d?: string; lines?: [number, number][] }) => (
+const Icon = ({ lines }: { lines: [number, number][] }) => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={colors.textPrimary} strokeWidth="1.6" strokeLinecap="round">
-    {lines ? lines.map(([x1, x2], i) => <line key={i} x1={x1} y1={3 + i * 3} x2={x2} y2={3 + i * 3} />) : <path d={d} />}
+    {lines.map(([x1, x2], i) => <line key={i} x1={x1} y1={3 + i * 3} x2={x2} y2={3 + i * 3} />)}
   </svg>
 );
 const AlignLeft = () => <Icon lines={[[2, 14], [2, 9], [2, 12], [2, 8]]} />;
@@ -52,6 +50,8 @@ export function RichTextEditor({
   placeholder?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const lastRange = useRef<Range | null>(null);
+  const dragType = useRef<string | null>(null);
 
   useEffect(() => {
     if (ref.current && valueHtml && ref.current.innerHTML !== valueHtml) {
@@ -62,35 +62,77 @@ export function RichTextEditor({
 
   const sync = () => { if (ref.current) onChangeHtml(ref.current.innerHTML); };
 
-  const exec = (cmd: string, value?: string) => {
-    try { (document as any).execCommand(cmd, false, value); } catch {}
+  // Remember where the caret was inside the editor so a toolbar/chip click can
+  // act on that spot even though clicking the button moves focus away.
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && ref.current && ref.current.contains(sel.anchorNode)) {
+      lastRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const restoreSelection = () => {
     ref.current?.focus();
-    sync();
+    if (lastRange.current) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(lastRange.current);
+    }
   };
 
-  const insertHtml = (html: string) => {
-    ref.current?.focus();
+  const doInsert = (html: string) => {
     try { (document as any).execCommand('insertHTML', false, html); } catch {}
     sync();
   };
+  const exec = (cmd: string, value?: string) => {
+    restoreSelection();
+    try { (document as any).execCommand(cmd, false, value); } catch {}
+    sync();
+  };
+  const insertAtCaret = (html: string) => { restoreSelection(); doInsert(html); };
 
+  const clearFmt = () => {
+    ref.current?.focus();
+    const sel = window.getSelection();
+    // If nothing is selected, clear the whole document so the button always does something.
+    if (ref.current && (!sel || sel.isCollapsed)) {
+      const range = document.createRange();
+      range.selectNodeContents(ref.current);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    } else {
+      restoreSelection();
+    }
+    try {
+      (document as any).execCommand('removeFormat');
+      (document as any).execCommand('justifyLeft');
+    } catch {}
+    sync();
+  };
+
+  // Keep the caret-preserving behaviour for TOOLBAR buttons (they format the
+  // selection) but NOT for draggable chips — preventing mousedown there blocks
+  // the native drag from starting.
   const hold = (e: any) => e.preventDefault();
 
   const onDrop = (e: any) => {
-    const type = e.dataTransfer?.getData('text/sl-field');
+    const type = e.dataTransfer?.getData('text/sl-field') || dragType.current;
     if (!type) return;
     e.preventDefault();
-    // Move the caret to the drop point, then insert the field there.
+    dragType.current = null;
     try {
       const doc: any = document;
-      const range = doc.caretRangeFromPoint ? doc.caretRangeFromPoint(e.clientX, e.clientY) : null;
+      const range = doc.caretRangeFromPoint
+        ? doc.caretRangeFromPoint(e.clientX, e.clientY)
+        : (doc.caretPositionFromPoint ? (() => { const p = doc.caretPositionFromPoint(e.clientX, e.clientY); const r = doc.createRange(); r.setStart(p.offsetNode, p.offset); r.collapse(true); return r; })() : null);
       if (range) {
         const sel = window.getSelection();
         sel?.removeAllRanges();
         sel?.addRange(range);
+      } else {
+        ref.current?.focus();
       }
-    } catch {}
-    insertHtml(fieldTokenHtml(type));
+    } catch { ref.current?.focus(); }
+    doInsert(fieldTokenHtml(type));
   };
 
   const Btn = ({ children, onPress, title, bold }: { children: React.ReactNode; onPress: () => void; title: string; bold?: boolean }) => (
@@ -120,19 +162,19 @@ export function RichTextEditor({
         <span style={divider} />
         <Btn title="Undo" onPress={() => exec('undo')}><UndoIcon /></Btn>
         <Btn title="Redo" onPress={() => exec('redo')}><RedoIcon /></Btn>
-        <Btn title="Clear formatting" onPress={() => exec('removeFormat')}>Clear</Btn>
+        <Btn title="Clear formatting" onPress={clearFmt}>Clear</Btn>
       </div>
 
       <div style={paletteBar}>
-        <span style={{ fontSize: 12, color: colors.textSecondary, fontWeight: 700, marginRight: 4 }}>Insert / drag a field →</span>
+        <span style={{ fontSize: 12, color: colors.textSecondary, fontWeight: 700, marginRight: 4 }}>Drag a field into the document, or click to insert →</span>
         {FIELD_TYPES.map((f) => (
           <span
             key={f.type}
             draggable
-            onDragStart={(e) => { e.dataTransfer.setData('text/sl-field', f.type); e.dataTransfer.effectAllowed = 'copy'; }}
-            onMouseDown={hold}
-            onClick={() => insertHtml(fieldTokenHtml(f.type))}
-            title={`Click to insert, or drag onto the document`}
+            onDragStart={(e) => { dragType.current = f.type; try { e.dataTransfer.setData('text/sl-field', f.type); e.dataTransfer.effectAllowed = 'copy'; } catch {} }}
+            onDragEnd={() => { dragType.current = null; }}
+            onClick={() => insertAtCaret(fieldTokenHtml(f.type))}
+            title="Drag onto the document, or click to insert at the cursor"
             style={chip}
           >
             {f.label}
@@ -146,6 +188,9 @@ export function RichTextEditor({
         suppressContentEditableWarning
         data-placeholder={placeholder || 'Type or paste your agreement here…'}
         onInput={sync}
+        onKeyUp={saveSelection}
+        onMouseUp={saveSelection}
+        onBlur={saveSelection}
         onDrop={onDrop}
         onDragOver={(e) => e.preventDefault()}
         style={editor}

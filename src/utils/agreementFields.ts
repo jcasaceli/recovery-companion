@@ -34,14 +34,18 @@ export function agreementFieldLabel(type: string): string {
     case 'signature': return '✍️ Signature';
     case 'initials': return '🅰️ Initials';
     case 'date': return '📅 Date';
+    case 'number': return '🔢 Number';
+    case 'phone': return '📞 Phone';
+    case 'email': return '✉️ Email';
+    case 'checkbox': return '☑️ Checkbox';
     default: return '🔤 Text';
   }
 }
 
 export function isFieldFilled(type: string, value: any): boolean {
-  return type === 'signature'
-    ? !!(value && Array.isArray(value.paths) && value.paths.length)
-    : !!(value && String(value).trim());
+  if (type === 'signature') return !!(value && Array.isArray(value.paths) && value.paths.length);
+  if (type === 'checkbox') return value === 'checked' || value === true;
+  return !!(value && String(value).trim());
 }
 
 function escapeHtml(s: string) {
@@ -59,6 +63,8 @@ export function decorateAgreementHtml(html: string, values: Record<string, any>,
     const filled = isFieldFilled(type, val);
     const inner = type === 'signature'
       ? (filled ? '✓ Signed' : '✍️ Sign here')
+      : type === 'checkbox'
+      ? (filled ? '☑ Checked' : '☐ Check')
       : (filled ? escapeHtml(String(val)) : agreementFieldLabel(type));
     const bg = filled ? '#CDE9D6' : '#FCE8A6';
     const bd = filled ? '#5FA877' : '#E0B33A';
