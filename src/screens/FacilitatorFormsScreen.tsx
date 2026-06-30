@@ -6,8 +6,9 @@ import { colors, spacing, radius, typography } from '../theme';
 import {
   listFormTemplates, createFormTemplate, deleteFormTemplate, assignForm, listOrgFormResponses,
   listFacilitatorIndividuals, getMyOrg, createAgreement,
-  FormField, FormFieldType, FormTemplate, FormResponse,
+  FormField, FormFieldType, FormTemplate, FormResponse, PlacedField,
 } from '../services/db';
+import { DocumentFieldEditor } from '../components/DocumentFieldEditor';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { HOUSE_FORMS } from '../content/houseForms';
 import { formatDateTime } from '../utils/format';
@@ -42,6 +43,7 @@ export function FacilitatorFormsScreen() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docTitle, setDocTitle] = useState('');
   const [pendingDoc, setPendingDoc] = useState<string | null>(null);
+  const [docFields, setDocFields] = useState<PlacedField[]>([]);
   // shared recipient selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
@@ -129,9 +131,9 @@ export function FacilitatorFormsScreen() {
     setBusy(true);
     try {
       for (const id of ids) {
-        await createAgreement({ orgId, individualId: id, title: docTitle.trim(), documentData: pendingDoc });
+        await createAgreement({ orgId, individualId: id, title: docTitle.trim(), documentData: pendingDoc, fields: docFields });
       }
-      setUploadOpen(false); setDocTitle(''); setPendingDoc(null); setSelected({});
+      setUploadOpen(false); setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({});
       Alert.alert('Sent ✅', `“${docTitle.trim()}” was sent to ${ids.length} resident${ids.length > 1 ? 's' : ''} to sign.`);
       load();
     } catch (e: any) { Alert.alert('Could not send', e?.message ?? 'Try again.'); }
@@ -166,7 +168,7 @@ export function FacilitatorFormsScreen() {
           <Button title="➕ New form" onPress={() => { setTitle(''); setFields([]); setBuilderOpen(true); }} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button title="⬆️ Upload document" variant="secondary" onPress={() => { setDocTitle(''); setPendingDoc(null); setSelected({}); setUploadOpen(true); }} />
+          <Button title="⬆️ Upload document" variant="secondary" onPress={() => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); }} />
         </View>
       </View>
 
@@ -276,15 +278,25 @@ export function FacilitatorFormsScreen() {
       <Modal visible={uploadOpen} transparent animationType="slide" onRequestClose={() => setUploadOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.modal}>
-            <Text style={typography.h3}>Upload a document</Text>
-            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, name it, and send it to residents to sign.</Text>
-            <Text style={styles.lbl}>Document name</Text>
-            <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Guest Agreement" placeholderTextColor={colors.textMuted} />
-            <View style={{ height: spacing.sm }} />
-            <Button title={pendingDoc ? '✅ File attached — choose another' : '📎 Choose photo / scan'} variant="secondary" onPress={pickDoc} />
-            <RecipientPicker />
-            <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendDoc} disabled={busy} />
-            <TouchableOpacity onPress={() => setUploadOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+            <ScrollView>
+              <Text style={typography.h3}>Upload a document</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, place signature fields on it, then send it to residents to sign.</Text>
+              <Text style={styles.lbl}>Document name</Text>
+              <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Guest Agreement" placeholderTextColor={colors.textMuted} />
+              <View style={{ height: spacing.sm }} />
+              <Button title={pendingDoc ? '✅ File attached — choose another' : '📎 Choose photo / scan'} variant="secondary" onPress={pickDoc} />
+
+              {pendingDoc ? (
+                <View style={{ marginTop: spacing.md }}>
+                  <Text style={[styles.lbl, { marginBottom: spacing.xs }]}>Place signature fields</Text>
+                  <DocumentFieldEditor imageUri={pendingDoc} fields={docFields} onChange={setDocFields} />
+                </View>
+              ) : null}
+
+              <RecipientPicker />
+              <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendDoc} disabled={busy} />
+              <TouchableOpacity onPress={() => setUploadOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>

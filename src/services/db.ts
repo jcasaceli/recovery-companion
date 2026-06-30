@@ -1095,6 +1095,16 @@ export async function listFlaggedIndividualIds(): Promise<string[]> {
 
 // ── Membership agreements ────────────────────────────────────────────────────
 
+/** A signature/initials/date/text box placed on the document by the facilitator.
+ *  x/y/w/h are fractions (0–1) of the document image so they scale on any screen. */
+export interface PlacedField {
+  key: string;
+  type: 'signature' | 'initials' | 'date' | 'text';
+  x: number; y: number; w: number; h: number;
+  label?: string;
+  required?: boolean;
+}
+
 export interface Agreement {
   id: string;
   individualId: string;
@@ -1106,6 +1116,8 @@ export interface Agreement {
   signedAt?: string;
   signedIp?: string;
   createdAt: string;
+  fields?: PlacedField[];           // signature boxes placed on the document
+  fieldValues?: Record<string, any>; // key -> { paths: string[] } | string
 }
 
 function mapAgreement(r: any): Agreement {
@@ -1120,6 +1132,8 @@ function mapAgreement(r: any): Agreement {
     signedAt: r.signed_at ?? undefined,
     signedIp: r.signed_ip ?? undefined,
     createdAt: r.created_at,
+    fields: r.fields ?? undefined,
+    fieldValues: r.field_values ?? undefined,
   };
 }
 
@@ -1129,13 +1143,18 @@ export async function createAgreement(input: {
   individualId: string;
   title: string;
   documentData?: string;
+  fields?: PlacedField[];
 }) {
-  const { error } = await db().from('agreements').insert({
+  const row: any = {
     org_id: input.orgId ?? null,
     individual_id: input.individualId,
     title: input.title,
     document_data: input.documentData ?? null,
-  });
+  };
+  // Only reference the `fields` column when placed fields are provided, so plain
+  // agreement uploads keep working even before migration 0040 is applied.
+  if (input.fields && input.fields.length) row.fields = input.fields;
+  const { error } = await db().from('agreements').insert(row);
   if (error) throw error;
 }
 
@@ -1185,6 +1204,34 @@ export async function listMyAgreements(): Promise<Agreement[]> {
   const me = await resolveMyIndividual();
   if (!me) return [];
   return listAgreements(me.individualId);
+}
+
+/** Member: sign an agreement that has placed fields. Stores each box's value
+ *  (signature strokes / typed text) plus the signer name, time, and IP. The
+ *  first signature box is also mirrored to signature_paths for list/legacy views. */
+export async function signAgreementWithFields(
+  id: string,
+  fieldValues: Record<string, any>,
+  signerName: string,
+  signedIp?: string,
+) {
+  // Mirror the first signature box into signature_paths for the summary view.
+  let primary: string[] | undefined;
+  for (const v of Object.values(fieldValues)) {
+    if (v && Array.isArray((v as any).paths) && (v as any).paths.length) { primary = (v as any).paths; break; }
+  }
+  const { error } = await db()
+    .from('agreements')
+    .update({
+      field_values: fieldValues,
+      signature_paths: primary ?? null,
+      signer_name: signerName,
+      signed_at: new Date().toISOString(),
+      signed_ip: signedIp ?? null,
+      status: 'signed',
+    })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 /** Member: sign an agreement. Stores the signature strokes + name + timestamp. */
