@@ -1,0 +1,69 @@
+// Inline fillable fields embedded in a rich-text agreement body (body_html).
+// The CRM editor inserts <span data-sl-field="signature" data-sl-key="..."> tokens;
+// these helpers read them back for rendering and signing.
+
+export interface InlineField { key: string; type: string }
+
+// Match a whole field span regardless of attribute order; pull field/key out
+// of each match separately (contentEditable can reorder attributes).
+const SPAN_RE = /<span\b[^>]*\bdata-sl-field=[^>]*>[\s\S]*?<\/span>/g;
+const attr = (frag: string, name: string) => {
+  const m = frag.match(new RegExp(`${name}="([^"]+)"`));
+  return m ? m[1] : '';
+};
+
+export function hasInlineFields(html?: string): boolean {
+  return !!html && /data-sl-field=/.test(html);
+}
+
+export function parseAgreementFields(html?: string): InlineField[] {
+  if (!html) return [];
+  const out: InlineField[] = [];
+  let m: RegExpExecArray | null;
+  SPAN_RE.lastIndex = 0;
+  while ((m = SPAN_RE.exec(html))) {
+    const type = attr(m[0], 'data-sl-field');
+    const key = attr(m[0], 'data-sl-key');
+    if (type && key) out.push({ type, key });
+  }
+  return out;
+}
+
+export function agreementFieldLabel(type: string): string {
+  switch (type) {
+    case 'signature': return '✍️ Signature';
+    case 'initials': return '🅰️ Initials';
+    case 'date': return '📅 Date';
+    default: return '🔤 Text';
+  }
+}
+
+export function isFieldFilled(type: string, value: any): boolean {
+  return type === 'signature'
+    ? !!(value && Array.isArray(value.paths) && value.paths.length)
+    : !!(value && String(value).trim());
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Rewrite each field token's contents/colour to reflect its current value, and
+ *  make it clickable in sign mode. Returns HTML ready for dangerouslySetInnerHTML. */
+export function decorateAgreementHtml(html: string, values: Record<string, any>, mode: 'sign' | 'read'): string {
+  return html.replace(SPAN_RE, (full) => {
+    const type = attr(full, 'data-sl-field');
+    const key = attr(full, 'data-sl-key');
+    if (!type || !key) return full;
+    const val = values?.[key];
+    const filled = isFieldFilled(type, val);
+    const inner = type === 'signature'
+      ? (filled ? '✓ Signed' : '✍️ Sign here')
+      : (filled ? escapeHtml(String(val)) : agreementFieldLabel(type));
+    const bg = filled ? '#CDE9D6' : '#FCE8A6';
+    const bd = filled ? '#5FA877' : '#E0B33A';
+    const col = filled ? '#1f5130' : '#7a5b00';
+    const cursor = mode === 'sign' ? 'pointer' : 'default';
+    return `<span data-sl-field="${type}" data-sl-key="${key}" contenteditable="false" style="display:inline-block;background:${bg};border:1px solid ${bd};border-radius:4px;padding:0 8px;margin:0 2px;font-weight:700;color:${col};cursor:${cursor};">${inner}</span>`;
+  });
+}

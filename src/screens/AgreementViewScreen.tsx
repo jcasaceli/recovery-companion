@@ -8,6 +8,8 @@ import { colors, spacing, radius, typography } from '../theme';
 import { getAgreement, signAgreement, signAgreementWithFields, Agreement, PlacedField } from '../services/db';
 import { labelFor } from '../components/DocumentFieldEditor';
 import { RichTextView } from '../components/RichTextView';
+import { SignableAgreement } from '../components/SignableAgreement';
+import { hasInlineFields, parseAgreementFields, isFieldFilled } from '../utils/agreementFields';
 import { formatDateTime } from '../utils/format';
 
 /** Best-effort public IP for the signing audit trail. */
@@ -225,6 +227,63 @@ export function AgreementViewScreen() {
       </View>
     </Modal>
   );
+
+  // ── Rich-text agreement with inline fields: sign fields inside the document ───
+  if (hasInlineFields(agreement.bodyHtml)) {
+    const readOnly = agreement.status === 'signed' || !canSign;
+    const vals = readOnly ? (agreement.fieldValues ?? {}) : fieldValues;
+    const required = parseAgreementFields(agreement.bodyHtml).filter((f) => f.type === 'signature');
+    const allSigned = required.every((f) => isFieldFilled(f.type, fieldValues[f.key]));
+    const submitInline = async () => {
+      if (!name.trim()) { Alert.alert('Add your name', 'Type your full legal name.'); return; }
+      if (!allSigned) { Alert.alert('Sign every signature field', 'Tap each highlighted signature in the document.'); return; }
+      setBusy(true);
+      try {
+        const ip = await fetchIp();
+        await signAgreementWithFields(id, fieldValues, name.trim(), ip);
+        Alert.alert('Signed ✅', 'Your signed agreement was sent to your facilitator.');
+        nav.goBack();
+      } catch (e: any) { Alert.alert('Could not sign', e?.message ?? 'Please try again.'); }
+      finally { setBusy(false); }
+    };
+    return (
+      <SafeAreaView style={styles.screen} edges={['bottom']}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Card>
+            <Text style={[typography.h3, { marginBottom: spacing.sm }]}>{agreement.title}</Text>
+            <SignableAgreement
+              html={agreement.bodyHtml!}
+              mode={readOnly ? 'read' : 'sign'}
+              values={vals}
+              onChangeValue={(key, value) => setFieldValues((prev) => ({ ...prev, [key]: value }))}
+            />
+          </Card>
+          {readOnly ? (
+            agreement.status === 'signed' ? (
+              <Card style={styles.certCard}>
+                <View style={styles.certMeta}>
+                  <Text style={styles.certLabel}>Signed by</Text>
+                  <Text style={styles.certValue}>{agreement.signerName ?? 'resident'}</Text>
+                  {agreement.signedAt ? (<><Text style={styles.certLabel}>Date &amp; time</Text><Text style={styles.certValue}>{formatDateTime(agreement.signedAt)}</Text></>) : null}
+                  {agreement.signedIp ? (<><Text style={styles.certLabel}>IP address</Text><Text style={styles.certValue}>{agreement.signedIp}</Text></>) : null}
+                </View>
+              </Card>
+            ) : (
+              <Card><Text style={[typography.body, { color: colors.warning }]}>⏳ Awaiting the member's signature.</Text></Card>
+            )
+          ) : (
+            <Card>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Tap each highlighted field in the agreement to sign or fill it in.</Text>
+              <Text style={styles.label}>Your full legal name</Text>
+              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="First and last name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
+              <Button title={busy ? 'Signing…' : 'Finish & submit'} onPress={submitInline} disabled={busy} />
+              <Text style={styles.fine}>Your signature is recorded with the date, time, and IP address you signed from.</Text>
+            </Card>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   // ── Placed-field documents: sign each box in place ───────────────────────────
   if (hasFields) {
