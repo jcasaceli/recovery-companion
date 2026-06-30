@@ -1110,6 +1110,7 @@ export interface Agreement {
   individualId: string;
   title: string;
   documentData?: string;       // base64 data URI of the uploaded document photo
+  bodyHtml?: string;           // rich-text agreement body authored in the CRM editor
   status: 'pending' | 'signed';
   signaturePaths?: string[];   // SVG path strings making up the signature
   signerName?: string;
@@ -1126,6 +1127,7 @@ function mapAgreement(r: any): Agreement {
     individualId: r.individual_id,
     title: r.title,
     documentData: r.document_data ?? undefined,
+    bodyHtml: r.body_html ?? undefined,
     status: (r.status ?? 'pending') as 'pending' | 'signed',
     signaturePaths: r.signature_paths ?? undefined,
     signerName: r.signer_name ?? undefined,
@@ -1143,6 +1145,7 @@ export async function createAgreement(input: {
   individualId: string;
   title: string;
   documentData?: string;
+  bodyHtml?: string;
   fields?: PlacedField[];
 }) {
   const row: any = {
@@ -1154,6 +1157,7 @@ export async function createAgreement(input: {
   // Only reference the `fields` column when placed fields are provided, so plain
   // agreement uploads keep working even before migration 0040 is applied.
   if (input.fields && input.fields.length) row.fields = input.fields;
+  if (input.bodyHtml) row.body_html = input.bodyHtml;
   const { error } = await db().from('agreements').insert(row);
   if (error) throw error;
 }

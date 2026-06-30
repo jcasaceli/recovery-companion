@@ -9,6 +9,7 @@ import {
   FormField, FormFieldType, FormTemplate, FormResponse, PlacedField,
 } from '../services/db';
 import { DocumentFieldEditor } from '../components/DocumentFieldEditor';
+import { RichTextEditor } from '../components/RichTextEditor';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { HOUSE_FORMS } from '../content/houseForms';
 import { formatDateTime } from '../utils/format';
@@ -44,6 +45,10 @@ export function FacilitatorFormsScreen() {
   const [docTitle, setDocTitle] = useState('');
   const [pendingDoc, setPendingDoc] = useState<string | null>(null);
   const [docFields, setDocFields] = useState<PlacedField[]>([]);
+  // Write-agreement (rich text) modal
+  const [writeOpen, setWriteOpen] = useState(false);
+  const [agrTitle, setAgrTitle] = useState('');
+  const [agrHtml, setAgrHtml] = useState('');
   // shared recipient selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
@@ -140,6 +145,23 @@ export function FacilitatorFormsScreen() {
     finally { setBusy(false); }
   };
 
+  const confirmSendWritten = async () => {
+    const ids = recipientIds();
+    if (!agrTitle.trim()) { Alert.alert('Name the agreement', 'Give it a title.'); return; }
+    if (!agrHtml.trim()) { Alert.alert('Write the agreement', 'Add the agreement text.'); return; }
+    if (!ids.length) { Alert.alert('Pick residents', 'Select at least one resident.'); return; }
+    setBusy(true);
+    try {
+      for (const id of ids) {
+        await createAgreement({ orgId, individualId: id, title: agrTitle.trim(), bodyHtml: agrHtml });
+      }
+      setWriteOpen(false); setAgrTitle(''); setAgrHtml(''); setSelected({});
+      Alert.alert('Sent ✅', `“${agrTitle.trim()}” was sent to ${ids.length} resident${ids.length > 1 ? 's' : ''} to read and sign.`);
+      load();
+    } catch (e: any) { Alert.alert('Could not send', e?.message ?? 'Try again.'); }
+    finally { setBusy(false); }
+  };
+
   const RecipientPicker = () => (
     <View style={{ maxHeight: 240, marginVertical: spacing.sm }}>
       <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Send to</Text>
@@ -164,10 +186,13 @@ export function FacilitatorFormsScreen() {
       <ScreenTitle title="Forms" subtitle="Build forms, collect signatures, and send documents to residents." />
 
       <View style={styles.actionRow}>
-        <View style={{ flex: 1, marginRight: spacing.sm }}>
-          <Button title="➕ New form" onPress={() => { setTitle(''); setFields([]); setBuilderOpen(true); }} />
+        <View style={{ flex: 1, marginRight: spacing.sm, marginBottom: spacing.sm }}>
+          <Button title="✍️ Write agreement" onPress={() => { setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); }} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginBottom: spacing.sm }}>
+          <Button title="➕ New form" variant="secondary" onPress={() => { setTitle(''); setFields([]); setBuilderOpen(true); }} />
+        </View>
+        <View style={{ flexBasis: '100%' }}>
           <Button title="⬆️ Upload document" variant="secondary" onPress={() => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); }} />
         </View>
       </View>
@@ -300,12 +325,31 @@ export function FacilitatorFormsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Write agreement (rich text) modal ────────────────────────────────── */}
+      <Modal visible={writeOpen} transparent animationType="slide" onRequestClose={() => setWriteOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={[styles.modal, { maxWidth: 760, alignSelf: 'center', width: '100%' }]}>
+            <ScrollView>
+              <Text style={typography.h3}>Write an agreement</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Format the text, or paste from Word, then send it to residents to read and sign.</Text>
+              <Text style={styles.lbl}>Title</Text>
+              <TextInput style={styles.input} value={agrTitle} onChangeText={setAgrTitle} placeholder="e.g. House Membership Agreement" placeholderTextColor={colors.textMuted} />
+              <View style={{ height: spacing.sm }} />
+              <RichTextEditor valueHtml={agrHtml} onChangeHtml={setAgrHtml} placeholder="Type or paste your agreement here…" />
+              <RecipientPicker />
+              <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendWritten} disabled={busy} />
+              <TouchableOpacity onPress={() => setWriteOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  actionRow: { flexDirection: 'row', marginBottom: spacing.sm },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   rowCard: { flexDirection: 'row', alignItems: 'center' },
   lbl: { ...typography.bodySecondary, fontWeight: '600', marginBottom: spacing.xs },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary },

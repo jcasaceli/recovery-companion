@@ -7,6 +7,7 @@ import { SignaturePad, SignatureView } from '../components/SignaturePad';
 import { colors, spacing, radius, typography } from '../theme';
 import { getAgreement, signAgreement, signAgreementWithFields, Agreement, PlacedField } from '../services/db';
 import { labelFor } from '../components/DocumentFieldEditor';
+import { RichTextView } from '../components/RichTextView';
 import { formatDateTime } from '../utils/format';
 
 /** Best-effort public IP for the signing audit trail. */
@@ -105,7 +106,9 @@ export function AgreementViewScreen() {
   const Document = (
     <Card>
       <Text style={[typography.h3, { marginBottom: spacing.sm }]}>{agreement.title}</Text>
-      {agreement.documentData ? (
+      {agreement.bodyHtml ? (
+        <RichTextView html={agreement.bodyHtml} />
+      ) : agreement.documentData ? (
         <>
           <TouchableOpacity activeOpacity={0.9} onPress={() => setViewer(true)}>
             <Image source={{ uri: agreement.documentData }} style={styles.doc} resizeMode="contain" />
