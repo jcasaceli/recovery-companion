@@ -6,7 +6,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -72,19 +72,43 @@ export function ClientsScreen() {
   const [importing, setImporting] = useState(false);
   const onWeb = Platform.OS === 'web';
 
-  const exportMembers = () => {
-    const headers = ['First Name', 'Last Name', 'Phone', 'Email', 'House', 'Status', 'Level of Care', 'Monthly Fee', 'Rent Due Day'];
-    const rows = clients.map((c) => [
-      c.firstName, c.lastName ?? '', c.phone ?? '', c.email ?? '',
-      houseLabel(c.houseId) ?? c.houseName ?? '',
-      c.status === 'in_care' ? 'In Care' : 'Completed',
-      c.levelOfCare ?? '',
-      c.monthlyRentCents != null ? (c.monthlyRentCents / 100).toFixed(2) : '',
-      c.rentDueDay ?? '',
-    ]);
+  const [exporting, setExporting] = useState(false);
+  const exportMembers = async () => {
+    setExporting(true);
     try {
+      // Full records + all-time meeting check-ins for a rich export.
+      const [rowsRaw, checkins] = await Promise.all([
+        listFacilitatorIndividuals().catch(() => [] as any[]),
+        listOrgCheckins('1970-01-01T00:00:00Z').catch(() => [] as { individualId: string; createdAt: string }[]),
+      ]);
+      const byId: Record<string, { count: number; last?: string }> = {};
+      for (const c of checkins) {
+        const e = byId[c.individualId] || { count: 0 };
+        e.count += 1;
+        if (!e.last || c.createdAt > e.last) e.last = c.createdAt;
+        byId[c.individualId] = e;
+      }
+      const d = (s?: string) => (s ? String(s).slice(0, 10) : '');
+      const headers = [
+        'First Name', 'Last Name', 'Phone', 'Email', 'House', 'Bed', 'Status', 'Level of Care',
+        'Monthly Fee', 'Rent Due Day', 'Move-in Date', 'Discharge Date', 'Sobriety Date',
+        'Program', 'Meeting Check-ins', 'Last Check-in', 'Join Code',
+      ];
+      const rows = (rowsRaw as any[]).map((r) => {
+        const ci = byId[r.id] || { count: 0 };
+        return [
+          r.first_name ?? '', r.last_name ?? '', r.phone ?? '', r.email ?? '',
+          houseLabel(r.house_id) ?? r.house_name ?? '', r.bed_label ?? '',
+          r.status === 'completed' ? 'Completed' : 'In Care', r.level_of_care ?? '',
+          r.monthly_rent_cents != null ? (r.monthly_rent_cents / 100).toFixed(2) : '',
+          r.rent_due_day ?? '', d(r.move_in_date), d(r.discharge_date), d(r.sobriety_date),
+          r.program_name ?? '', ci.count, ci.last ? new Date(ci.last).toISOString().slice(0, 10) : '',
+          r.join_code ?? '',
+        ];
+      });
       downloadCsv(`members-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
     } catch (e: any) { Alert.alert('Export', e?.message ?? 'Could not export.'); }
+    finally { setExporting(false); }
   };
 
   const importMembers = async () => {
@@ -194,7 +218,7 @@ export function ClientsScreen() {
                   <Button title={importing ? 'Importing…' : '⬆️ Import CSV'} variant="secondary" onPress={importMembers} disabled={importing} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Button title="⬇️ Export CSV" variant="secondary" onPress={exportMembers} disabled={!clients.length} />
+                  <Button title={exporting ? 'Exporting…' : '⬇️ Export CSV'} variant="secondary" onPress={exportMembers} disabled={exporting || !clients.length} />
                 </View>
               </View>
             ) : null}

@@ -1858,8 +1858,18 @@ function mapNote(r: any): Note {
     id: r.id,
     body: r.body,
     visibility: r.visibility,
+    authorId: r.author_id ?? undefined,
     authorName: r.profiles?.full_name ?? 'Care team',
     authorRole: (r.profiles?.role as AppRole) ?? 'facilitator',
     createdAt: r.created_at,
   };
+}
+
+/** Owner/manager roster for the caller's org (to label who wrote a note). */
+export async function listOrgStaff(): Promise<{ profileId: string; isOwner: boolean }[]> {
+  const org = await getMyOrg();
+  if (!org?.id) return [];
+  const { data, error } = await db().from('org_members').select('profile_id, is_owner').eq('org_id', org.id);
+  if (error) return [];
+  return (data ?? []).map((r: any) => ({ profileId: r.profile_id, isOwner: !!r.is_owner }));
 }

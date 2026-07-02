@@ -217,6 +217,7 @@ export interface Note {
   id: string;
   body: string;
   visibility: NoteVisibility;
+  authorId?: string;
   authorName: string;
   authorRole: AppRole;
   /** ISO datetime string */

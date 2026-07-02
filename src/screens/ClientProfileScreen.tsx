@@ -6,7 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote,
+  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote, addNote, listOrgStaff,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient,
@@ -45,6 +45,10 @@ export function ClientProfileScreen() {
   const [houseId, setHouseId] = useState<string | undefined>(client?.houseId);
   const [paidThisMonth, setPaidThisMonth] = useState(0);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [staffNotes, setStaffNotes] = useState<any[]>([]);
+  const [ownerIds, setOwnerIds] = useState<Set<string>>(new Set());
+  const [noteText, setNoteText] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [pendingDoc, setPendingDoc] = useState<string | null>(null); // base64 data URI awaiting a title
   const [docTitle, setDocTitle] = useState('');
@@ -136,9 +140,36 @@ export function ClientProfileScreen() {
       const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
       setPaidThisMonth(sum);
     }).catch(() => {});
-    // Alerts the client flagged specifically for the facilitator.
-    listNotes(id).then((ns) => setAlerts(ns.filter((n) => n.visibility === 'facilitators'))).catch(() => {});
+    // Facilitator-only notes: split member-flagged alerts vs. staff notes.
+    reloadNotes();
+    listOrgStaff().then((s) => setOwnerIds(new Set(s.filter((x) => x.isOwner).map((x) => x.profileId)))).catch(() => {});
   }, [id]);
+
+  const reloadNotes = () => listNotes(id).then((ns) => {
+    const fac = ns.filter((n) => n.visibility === 'facilitators');
+    setAlerts(fac.filter((n) => n.authorRole === 'individual'));       // things the resident flagged
+    setStaffNotes(fac.filter((n) => n.authorRole !== 'individual'));    // owner/manager care notes
+  }).catch(() => {});
+
+  const addStaffNote = async () => {
+    if (!noteText.trim()) return;
+    setNoteSaving(true);
+    try {
+      await addNote(id, noteText.trim(), 'facilitators');
+      setNoteText('');
+      await reloadNotes();
+    } catch (e: any) { Alert.alert('Could not add note', e?.message ?? 'Try again.'); }
+    finally { setNoteSaving(false); }
+  };
+  const removeStaffNote = (noteId: string) => Alert.alert('Delete note?', 'This permanently removes the note.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: async () => { setStaffNotes((n) => n.filter((x) => x.id !== noteId)); try { await deleteNote(noteId); } catch {} } },
+  ]);
+  const noteAuthorLabel = (n: any) => {
+    const who = n.authorName || 'Staff';
+    if (n.authorRole !== 'facilitator') return who;
+    return `${n.authorId && ownerIds.has(n.authorId) ? 'Owner' : 'Manager'} ${who}`;
+  };
 
   const dismissAlert = (noteId: string) => {
     Alert.alert('Dismiss alert?', 'This removes it from the client’s profile.', [
@@ -442,6 +473,42 @@ export function ClientProfileScreen() {
         </Card>
       ) : null}
 
+      {/* Staff-only notes (owner/manager care coordination) — residents can't see these */}
+      <SectionTitle>Notes (staff only)</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Private notes for owners &amp; managers — {client.firstName} can’t see these. Newest first.
+        </Text>
+        <TextInput
+          style={[styles.input, { minHeight: 64, textAlignVertical: 'top', marginBottom: spacing.sm }]}
+          value={noteText}
+          onChangeText={setNoteText}
+          placeholder="Add a note (care coordination, updates, reminders)…"
+          placeholderTextColor={colors.textMuted}
+          multiline
+        />
+        <Button title={noteSaving ? 'Saving…' : '➕ Add note'} onPress={addStaffNote} disabled={noteSaving || !noteText.trim()} />
+        {staffNotes.length ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {staffNotes.map((n) => (
+              <View key={n.id} style={styles.noteRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>{n.body}</Text>
+                  <Text style={[typography.caption, { marginTop: 2 }]}>
+                    <Text style={{ fontWeight: '700', color: colors.primaryDark }}>{noteAuthorLabel(n)}</Text> · {formatDateTime(n.createdAt)}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => removeStaffNote(n.id)} hitSlop={8} style={{ marginLeft: spacing.sm }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 16 }}>🗑</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>No notes yet.</Text>
+        )}
+      </Card>
+
       {/* Positive UA flag — facilitators/managers only */}
       {hasPositiveFlag ? (
         <Card style={{ borderWidth: 1, borderColor: colors.crisis, backgroundColor: '#FDECEC' }}>
@@ -689,6 +756,7 @@ const styles = StyleSheet.create({
   meetingCount: { fontSize: 34, fontWeight: '800', color: colors.primary },
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   agreementRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
