@@ -49,6 +49,9 @@ export function FacilitatorFormsScreen() {
   const [writeOpen, setWriteOpen] = useState(false);
   const [agrTitle, setAgrTitle] = useState('');
   const [agrHtml, setAgrHtml] = useState('');
+  // Table view (OneStep-style)
+  const [tab, setTab] = useState<'forms' | 'submissions'>('forms');
+  const [sortAsc, setSortAsc] = useState(true);
   // shared recipient selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
@@ -181,72 +184,91 @@ export function FacilitatorFormsScreen() {
     </View>
   );
 
+  const openBuilder = () => { setTitle(''); setFields([]); setBuilderOpen(true); };
+  const openWrite = () => { setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
+  const openUpload = () => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); };
+  const countFor = (title: string) => responses.filter((r) => r.title === title).length;
+  const openSend = (f: { title: string; fields: FormField[]; templateId?: string }) => { setSelected({}); setSendForm(f); };
+  const del = (id: string, title: string) => Alert.alert('Delete form?', title, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFormTemplate(id).catch(() => {}); load(); } },
+  ]);
+  const formsList = [
+    ...templates.map((t) => ({ key: t.id, title: t.title, fields: t.fields, templateId: t.id as string | undefined, saved: true })),
+    ...starters.map((s, i) => ({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined as string | undefined, saved: false })),
+  ].sort((a, b) => (sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
+
   return (
     <Screen>
-      <ScreenTitle title="Forms" subtitle="Build forms, collect signatures, and send documents to residents." />
+      <View style={styles.headerRow}>
+        <Text style={styles.pageTitle}>Forms</Text>
+        <TouchableOpacity style={styles.newBtn} onPress={openBuilder}><Text style={styles.newBtnText}>＋ New form</Text></TouchableOpacity>
+      </View>
+      <View style={styles.subActions}>
+        <TouchableOpacity onPress={openWrite}><Text style={styles.subAction}>✍️ Write agreement</Text></TouchableOpacity>
+        <TouchableOpacity onPress={openUpload}><Text style={styles.subAction}>⬆️ Upload document</Text></TouchableOpacity>
+      </View>
 
-      <View style={styles.actionRow}>
-        <View style={{ flex: 1, marginRight: spacing.sm, marginBottom: spacing.sm }}>
-          <Button title="✍️ Write agreement" onPress={() => { setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); }} />
-        </View>
-        <View style={{ flex: 1, marginBottom: spacing.sm }}>
-          <Button title="➕ New form" variant="secondary" onPress={() => { setTitle(''); setFields([]); setBuilderOpen(true); }} />
-        </View>
-        <View style={{ flexBasis: '100%' }}>
-          <Button title="⬆️ Upload document" variant="secondary" onPress={() => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); }} />
-        </View>
+      <View style={styles.tabs}>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'forms' && styles.tabBtnActive]} onPress={() => setTab('forms')}>
+          <Text style={[styles.tabText, tab === 'forms' && styles.tabTextActive]}>Forms</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'submissions' && styles.tabBtnActive]} onPress={() => setTab('submissions')}>
+          <Text style={[styles.tabText, tab === 'submissions' && styles.tabTextActive]}>Submissions</Text>
+          <View style={styles.badge}><Text style={styles.badgeText}>{responses.length}</Text></View>
+        </TouchableOpacity>
       </View>
 
       {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null}
 
-      {/* Saved templates */}
-      {templates.length > 0 ? (
-        <>
-          <SectionTitle>Your forms</SectionTitle>
-          {templates.map((t) => (
-            <Card key={t.id} style={styles.rowCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={[typography.body, { fontWeight: '700' }]}>{t.title}</Text>
-                <Text style={typography.caption}>{t.fields.length} field{t.fields.length === 1 ? '' : 's'}</Text>
+      {tab === 'forms' ? (
+        <Card style={{ padding: 0 }}>
+          <View style={styles.thead}>
+            <TouchableOpacity style={styles.colTitle} onPress={() => setSortAsc((a) => !a)}>
+              <Text style={styles.th}>TITLE {sortAsc ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            <Text style={[styles.th, styles.colType]}>FIELDS</Text>
+            <Text style={[styles.th, styles.colRight]}>SUBMISSIONS</Text>
+          </View>
+          {formsList.map((f) => (
+            <View key={f.key} style={styles.tr}>
+              <View style={styles.colTitle}>
+                <Text style={styles.cellTitle}>{f.title}</Text>
+                {f.saved
+                  ? <TouchableOpacity onPress={() => del(f.templateId!, f.title)}><Text style={styles.delLink}>Delete</Text></TouchableOpacity>
+                  : <Text style={styles.starterTag}>Starter template</Text>}
               </View>
-              <TouchableOpacity onPress={() => { setSelected({}); setSendForm({ title: t.title, fields: t.fields, templateId: t.id }); }}>
-                <Pill label="Send" color={colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => Alert.alert('Delete form?', t.title, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFormTemplate(t.id).catch(() => {}); load(); } }])} style={{ marginLeft: spacing.sm }}>
-                <Text style={{ color: colors.textMuted, fontSize: 18 }}>🗑</Text>
-              </TouchableOpacity>
-            </Card>
+              <Text style={[styles.cell, styles.colType]}>{f.fields.length}</Text>
+              <View style={[styles.colRight, styles.rightCell]}>
+                <TouchableOpacity onPress={() => setTab('submissions')}><Text style={styles.link}>{countFor(f.title)} ›</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => openSend(f)} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+              </View>
+            </View>
           ))}
-        </>
-      ) : null}
-
-      {/* Starter templates */}
-      <SectionTitle>Starter templates</SectionTitle>
-      {starters.map((s, i) => (
-        <Card key={`starter_${i}`} style={styles.rowCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={[typography.body, { fontWeight: '700' }]}>{s.title}</Text>
-            <Text style={typography.caption}>{s.fields.length} field{s.fields.length === 1 ? '' : 's'}</Text>
-          </View>
-          <TouchableOpacity onPress={() => { setSelected({}); setSendForm({ title: s.title, fields: s.fields }); }}>
-            <Pill label="Send" color={colors.primary} />
-          </TouchableOpacity>
         </Card>
-      ))}
-
-      {/* Submissions */}
-      <SectionTitle>Submissions</SectionTitle>
-      {responses.length === 0 ? (
-        <Card><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></Card>
-      ) : responses.slice(0, 40).map((r) => (
-        <Card key={r.id} style={styles.rowCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={[typography.body, { fontWeight: '700' }]}>{r.title}</Text>
-            <Text style={typography.caption}>{nameOf(r.individualId)} · {formatDateTime(r.createdAt)}</Text>
+      ) : (
+        <Card style={{ padding: 0 }}>
+          <View style={styles.thead}>
+            <Text style={[styles.th, styles.colTitle]}>NAME</Text>
+            <Text style={[styles.th, styles.colType]}>FORM</Text>
+            <Text style={[styles.th, styles.colRight]}>STATUS</Text>
           </View>
-          <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+          {responses.length === 0 ? (
+            <View style={styles.tr}><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></View>
+          ) : responses.slice(0, 100).map((r) => (
+            <View key={r.id} style={styles.tr}>
+              <View style={styles.colTitle}>
+                <Text style={styles.cellTitle}>{nameOf(r.individualId)}</Text>
+                <Text style={typography.caption}>{formatDateTime(r.createdAt)}</Text>
+              </View>
+              <Text style={[styles.cell, styles.colType]} numberOfLines={1}>{r.title}</Text>
+              <View style={[styles.colRight, styles.rightCell]}>
+                <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+              </View>
+            </View>
+          ))}
         </Card>
-      ))}
+      )}
       <View style={{ height: spacing.xl }} />
 
       {/* ── New form builder modal ───────────────────────────────────────────── */}
@@ -350,6 +372,31 @@ export function FacilitatorFormsScreen() {
 
 const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: colors.textPrimary },
+  newBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 16 },
+  newBtnText: { color: colors.textInverse, fontWeight: '800', fontSize: 15 },
+  subActions: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.md },
+  subAction: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.md },
+  tabBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, marginRight: spacing.lg, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabBtnActive: { borderBottomColor: colors.primary },
+  tabText: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
+  tabTextActive: { color: colors.textPrimary },
+  badge: { backgroundColor: colors.surfaceAlt, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, marginLeft: 6 },
+  badgeText: { fontSize: 12, fontWeight: '800', color: colors.textSecondary },
+  thead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surfaceAlt },
+  th: { fontSize: 12, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.4 },
+  tr: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+  colTitle: { flex: 2, paddingRight: spacing.sm },
+  colType: { flex: 1, textAlign: 'center' },
+  colRight: { flex: 1.4 },
+  rightCell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  cell: { ...typography.body, color: colors.textSecondary },
+  cellTitle: { ...typography.body, fontWeight: '700', color: colors.textPrimary },
+  delLink: { color: colors.crisis, fontSize: 12, marginTop: 2 },
+  starterTag: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  link: { color: colors.primary, fontWeight: '700' },
   rowCard: { flexDirection: 'row', alignItems: 'center' },
   lbl: { ...typography.bodySecondary, fontWeight: '600', marginBottom: spacing.xs },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary },
