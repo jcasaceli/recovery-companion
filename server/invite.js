@@ -85,10 +85,11 @@ inviteRouter.post('/send', async (req, res) => {
     if (!ind.email) return res.json({ sent: false, reason: 'no email on file' });
     if (!RESEND_API_KEY) return res.json({ sent: false, reason: 'email not configured' });
 
-    // One master code per sober living (the org code). When the resident redeems
-    // it, the app smart-matches them to this record by email/phone.
+    // Prefer THIS member's personal code — redeeming it links to this exact
+    // record (no email/phone matching, so no duplicate). Fall back to the org
+    // master code only if the member has no personal code yet.
     const { data: org } = await admin.from('organizations').select('name, join_code').eq('id', ind.org_id).maybeSingle();
-    const joinCode = org?.join_code || ind.join_code || '';
+    const joinCode = ind.join_code || org?.join_code || '';
     const houseName = ind.house_name || org?.name || '';
 
     const r = await fetch('https://api.resend.com/emails', {
