@@ -285,9 +285,11 @@ export function SettingsScreen() {
         />
       </Card>
 
-      {isOwner ? (
+      {isFacilitator ? (
         <>
           <SectionTitle>Payments</SectionTitle>
+          {/* Stripe setup is owner-only — managers can do everything else here. */}
+          {isOwner ? (
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>Accept rent from residents</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
@@ -304,6 +306,7 @@ export function SettingsScreen() {
             />
             {connectBusy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
           </Card>
+          ) : null}
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>CashApp & Zelle</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
@@ -313,6 +316,7 @@ export function SettingsScreen() {
             <TextInput style={styles.input} value={zelle} onChangeText={setZelle} placeholder="Zelle email or phone" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
             <Button title="Save CashApp / Zelle" variant="secondary" onPress={saveHandles} />
           </Card>
+          {isOwner ? (
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
@@ -326,6 +330,7 @@ export function SettingsScreen() {
               <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
             )}
           </Card>
+          ) : null}
 
           {!subscriptionActive ? (
             <Card style={{ borderWidth: 1, borderColor: colors.primary }}>

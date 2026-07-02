@@ -28,15 +28,17 @@ async function getUser(req) {
   return data.user;
 }
 
-/** The org this user OWNS (created), or null if they're not an owner. */
+/** The org this user is staff of (owner OR manager), or null. Managers get the
+ *  same access as owners here; removing the owner is still blocked below. */
 async function ownerOrg(userId) {
-  const { data } = await supabaseAdmin
-    .from('organizations')
-    .select('*')
-    .eq('created_by', userId)
-    .order('created_at', { ascending: true })
+  const { data: m } = await supabaseAdmin
+    .from('org_members')
+    .select('org_id')
+    .eq('profile_id', userId)
     .limit(1)
     .maybeSingle();
+  if (!m?.org_id) return null;
+  const { data } = await supabaseAdmin.from('organizations').select('*').eq('id', m.org_id).maybeSingle();
   return data || null;
 }
 

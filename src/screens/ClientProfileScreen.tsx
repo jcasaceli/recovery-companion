@@ -6,7 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listMeetingCheckins, getMyOrg, listMyPayments, listNotes, deleteNote, addNote, listOrgStaff,
+  listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, listOrgStaff,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient,
@@ -23,6 +23,15 @@ import { DEMO_CLIENTS } from '../data/demo';
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
 }
+const PAY_METHODS: { value: 'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'; label: string }[] = [
+  { value: 'zelle', label: 'Zelle' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'cashapp', label: 'CashApp' },
+  { value: 'venmo', label: 'Venmo' },
+  { value: 'card', label: 'Card' },
+  { value: 'other', label: 'Other' },
+];
+
 function currentPeriod() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -49,6 +58,10 @@ export function ClientProfileScreen() {
   const [ownerIds, setOwnerIds] = useState<Set<string>>(new Set());
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'>('zelle');
+  const [paySaving, setPaySaving] = useState(false);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [pendingDoc, setPendingDoc] = useState<string | null>(null); // base64 data URI awaiting a title
   const [docTitle, setDocTitle] = useState('');
@@ -82,6 +95,24 @@ export function ClientProfileScreen() {
     setMoveInDate(r.move_in_date ?? '');
     setDischargeDate(r.discharge_date ?? undefined);
   }).catch(() => {});
+
+  const loadPayments = () => listMyPayments(id).then((pays: any[]) => {
+    const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
+    setPaidThisMonth(sum);
+  }).catch(() => {});
+
+  const recordPay = async () => {
+    const amt = Math.round(parseFloat(payAmount) * 100);
+    if (!amt || amt <= 0) { Alert.alert('Enter an amount', 'How much did they pay?'); return; }
+    setPaySaving(true);
+    try {
+      await recordPayment({ individualId: id, orgId: org?.id, amountCents: amt, method: payMethod, periodMonth: currentPeriod(), status: 'paid' });
+      setPayOpen(false); setPayAmount('');
+      await loadPayments();
+      Alert.alert('Payment recorded ✅', `$${(amt / 100).toFixed(2)} · ${PAY_METHODS.find((m) => m.value === payMethod)?.label ?? payMethod}`);
+    } catch (e: any) { Alert.alert('Could not record', e?.message ?? 'Try again.'); }
+    finally { setPaySaving(false); }
+  };
 
   const [uaTests, setUaTests] = useState<UATest[]>([]);
   const [uaOpen, setUaOpen] = useState(false);
@@ -136,10 +167,7 @@ export function ClientProfileScreen() {
     loadAgreements();
     loadUA();
     loadCrm();
-    listMyPayments(id).then((pays: any[]) => {
-      const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
-      setPaidThisMonth(sum);
-    }).catch(() => {});
+    loadPayments();
     // Facilitator-only notes: split member-flagged alerts vs. staff notes.
     reloadNotes();
     listOrgStaff().then((s) => setOwnerIds(new Set(s.filter((x) => x.isOwner).map((x) => x.profileId)))).catch(() => {});
@@ -400,6 +428,31 @@ export function ClientProfileScreen() {
         title={`${client.firstName}${client.lastName ? ` ${client.lastName}` : ''}`}
         subtitle={houseList.find((h) => h.id === houseId)?.name || client.houseName || 'Sober Living'}
       />
+
+      {/* Record a payment — first action on the profile */}
+      <Button title="💵 Record payment" onPress={() => { setPayAmount(''); setPayMethod('zelle'); setPayOpen(true); }} />
+      <View style={{ height: spacing.sm }} />
+
+      <Modal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Record a payment</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Log a payment {client.firstName} made this month.</Text>
+            <Text style={styles.label}>Amount ($)</Text>
+            <TextInput style={styles.input} value={payAmount} onChangeText={setPayAmount} placeholder="e.g. 800" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
+            <Text style={styles.label}>Method</Text>
+            <View style={styles.payMethods}>
+              {PAY_METHODS.map((m) => (
+                <TouchableOpacity key={m.value} onPress={() => setPayMethod(m.value)} style={[styles.payChip, payMethod === m.value && styles.payChipOn]}>
+                  <Text style={[styles.payChipText, payMethod === m.value && { color: colors.textInverse }]}>{m.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Button title={paySaving ? 'Saving…' : 'Record payment'} onPress={recordPay} disabled={paySaving || !payAmount.trim()} />
+            <TouchableOpacity onPress={() => setPayOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Contact info + quick actions */}
       <SectionTitle>Contact</SectionTitle>
@@ -757,6 +810,10 @@ const styles = StyleSheet.create({
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  payMethods: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
+  payChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, marginBottom: spacing.sm },
+  payChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  payChipText: { fontWeight: '700', color: colors.textSecondary },
   dismissBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   agreementRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
