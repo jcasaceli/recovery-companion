@@ -47,7 +47,7 @@ function fieldsToHtml(fields: FormField[]): string {
   }).join('');
 }
 
-interface Resident { id: string; first_name?: string; last_name?: string }
+interface Resident { id: string; first_name?: string; last_name?: string; status?: string }
 
 export function FacilitatorFormsScreen() {
   const { width } = useWindowDimensions();
@@ -236,13 +236,15 @@ export function FacilitatorFormsScreen() {
     finally { setBusy(false); }
   };
 
+  // Only current (in-care) residents can receive forms — hide discharged ones.
+  const activeResidents = residents.filter((r) => (r.status ?? 'in_care') !== 'completed');
   const RecipientPicker = () => (
     <View style={{ maxHeight: 240, marginVertical: spacing.sm }}>
       <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Send to</Text>
       <ScrollView style={styles.pickerBox}>
-        {residents.length === 0 ? (
-          <Text style={[typography.caption, { padding: spacing.sm }]}>No residents yet.</Text>
-        ) : residents.map((r) => {
+        {activeResidents.length === 0 ? (
+          <Text style={[typography.caption, { padding: spacing.sm }]}>No current residents.</Text>
+        ) : activeResidents.map((r) => {
           const on = !!selected[r.id];
           return (
             <TouchableOpacity key={r.id} style={styles.recipRow} onPress={() => setSelected((s) => ({ ...s, [r.id]: !on }))}>

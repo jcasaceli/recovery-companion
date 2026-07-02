@@ -32,6 +32,20 @@ const PAY_METHODS: { value: 'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'o
   { value: 'other', label: 'Other' },
 ];
 
+// RN's Alert.alert confirm buttons don't fire on web (react-native-web), so use
+// the browser's confirm() there. Native keeps the styled Alert dialog.
+function confirmThen(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    const g: any = globalThis;
+    if (!g.confirm || g.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
+
 function currentPeriod() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -141,24 +155,16 @@ export function ClientProfileScreen() {
     }
   };
 
-  const removeUA = (t: UATest) => {
-    Alert.alert('Delete UA result?', `${t.testedAt} · ${t.result}. This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteUATest(t.id).catch(() => {}); loadUA(); } },
-    ]);
-  };
+  const removeUA = (t: UATest) => confirmThen('Delete UA result?', `${t.testedAt} · ${t.result}. This cannot be undone.`, 'Delete',
+    async () => { await deleteUATest(t.id).catch(() => {}); loadUA(); });
 
   const UA_COLOR: Record<UAResult, string> = {
     negative: colors.success, positive: colors.crisis, refused: colors.warning, pending: colors.textMuted,
   };
   const hasPositiveFlag = uaTests.some((t) => t.result === 'positive' && !t.dismissed);
 
-  const dismissFlag = () => {
-    Alert.alert('Dismiss positive-UA flag?', 'This clears the flag for this resident. The test stays in their history.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Dismiss flag', onPress: async () => { await dismissUAFlags(id).catch(() => {}); loadUA(); } },
-    ]);
-  };
+  const dismissFlag = () => confirmThen('Dismiss positive-UA flag?', 'This clears the flag for this resident. The test stays in their history.', 'Dismiss flag',
+    async () => { await dismissUAFlags(id).catch(() => {}); loadUA(); });
 
   useEffect(() => {
     listMeetingCheckins(id).then(setCheckins).catch(() => {});
@@ -189,10 +195,8 @@ export function ClientProfileScreen() {
     } catch (e: any) { Alert.alert('Could not add note', e?.message ?? 'Try again.'); }
     finally { setNoteSaving(false); }
   };
-  const removeStaffNote = (noteId: string) => Alert.alert('Delete note?', 'This permanently removes the note.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: async () => { setStaffNotes((n) => n.filter((x) => x.id !== noteId)); try { await deleteNote(noteId); } catch {} } },
-  ]);
+  const removeStaffNote = (noteId: string) => confirmThen('Delete note?', 'This permanently removes the note.', 'Delete',
+    async () => { setStaffNotes((n) => n.filter((x) => x.id !== noteId)); try { await deleteNote(noteId); } catch {} });
   const noteAuthorLabel = (n: any) => {
     const who = n.authorName || 'Staff';
     if (n.authorRole !== 'facilitator') return who;
@@ -200,17 +204,10 @@ export function ClientProfileScreen() {
   };
 
   const dismissAlert = (noteId: string) => {
-    Alert.alert('Dismiss alert?', 'This removes it from the client’s profile.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Dismiss',
-        style: 'destructive',
-        onPress: async () => {
-          setAlerts((a) => a.filter((x) => x.id !== noteId)); // optimistic
-          try { await deleteNote(noteId); } catch { /* will reappear on next load if it failed */ }
-        },
-      },
-    ]);
+    confirmThen('Dismiss alert?', 'This removes it from the client’s profile.', 'Dismiss', async () => {
+      setAlerts((a) => a.filter((x) => x.id !== noteId)); // optimistic
+      try { await deleteNote(noteId); } catch { /* will reappear on next load if it failed */ }
+    });
   };
 
   const changeHouse = async (newHouseId: string) => {
@@ -234,19 +231,16 @@ export function ClientProfileScreen() {
     finally { setBedSaving(false); }
   };
 
-  const discharge = () => {
-    Alert.alert('Discharge resident?', `This marks ${client?.firstName ?? 'this member'} as discharged and frees their bed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discharge', style: 'destructive',
-        onPress: async () => {
-          const today = new Date().toISOString().slice(0, 10);
-          try { await dischargeMember(id, today); setDischargeDate(today); setBedLabel(''); await setClientStatus(id, 'completed'); }
-          catch (e: any) { Alert.alert('Could not discharge', e?.message ?? 'Try again.'); }
-        },
-      },
-    ]);
-  };
+  const discharge = () => confirmThen(
+    'Discharge resident?',
+    `This marks ${client?.firstName ?? 'this member'} as discharged and frees their bed.`,
+    'Discharge',
+    async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      try { await dischargeMember(id, today); setDischargeDate(today); setBedLabel(''); await setClientStatus(id, 'completed'); }
+      catch (e: any) { Alert.alert('Could not discharge', e?.message ?? 'Try again.'); }
+    },
+  );
 
   const readmit = async () => {
     try { await readmitMember(id); setDischargeDate(undefined); await setClientStatus(id, 'in_care'); }
