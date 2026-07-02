@@ -234,12 +234,8 @@ export function HomeScreen() {
 
   const QUICK_LINKS: { label: string; icon: any; screen: string }[] = [
     { label: 'Chores', icon: 'checkmark-circle-outline', screen: 'Tasks' },
-    { label: 'Community', icon: 'people-outline', screen: 'Community' },
-    { label: 'Schedule', icon: 'calendar-outline', screen: 'Schedule' },
     { label: 'Meetings', icon: 'videocam-outline', screen: 'Meetings' },
-    { label: 'Agreements', icon: 'document-text-outline', screen: 'Agreements' },
-    { label: 'Forms', icon: 'clipboard-outline', screen: 'Forms' },
-    { label: 'Documents', icon: 'folder-outline', screen: 'Documents' },
+    { label: 'Documents', icon: 'document-text-outline', screen: 'MemberDocs' },
     ...(passesEnabled ? [{ label: 'Passes', icon: 'bed-outline' as any, screen: 'Passes' }] : []),
   ];
 
@@ -272,15 +268,13 @@ export function HomeScreen() {
         <Text style={styles.welcomeHome}>🏡 Welcome to {networkName}</Text>
       ) : null}
 
-      {/* New agreements / forms to sign — open Forms first, then Agreements */}
+      {/* Documents to sign — one place for forms + agreements */}
       {selfView && toSign > 0 ? (
-        <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate(pendingForms > 0 ? 'Forms' : 'Agreements')}>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('MemberDocs')}>
           <Card style={styles.toSignCard}>
             <Text style={styles.toSignTitle}>📝 {toSign} {toSign === 1 ? 'item needs' : 'items need'} your signature</Text>
             <Text style={styles.toSignBody}>
-              You have {pendingForms > 0 ? `${pendingForms} form${pendingForms === 1 ? '' : 's'}` : ''}
-              {pendingForms > 0 && pendingAgr > 0 ? ' and ' : ''}
-              {pendingAgr > 0 ? `${pendingAgr} agreement${pendingAgr === 1 ? '' : 's'}` : ''} from your sober living to review and sign. Tap to open.
+              You have {toSign} document{toSign === 1 ? '' : 's'} from your sober living to review and sign. Tap to open.
             </Text>
           </Card>
         </TouchableOpacity>

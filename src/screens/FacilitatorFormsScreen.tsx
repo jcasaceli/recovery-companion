@@ -5,7 +5,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../compon
 import { colors, spacing, radius, typography } from '../theme';
 import {
   listFormTemplates, createFormTemplate, updateFormTemplate, deleteFormTemplate, assignForm, listOrgFormResponses,
-  listFacilitatorIndividuals, getMyOrg, createAgreement,
+  listFacilitatorIndividuals, getMyOrg, createAgreement, listOrgAgreements,
   FormField, FormFieldType, FormTemplate, FormResponse, PlacedField,
 } from '../services/db';
 import { DocumentFieldEditor } from '../components/DocumentFieldEditor';
@@ -54,6 +54,7 @@ export function FacilitatorFormsScreen() {
   const wide = Platform.OS === 'web' && width >= 900; // CRM table only on the desktop site
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
+  const [agrs, setAgrs] = useState<any[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [orgId, setOrgId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ export function FacilitatorFormsScreen() {
   const [busy, setBusy] = useState(false);
 
   // Send modal
-  const [sendForm, setSendForm] = useState<{ title: string; fields: FormField[]; templateId?: string } | null>(null);
+  const [sendForm, setSendForm] = useState<{ title: string; fields: FormField[]; templateId?: string; bodyHtml?: string } | null>(null);
   // Upload-document modal
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docTitle, setDocTitle] = useState('');
@@ -91,6 +92,7 @@ export function FacilitatorFormsScreen() {
     Promise.all([
       listFormTemplates().then(setTemplates).catch(() => {}),
       listOrgFormResponses().then(setResponses).catch(() => {}),
+      listOrgAgreements().then((a: any) => setAgrs(a ?? [])).catch(() => {}),
       listFacilitatorIndividuals().then((r: any) => setResidents(r ?? [])).catch(() => {}),
       getMyOrg().then((o: any) => setOrgId(o?.id)).catch(() => {}),
     ]).finally(() => setLoading(false));
@@ -187,8 +189,11 @@ export function FacilitatorFormsScreen() {
     if (!sendForm || !ids.length) { Alert.alert('Pick residents', 'Select at least one resident to send to.'); return; }
     setBusy(true);
     try {
+      // Everything is sent as one kind of thing: a document/agreement the resident
+      // reads, fills, and signs. Field-based forms are converted to rich text.
+      const html = sendForm.bodyHtml || fieldsToHtml(sendForm.fields);
       for (const id of ids) {
-        await assignForm({ individualId: id, orgId, templateId: sendForm.templateId, title: sendForm.title, fields: sendForm.fields });
+        await createAgreement({ orgId, individualId: id, title: sendForm.title, bodyHtml: html });
       }
       setSendForm(null); setSelected({});
       Alert.alert('Sent ✅', `“${sendForm.title}” was sent to ${ids.length} resident${ids.length > 1 ? 's' : ''} to review and sign.`);
@@ -253,8 +258,13 @@ export function FacilitatorFormsScreen() {
   const openBuilder = () => { setEditingId(null); setTitle(''); setFields([]); setBuilderOpen(true); };
   const openWrite = () => { setEditingId(null); setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
   const openUpload = () => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); };
-  const countFor = (title: string) => responses.filter((r) => r.title === title).length;
-  const openSend = (f: { title: string; fields: FormField[]; templateId?: string }) => { setSelected({}); setSendForm(f); };
+  // Unified submissions: sent agreements + any legacy form responses.
+  const submissions = [
+    ...agrs.map((a) => ({ id: a.id, title: a.title, individualId: a.individualId, createdAt: a.createdAt, done: a.status === 'signed' })),
+    ...responses.map((r) => ({ id: r.id, title: r.title, individualId: r.individualId, createdAt: r.createdAt, done: r.status === 'completed' })),
+  ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const countFor = (title: string) => submissions.filter((s) => s.title === title).length;
+  const openSend = (f: { title: string; fields: FormField[]; templateId?: string; bodyHtml?: string }) => { setSelected({}); setSendForm(f); };
   const del = (id: string, title: string) => Alert.alert('Delete form?', title, [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFormTemplate(id).catch(() => {}); load(); } },
@@ -447,15 +457,15 @@ export function FacilitatorFormsScreen() {
         ))}
 
         <SectionTitle>Submissions</SectionTitle>
-        {responses.length === 0 ? (
+        {submissions.length === 0 ? (
           <Card><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></Card>
-        ) : responses.slice(0, 40).map((r) => (
+        ) : submissions.slice(0, 40).map((r) => (
           <Card key={r.id} style={styles.rowCard}>
             <View style={{ flex: 1 }}>
               <Text style={[typography.body, { fontWeight: '700' }]}>{r.title}</Text>
               <Text style={typography.caption}>{nameOf(r.individualId)} · {formatDateTime(r.createdAt)}</Text>
             </View>
-            <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+            <Pill label={r.done ? 'Signed' : 'Pending'} color={r.done ? colors.success : colors.warning} />
           </Card>
         ))}
         <View style={{ height: spacing.xl }} />
@@ -481,7 +491,7 @@ export function FacilitatorFormsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabBtn, tab === 'submissions' && styles.tabBtnActive]} onPress={() => setTab('submissions')}>
           <Text style={[styles.tabText, tab === 'submissions' && styles.tabTextActive]}>Submissions</Text>
-          <View style={styles.badge}><Text style={styles.badgeText}>{responses.length}</Text></View>
+          <View style={styles.badge}><Text style={styles.badgeText}>{submissions.length}</Text></View>
         </TouchableOpacity>
       </View>
 
@@ -520,9 +530,9 @@ export function FacilitatorFormsScreen() {
             <Text style={[styles.th, styles.colType]}>FORM</Text>
             <Text style={[styles.th, styles.colRight]}>STATUS</Text>
           </View>
-          {responses.length === 0 ? (
+          {submissions.length === 0 ? (
             <View style={styles.tr}><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></View>
-          ) : responses.slice(0, 100).map((r) => (
+          ) : submissions.slice(0, 100).map((r) => (
             <View key={r.id} style={styles.tr}>
               <View style={styles.colTitle}>
                 <Text style={styles.cellTitle}>{nameOf(r.individualId)}</Text>
@@ -530,7 +540,7 @@ export function FacilitatorFormsScreen() {
               </View>
               <Text style={[styles.cell, styles.colType]} numberOfLines={1}>{r.title}</Text>
               <View style={[styles.colRight, styles.rightCell]}>
-                <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+                <Pill label={r.done ? 'Signed' : 'Pending'} color={r.done ? colors.success : colors.warning} />
               </View>
             </View>
           ))}

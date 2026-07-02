@@ -22,7 +22,7 @@ import { ClientsScreen } from '../screens/ClientsScreen';
 import { ClientProfileScreen } from '../screens/ClientProfileScreen';
 import { LinkMemberScreen } from '../screens/LinkMemberScreen';
 import { TasksScreen } from '../screens/TasksScreen';
-import { CommunityScreen } from '../screens/CommunityScreen';
+import { MemberDocsScreen } from '../screens/MemberDocsScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
 import { PaymentsScreen } from '../screens/PaymentsScreen';
@@ -185,7 +185,7 @@ function MainStack() {
         })}
       />
       <RootStack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Chores & tasks' }} />
-      <RootStack.Screen name="Community" component={CommunityScreen} options={{ title: 'Community' }} />
+      <RootStack.Screen name="MemberDocs" component={MemberDocsScreen} options={{ title: 'Documents' }} />
       <RootStack.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'Schedule' }} />
       <RootStack.Screen name="Meetings" component={MeetingsScreen} options={{ title: 'Meetings' }} />
       <RootStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Pay membership fee' }} />
