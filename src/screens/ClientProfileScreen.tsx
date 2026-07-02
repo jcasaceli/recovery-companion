@@ -6,7 +6,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, listOrgStaff,
+  listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, listOrgStaff, getSubmittedInfo,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient,
@@ -72,6 +72,8 @@ export function ClientProfileScreen() {
   const [ownerIds, setOwnerIds] = useState<Set<string>>(new Set());
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
+  const [autoFilled, setAutoFilled] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'>('zelle');
@@ -114,6 +116,8 @@ export function ClientProfileScreen() {
     const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
     setPaidThisMonth(sum);
   }).catch(() => {});
+
+  const loadSubmitted = () => getSubmittedInfo(id).then(setSubmitted).catch(() => {});
 
   const recordPay = async () => {
     const amt = Math.round(parseFloat(payAmount) * 100);
@@ -174,10 +178,24 @@ export function ClientProfileScreen() {
     loadUA();
     loadCrm();
     loadPayments();
+    loadSubmitted();
     // Facilitator-only notes: split member-flagged alerts vs. staff notes.
     reloadNotes();
     listOrgStaff().then((s) => setOwnerIds(new Set(s.filter((x) => x.isOwner).map((x) => x.profileId)))).catch(() => {});
   }, [id]);
+
+  // Auto-populate empty contact fields from what the resident submitted.
+  useEffect(() => {
+    if (!client || autoFilled || !submitted.length) return;
+    setAutoFilled(true);
+    const phoneVal = submitted.find((s) => s.type === 'phone' || /phone|mobile|cell/i.test(s.label))?.value;
+    const emailVal = submitted.find((s) => s.type === 'email' || /e-?mail/i.test(s.label))?.value;
+    const patch: { phone?: string; email?: string } = {};
+    if (phoneVal && !client.phone) patch.phone = phoneVal;
+    if (emailVal && !client.email) patch.email = emailVal;
+    if (Object.keys(patch).length) updateClient(id, patch).then(reloadCloud).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitted, client?.id]);
 
   const reloadNotes = () => listNotes(id).then((ns) => {
     const fac = ns.filter((n) => n.visibility === 'facilitators');
@@ -502,6 +520,22 @@ export function ClientProfileScreen() {
         </View>
       </Card>
 
+      {/* Submitted info — everything the resident filled into their forms/agreements */}
+      {submitted.length ? (
+        <>
+          <SectionTitle>Submitted info</SectionTitle>
+          <Card>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Answers {client.firstName} filled into their forms &amp; agreements.</Text>
+            {submitted.map((s, i) => (
+              <View key={`${s.title}_${s.label}_${i}`} style={styles.submittedRow}>
+                <Text style={[typography.caption, { flex: 1 }]}>{s.label || 'Answer'}</Text>
+                <Text style={[typography.body, { flex: 1.4, fontWeight: '600', textAlign: 'right' }]}>{s.value}</Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
       {/* Alerts the client flagged for the facilitator */}
       {alerts.length ? (
         <Card style={{ borderWidth: 1, borderColor: colors.crisis }}>
@@ -804,6 +838,7 @@ const styles = StyleSheet.create({
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  submittedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider, gap: spacing.md },
   payMethods: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   payChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, marginBottom: spacing.sm },
   payChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },

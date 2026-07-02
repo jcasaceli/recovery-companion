@@ -29,6 +29,37 @@ export function parseAgreementFields(html?: string): InlineField[] {
   return out;
 }
 
+/** Pull labeled answers out of a signed rich-text agreement: each field's value
+ *  paired with the text that precedes it (e.g. "Guest name:" -> "John"). */
+export function extractLabeledValues(html: string, values: Record<string, any>): { label: string; type: string; value: string }[] {
+  if (!html) return [];
+  const out: { label: string; type: string; value: string }[] = [];
+  let m: RegExpExecArray | null;
+  SPAN_RE.lastIndex = 0;
+  while ((m = SPAN_RE.exec(html))) {
+    const frag = m[0];
+    const type = attr(frag, 'data-sl-field');
+    const key = attr(frag, 'data-sl-key');
+    if (!type || !key) continue;
+    // Label = the text since the last block boundary before this token.
+    const before = html.slice(0, m.index);
+    const bIdx = Math.max(
+      before.lastIndexOf('</p>'), before.lastIndexOf('</div>'), before.lastIndexOf('</li>'),
+      before.lastIndexOf('</h'), before.lastIndexOf('<br'), before.lastIndexOf('</tr>'),
+    );
+    const seg = bIdx >= 0 ? before.slice(bIdx) : before;
+    let label = seg.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
+    label = label.replace(/[:\-–]\s*$/, '').trim();
+    const v = values?.[key];
+    let value = '';
+    if (type === 'signature') value = v && Array.isArray(v.paths) && v.paths.length ? 'Signed' : '';
+    else if (type === 'checkbox') value = v === 'checked' || v === true ? 'Yes' : '';
+    else value = v != null && String(v).trim() ? String(v).trim() : '';
+    if (value) out.push({ label: label || agreementFieldLabel(type).replace(/^\S+\s/, ''), type, value });
+  }
+  return out;
+}
+
 export function agreementFieldLabel(type: string): string {
   switch (type) {
     case 'signature': return '✍️ Signature';

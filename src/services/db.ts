@@ -1224,6 +1224,44 @@ export async function listMyAgreements(): Promise<Agreement[]> {
   return listAgreements(me.individualId);
 }
 
+/** Staff: everything a resident has filled into their signed agreements/forms,
+ *  as labeled values — for the "Submitted info" panel on their profile. */
+export async function getSubmittedInfo(individualId: string): Promise<{ label: string; value: string; type: string; title: string; date: string }[]> {
+  const { extractLabeledValues } = await import('../utils/agreementFields');
+  const out: { label: string; value: string; type: string; title: string; date: string }[] = [];
+
+  const { data: ags } = await db()
+    .from('agreements')
+    .select('title, body_html, field_values, signed_at, created_at, status')
+    .eq('individual_id', individualId)
+    .eq('status', 'signed');
+  for (const a of ags ?? []) {
+    if (!a.body_html || !a.field_values) continue;
+    for (const f of extractLabeledValues(a.body_html, a.field_values)) {
+      out.push({ label: f.label, value: f.value, type: f.type, title: a.title, date: a.signed_at || a.created_at });
+    }
+  }
+
+  const { data: frs } = await db()
+    .from('form_responses')
+    .select('title, fields, answers, status, created_at')
+    .eq('individual_id', individualId)
+    .eq('status', 'completed');
+  for (const r of frs ?? []) {
+    const fields: any[] = r.fields ?? [];
+    const answers: any = r.answers ?? {};
+    for (const fld of fields) {
+      if (['heading', 'paragraph', 'signature', 'initial'].includes(fld.type)) continue;
+      const v = answers[fld.key];
+      if (v == null || String(v).trim() === '') continue;
+      out.push({ label: fld.label, value: fld.type === 'yesno' ? (v ? 'Yes' : 'No') : String(v), type: fld.type, title: r.title, date: r.created_at });
+    }
+  }
+
+  out.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return out;
+}
+
 /** Member: sign an agreement that has placed fields. Stores each box's value
  *  (signature strokes / typed text) plus the signer name, time, and IP. The
  *  first signature box is also mirrored to signature_paths for list/legacy views. */
