@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator, Share } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator, Share, ScrollView } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
@@ -9,7 +9,7 @@ import {
   listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, listOrgStaff, getSubmittedInfo,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
-  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient,
+  listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
 } from '../services/db';
 import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate } from '../utils/format';
@@ -74,6 +74,32 @@ export function ClientProfileScreen() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
   const [autoFilled, setAutoFilled] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [roster, setRoster] = useState<any[]>([]);
+  const [merging, setMerging] = useState(false);
+  const openMerge = () => {
+    listFacilitatorIndividuals().then((r: any) => setRoster((r ?? []).filter((x: any) => x.id !== id))).catch(() => {});
+    setMergeOpen(true);
+  };
+  const doMerge = (dup: any) => {
+    const dupName = `${dup.first_name ?? ''} ${dup.last_name ?? ''}`.trim() || 'this record';
+    confirmThen(
+      `Merge into ${client?.firstName ?? 'this member'}?`,
+      `“${dupName}” and everything they've signed will move into this profile, and the duplicate will be deleted. This can't be undone.`,
+      'Merge',
+      async () => {
+        setMerging(true);
+        try {
+          await mergeMembers(id, dup.id);
+          setMergeOpen(false);
+          await reloadCloud();
+          loadAgreements(); loadCrm(); loadSubmitted();
+          Alert.alert('Merged ✅', 'The duplicate was merged into this member.');
+        } catch (e: any) { Alert.alert('Could not merge', e?.message ?? 'Try again.'); }
+        finally { setMerging(false); }
+      },
+    );
+  };
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'>('zelle');
@@ -788,7 +814,37 @@ export function ClientProfileScreen() {
         ) : (
           <Button title="Re-admit (In Care)" variant="secondary" onPress={readmit} />
         )}
+        <View style={{ height: spacing.sm }} />
+        <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Duplicate of someone? Merge another record into this one.</Text>
+        <Button title="🔀 Merge a duplicate into this member" variant="secondary" onPress={openMerge} />
       </Card>
+
+      {/* Merge duplicate picker */}
+      <Modal visible={mergeOpen} transparent animationType="fade" onRequestClose={() => setMergeOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modal}>
+            <Text style={typography.h3}>Merge a duplicate</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              Pick the duplicate record to merge into {client.firstName}. Their data moves here and the duplicate is deleted.
+            </Text>
+            {merging ? <ActivityIndicator color={colors.primary} /> : null}
+            <ScrollView style={{ maxHeight: 320 }}>
+              {roster.length === 0 ? (
+                <Text style={[typography.caption, { padding: spacing.sm }]}>No other members to merge.</Text>
+              ) : roster.map((m) => (
+                <TouchableOpacity key={m.id} style={styles.mergeRow} onPress={() => doMerge(m)} disabled={merging}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={typography.body}>{`${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || 'Member'}</Text>
+                    <Text style={typography.caption}>{m.status === 'completed' ? 'Discharged' : 'In Care'}{m.email ? ` · ${m.email}` : ''}</Text>
+                  </View>
+                  <Text style={{ color: colors.primary, fontWeight: '700' }}>Merge →</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity onPress={() => setMergeOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Invite */}
       {client.phone || client.email ? (
@@ -839,6 +895,7 @@ const styles = StyleSheet.create({
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   submittedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider, gap: spacing.md },
+  mergeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   payMethods: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   payChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, marginBottom: spacing.sm },
   payChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },

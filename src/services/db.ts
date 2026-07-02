@@ -1707,6 +1707,13 @@ export async function setOrgPaymentHandles(_orgId: string, cashapp: string, zell
   if (error) throw error;
 }
 
+/** Facilitator: merge a duplicate resident (mergeId) into this one (keepId).
+ *  Moves the login + all their data over, then deletes the duplicate. */
+export async function mergeMembers(keepId: string, mergeId: string) {
+  const { error } = await db().rpc('merge_individuals', { p_keep: keepId, p_merge: mergeId });
+  if (error) throw error;
+}
+
 /** Facilitator: edit a client's details. */
 export async function updateClient(
   id: string,
