@@ -21,6 +21,31 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `field_${Math.floor(Date.now() % 100000)}`;
 }
 
+// Map a structured field type to an inline rich-text field token so a field-based
+// form can be edited in the Word-style editor.
+const FIELD_TO_SL: Record<string, string> = {
+  text: 'text', longtext: 'text', ssn_last4: 'text', address: 'text',
+  number: 'number', phone: 'phone', date: 'date', yesno: 'checkbox',
+  signature: 'signature', initial: 'initials',
+};
+const SL_LABEL: Record<string, string> = {
+  signature: '✍️ Signature', initials: '🅰️ Initials', date: '📅 Date',
+  number: '🔢 Number', phone: '📞 Phone', email: '✉️ Email', checkbox: '☑️ Checkbox', text: '🔤 Text',
+};
+function esc(s: string) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function slToken(type: string) {
+  const key = `f_${type}_${Math.random().toString(36).slice(2, 8)}`;
+  const style = 'display:inline-block;background:#FCE8A6;border:1px solid #E0B33A;border-radius:4px;padding:0 8px;margin:0 2px;font-weight:700;color:#7a5b00;cursor:grab;';
+  return `<span data-sl-field="${type}" data-sl-key="${key}" contenteditable="false" draggable="true" title="Drag to move" style="${style}">${SL_LABEL[type] || '🔤 Text'}</span>`;
+}
+function fieldsToHtml(fields: FormField[]): string {
+  return fields.map((f) => {
+    if (f.type === 'heading') return `<p><strong style="font-size:18px">${esc(f.label)}</strong></p>`;
+    if (f.type === 'paragraph') return `<p>${esc(f.label)}</p>`;
+    return `<p><strong>${esc(f.label)}:</strong> ${slToken(FIELD_TO_SL[f.type] || 'text')}</p>`;
+  }).join('');
+}
+
 interface Resident { id: string; first_name?: string; last_name?: string }
 
 export function FacilitatorFormsScreen() {
@@ -210,11 +235,14 @@ export function FacilitatorFormsScreen() {
 
   // Edit a template: rich-text ones open the Word-style editor, field-based ones
   // open the field builder — both prefilled. Starters open a fresh copy to save.
+  // Edit always opens the Word-style editor. Field-based forms are converted to
+  // rich text (label + inline field token) so everything edits the same way.
   const openEdit = (f: { title: string; fields: FormField[]; templateId?: string; bodyHtml?: string }) => {
     setEditingId(f.templateId ?? null);
     setSelected({});
-    if (f.bodyHtml) { setAgrTitle(f.title); setAgrHtml(f.bodyHtml); setWriteOpen(true); }
-    else { setTitle(f.title); setFields(f.fields); setBuilderOpen(true); }
+    setAgrTitle(f.title);
+    setAgrHtml(f.bodyHtml || fieldsToHtml(f.fields));
+    setWriteOpen(true);
   };
 
   // Save the written agreement as a reusable template (create or update).

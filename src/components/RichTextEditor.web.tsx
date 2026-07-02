@@ -141,6 +141,17 @@ export function RichTextEditor({
     }
   };
 
+  // Keep Word / Google Docs formatting: insert the clipboard's HTML as-is.
+  const onPaste = (e: any) => {
+    const html = e.clipboardData?.getData('text/html');
+    if (html) {
+      e.preventDefault();
+      // Strip Office conditional-comment cruft but keep the actual formatting.
+      const clean = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?(o:p|xml|meta|link|style)[^>]*>/gi, '');
+      doInsert(clean);
+    }
+  };
+
   const onDrop = (e: any) => {
     const moving = movingToken.current;
     const paletteType = e.dataTransfer?.getData('text/sl-field') || dragType.current;
@@ -218,6 +229,7 @@ export function RichTextEditor({
         onDragEnd={() => { movingToken.current = null; }}
         onDrop={onDrop}
         onDragOver={(e) => e.preventDefault()}
+        onPaste={onPaste}
         style={editor}
       />
     </div>
