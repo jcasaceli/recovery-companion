@@ -21,8 +21,9 @@ const fieldLabel = (type: string) => FIELD_TYPES.find((f) => f.type === type)?.l
 
 function fieldTokenHtml(type: string) {
   const key = `f_${type}_${Math.random().toString(36).slice(2, 8)}`;
-  const style = 'display:inline-block;background:#FCE8A6;border:1px solid #E0B33A;border-radius:4px;padding:0 8px;margin:0 2px;font-weight:700;color:#7a5b00;';
-  return `<span data-sl-field="${type}" data-sl-key="${key}" contenteditable="false" style="${style}">${fieldLabel(type)}</span>&nbsp;`;
+  const style = 'display:inline-block;background:#FCE8A6;border:1px solid #E0B33A;border-radius:4px;padding:0 8px;margin:0 2px;font-weight:700;color:#7a5b00;cursor:grab;';
+  // draggable=true so a placed field can be picked up and moved around the doc.
+  return `<span data-sl-field="${type}" data-sl-key="${key}" contenteditable="false" draggable="true" title="Drag to move" style="${style}">${fieldLabel(type)}</span>&nbsp;`;
 }
 
 const Icon = ({ lines }: { lines: [number, number][] }) => (
@@ -52,6 +53,7 @@ export function RichTextEditor({
   const ref = useRef<HTMLDivElement>(null);
   const lastRange = useRef<Range | null>(null);
   const dragType = useRef<string | null>(null);
+  const movingToken = useRef<HTMLElement | null>(null); // an existing field being dragged to a new spot
 
   useEffect(() => {
     if (ref.current && valueHtml && ref.current.innerHTML !== valueHtml) {
@@ -114,11 +116,7 @@ export function RichTextEditor({
   // the native drag from starting.
   const hold = (e: any) => e.preventDefault();
 
-  const onDrop = (e: any) => {
-    const type = e.dataTransfer?.getData('text/sl-field') || dragType.current;
-    if (!type) return;
-    e.preventDefault();
-    dragType.current = null;
+  const setCaretToPoint = (e: any) => {
     try {
       const doc: any = document;
       const range = doc.caretRangeFromPoint
@@ -128,11 +126,36 @@ export function RichTextEditor({
         const sel = window.getSelection();
         sel?.removeAllRanges();
         sel?.addRange(range);
-      } else {
-        ref.current?.focus();
+        return;
       }
-    } catch { ref.current?.focus(); }
-    doInsert(fieldTokenHtml(type));
+    } catch {}
+    ref.current?.focus();
+  };
+
+  // A field already in the document was picked up — remember it so we can move it.
+  const onDragStartEditor = (e: any) => {
+    const el = e.target?.closest?.('[data-sl-field]');
+    if (el) {
+      movingToken.current = el;
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/sl-move', '1'); } catch {}
+    }
+  };
+
+  const onDrop = (e: any) => {
+    const moving = movingToken.current;
+    const paletteType = e.dataTransfer?.getData('text/sl-field') || dragType.current;
+    if (!moving && !paletteType) return;
+    e.preventDefault();
+    setCaretToPoint(e);
+    if (moving) {
+      const html = (moving.outerHTML || '') + '&nbsp;';
+      movingToken.current = null;
+      try { moving.remove(); } catch {}
+      doInsert(html);
+    } else {
+      dragType.current = null;
+      doInsert(fieldTokenHtml(paletteType));
+    }
   };
 
   const Btn = ({ children, onPress, title, bold }: { children: React.ReactNode; onPress: () => void; title: string; bold?: boolean }) => (
@@ -191,6 +214,8 @@ export function RichTextEditor({
         onKeyUp={saveSelection}
         onMouseUp={saveSelection}
         onBlur={saveSelection}
+        onDragStart={onDragStartEditor}
+        onDragEnd={() => { movingToken.current = null; }}
         onDrop={onDrop}
         onDragOver={(e) => e.preventDefault()}
         style={editor}
