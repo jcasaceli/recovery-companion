@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import {
-  listFormTemplates, createFormTemplate, deleteFormTemplate, assignForm, listOrgFormResponses,
+  listFormTemplates, createFormTemplate, updateFormTemplate, deleteFormTemplate, assignForm, listOrgFormResponses,
   listFacilitatorIndividuals, getMyOrg, createAgreement,
   FormField, FormFieldType, FormTemplate, FormResponse, PlacedField,
 } from '../services/db';
@@ -54,6 +54,8 @@ export function FacilitatorFormsScreen() {
   // Table view (OneStep-style)
   const [tab, setTab] = useState<'forms' | 'submissions'>('forms');
   const [sortAsc, setSortAsc] = useState(true);
+  // When set, the builder/write modal is editing an existing saved template.
+  const [editingId, setEditingId] = useState<string | null>(null);
   // shared recipient selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
@@ -100,11 +102,17 @@ export function FacilitatorFormsScreen() {
     if (!fields.length) { Alert.alert('Add fields', 'Add at least one field or signature space.'); return; }
     setBusy(true);
     try {
-      await createFormTemplate({ title: title.trim(), fields });
-      setBuilderOpen(false);
-      // Offer to send right away.
-      setSendForm({ title: title.trim(), fields });
-      setTitle(''); setFields([]);
+      if (editingId) {
+        // Editing an existing template — save changes and close.
+        await updateFormTemplate(editingId, { title: title.trim(), fields });
+        setBuilderOpen(false); setEditingId(null); setTitle(''); setFields([]);
+        Alert.alert('Saved ✅', 'Your form was updated.');
+      } else {
+        await createFormTemplate({ title: title.trim(), fields });
+        setBuilderOpen(false);
+        setSendForm({ title: title.trim(), fields }); // offer to send right away
+        setTitle(''); setFields([]);
+      }
       load();
     } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
     finally { setBusy(false); }
@@ -190,8 +198,8 @@ export function FacilitatorFormsScreen() {
     </View>
   );
 
-  const openBuilder = () => { setTitle(''); setFields([]); setBuilderOpen(true); };
-  const openWrite = () => { setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
+  const openBuilder = () => { setEditingId(null); setTitle(''); setFields([]); setBuilderOpen(true); };
+  const openWrite = () => { setEditingId(null); setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
   const openUpload = () => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); };
   const countFor = (title: string) => responses.filter((r) => r.title === title).length;
   const openSend = (f: { title: string; fields: FormField[]; templateId?: string }) => { setSelected({}); setSendForm(f); };
@@ -199,22 +207,46 @@ export function FacilitatorFormsScreen() {
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFormTemplate(id).catch(() => {}); load(); } },
   ]);
+
+  // Edit a template: rich-text ones open the Word-style editor, field-based ones
+  // open the field builder — both prefilled. Starters open a fresh copy to save.
+  const openEdit = (f: { title: string; fields: FormField[]; templateId?: string; bodyHtml?: string }) => {
+    setEditingId(f.templateId ?? null);
+    setSelected({});
+    if (f.bodyHtml) { setAgrTitle(f.title); setAgrHtml(f.bodyHtml); setWriteOpen(true); }
+    else { setTitle(f.title); setFields(f.fields); setBuilderOpen(true); }
+  };
+
+  // Save the written agreement as a reusable template (create or update).
+  const saveWrittenTemplate = async () => {
+    if (!agrTitle.trim()) { Alert.alert('Name the agreement', 'Give it a title.'); return; }
+    if (!agrHtml.trim()) { Alert.alert('Write the agreement', 'Add the agreement text.'); return; }
+    setBusy(true);
+    try {
+      if (editingId) await updateFormTemplate(editingId, { title: agrTitle.trim(), bodyHtml: agrHtml, fields: [] });
+      else await createFormTemplate({ title: agrTitle.trim(), fields: [], bodyHtml: agrHtml });
+      setWriteOpen(false); setEditingId(null); setAgrTitle(''); setAgrHtml('');
+      Alert.alert('Saved ✅', 'Your agreement template was saved. Open it any time to edit or send.');
+      load();
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    finally { setBusy(false); }
+  };
   // Saved templates first (they win), then starters — skipping any title already
   // shown, so nothing appears twice across saved + starter lists.
   const formsList = (() => {
     const seen = new Set<string>();
-    const out: { key: string; title: string; fields: FormField[]; templateId?: string; saved: boolean }[] = [];
+    const out: { key: string; title: string; fields: FormField[]; templateId?: string; bodyHtml?: string; saved: boolean }[] = [];
     for (const t of templates) {
       const k = t.title.trim().toLowerCase();
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, saved: true });
+      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, bodyHtml: t.bodyHtml, saved: true });
     }
     starters.forEach((s, i) => {
       const k = s.title.trim().toLowerCase();
       if (seen.has(k)) return;
       seen.add(k);
-      out.push({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined, saved: false });
+      out.push({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined, bodyHtml: undefined, saved: false });
     });
     return out.sort((a, b) => (sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
   })();
@@ -226,7 +258,7 @@ export function FacilitatorFormsScreen() {
         <View style={styles.backdrop}>
           <View style={styles.modal}>
             <ScrollView>
-              <Text style={typography.h3}>New form</Text>
+              <Text style={typography.h3}>{editingId ? 'Edit form' : 'New form'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Name your form, then add fields and signature spaces.</Text>
               <Text style={styles.lbl}>Form title</Text>
               <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. House Agreement 2026" placeholderTextColor={colors.textMuted} />
@@ -252,8 +284,8 @@ export function FacilitatorFormsScreen() {
               </View>
 
               <View style={{ height: spacing.md }} />
-              <Button title={busy ? 'Saving…' : 'Save & choose recipients'} onPress={saveAndSend} disabled={busy} />
-              <TouchableOpacity onPress={() => setBuilderOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+              <Button title={busy ? 'Saving…' : (editingId ? '💾 Save changes' : 'Save & choose recipients')} onPress={saveAndSend} disabled={busy} />
+              <TouchableOpacity onPress={() => { setBuilderOpen(false); setEditingId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -303,15 +335,17 @@ export function FacilitatorFormsScreen() {
         <View style={styles.backdrop}>
           <View style={[styles.modal, { maxWidth: 760, alignSelf: 'center', width: '100%' }]}>
             <ScrollView>
-              <Text style={typography.h3}>Write an agreement</Text>
-              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Format the text, or paste from Word, then send it to residents to read and sign.</Text>
+              <Text style={typography.h3}>{editingId ? 'Edit agreement' : 'Write an agreement'}</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Format the text, or paste from Word. Save it as a reusable template, or send it to residents to read and sign.</Text>
               <Text style={styles.lbl}>Title</Text>
               <TextInput style={styles.input} value={agrTitle} onChangeText={setAgrTitle} placeholder="e.g. House Membership Agreement" placeholderTextColor={colors.textMuted} />
               <View style={{ height: spacing.sm }} />
-              <RichTextEditor valueHtml={agrHtml} onChangeHtml={setAgrHtml} placeholder="Type or paste your agreement here…" />
+              <RichTextEditor key={editingId || 'new'} valueHtml={agrHtml} onChangeHtml={setAgrHtml} placeholder="Type or paste your agreement here…" />
+              <View style={{ height: spacing.sm }} />
+              <Button title={busy ? 'Saving…' : (editingId ? '💾 Save changes' : '💾 Save as template')} variant="secondary" onPress={saveWrittenTemplate} disabled={busy} />
               <RecipientPicker />
               <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendWritten} disabled={busy} />
-              <TouchableOpacity onPress={() => setWriteOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { setWriteOpen(false); setEditingId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -341,6 +375,7 @@ export function FacilitatorFormsScreen() {
               <Text style={[typography.body, { fontWeight: '700' }]}>{f.title}</Text>
               <Text style={typography.caption}>{f.fields.length} field{f.fields.length === 1 ? '' : 's'}{f.saved ? '' : ' · starter'}</Text>
             </View>
+            <TouchableOpacity onPress={() => openEdit(f)} style={{ marginRight: spacing.sm }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => openSend(f)}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
             {f.saved ? (
               <TouchableOpacity onPress={() => del(f.templateId!, f.title)} style={{ marginLeft: spacing.sm }}>
@@ -411,6 +446,7 @@ export function FacilitatorFormsScreen() {
               <Text style={[styles.cell, styles.colType]}>{f.fields.length}</Text>
               <View style={[styles.colRight, styles.rightCell]}>
                 <TouchableOpacity onPress={() => setTab('submissions')}><Text style={styles.link}>{countFor(f.title)} ›</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => openEdit(f)} style={{ marginLeft: spacing.md }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => openSend(f)} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
               </View>
             </View>

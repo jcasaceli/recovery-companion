@@ -743,6 +743,7 @@ export interface FormTemplate {
   title: string;
   description?: string;
   fields: FormField[];
+  bodyHtml?: string;   // rich-text agreement body (for editable written-agreement templates)
   createdAt: string;
 }
 
@@ -762,7 +763,7 @@ export interface FormResponse {
 }
 
 function mapTemplate(r: any): FormTemplate {
-  return { id: r.id, title: r.title, description: r.description ?? undefined, fields: r.fields ?? [], createdAt: r.created_at };
+  return { id: r.id, title: r.title, description: r.description ?? undefined, fields: r.fields ?? [], bodyHtml: r.body_html ?? undefined, createdAt: r.created_at };
 }
 function mapFormResponse(r: any): FormResponse {
   return {
@@ -780,14 +781,27 @@ export async function listFormTemplates(): Promise<FormTemplate[]> {
   return (data ?? []).map(mapTemplate);
 }
 
-/** Staff: save a reusable form template. */
-export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[] }) {
+/** Staff: save a reusable form template. Returns the new template id. */
+export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[]; bodyHtml?: string }): Promise<string | undefined> {
   const { data: u } = await db().auth.getUser();
   const org = await getMyOrg();
-  const { error } = await db().from('form_templates').insert({
+  const row: any = {
     org_id: org?.id ?? null, title: input.title, description: input.description ?? null,
     fields: input.fields, created_by: u.user?.id,
-  });
+  };
+  if (input.bodyHtml) row.body_html = input.bodyHtml; // guarded until migration 0042 is applied
+  const { data, error } = await db().from('form_templates').insert(row).select('id').maybeSingle();
+  if (error) throw error;
+  return data?.id;
+}
+
+/** Staff: update an existing template's title/fields/body. */
+export async function updateFormTemplate(id: string, input: { title?: string; fields?: FormField[]; bodyHtml?: string }) {
+  const row: any = {};
+  if (input.title !== undefined) row.title = input.title;
+  if (input.fields !== undefined) row.fields = input.fields;
+  if (input.bodyHtml !== undefined) row.body_html = input.bodyHtml;
+  const { error } = await db().from('form_templates').update(row).eq('id', id);
   if (error) throw error;
 }
 
