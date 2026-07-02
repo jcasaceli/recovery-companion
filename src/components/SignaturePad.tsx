@@ -42,12 +42,26 @@ export function SignaturePad({
     return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
   };
 
+  // Push the in-progress stroke into the committed list and notify the parent.
+  const commitStroke = () => {
+    if (!current.current) return;
+    strokesRef.current = [...strokesRef.current, current.current];
+    current.current = '';
+    onChange(strokesRef.current);
+    rerender();
+  };
+
   const responder = useMemo(
     () =>
       PanResponder.create({
+        // Capture the touch before any parent ScrollView so drawing never turns
+        // into a scroll (which was wiping strokes on the Forms screen).
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (e) => {
           measure();
           const { x, y } = coords(e);
@@ -59,14 +73,10 @@ export function SignaturePad({
           current.current += ` L${x.toFixed(1)},${y.toFixed(1)}`;
           rerender();
         },
-        onPanResponderRelease: () => {
-          if (current.current) {
-            strokesRef.current = [...strokesRef.current, current.current];
-            current.current = '';
-            onChange(strokesRef.current);
-            rerender();
-          }
-        },
+        // Commit the stroke on both a normal lift AND a forced termination, so a
+        // stray gesture-steal can't erase what was just drawn.
+        onPanResponderRelease: () => commitStroke(),
+        onPanResponderTerminate: () => commitStroke(),
       }),
     [onChange],
   );
