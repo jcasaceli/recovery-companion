@@ -10,6 +10,7 @@ import {
 } from '../services/db';
 import { DocumentFieldEditor } from '../components/DocumentFieldEditor';
 import { RichTextEditor } from '../components/RichTextEditor';
+import { pdfToImage } from '../utils/pdf';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { HOUSE_FORMS } from '../content/houseForms';
 import { formatDateTime } from '../utils/format';
@@ -72,6 +73,7 @@ export function FacilitatorFormsScreen() {
   const [docTitle, setDocTitle] = useState('');
   const [pendingDoc, setPendingDoc] = useState<string | null>(null);
   const [docFields, setDocFields] = useState<PlacedField[]>([]);
+  const [converting, setConverting] = useState(false);
   // Write-agreement (rich text) modal
   const [writeOpen, setWriteOpen] = useState(false);
   const [agrTitle, setAgrTitle] = useState('');
@@ -150,6 +152,31 @@ export function FacilitatorFormsScreen() {
     const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.4, base64: true, allowsEditing: false });
     if (r.canceled || !r.assets?.[0]?.base64) return;
     setPendingDoc(`data:image/jpeg;base64,${r.assets[0].base64}`);
+  };
+
+  // Web: pick a PDF, render it to one tall image, then place fields on it.
+  const pickPdf = () => {
+    const g: any = globalThis;
+    if (!g.document) { Alert.alert('PDF', 'Upload a PDF from the web app.'); return; }
+    const input = g.document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf';
+    input.onchange = () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      const reader = new g.FileReader();
+      reader.onload = async () => {
+        setConverting(true);
+        try {
+          const img = await pdfToImage(String(reader.result || ''));
+          setPendingDoc(img);
+          setDocFields([]);
+        } catch (e: any) { Alert.alert('Could not read PDF', e?.message ?? 'Try again.'); }
+        finally { setConverting(false); }
+      };
+      reader.readAsDataURL(f);
+    };
+    input.click();
   };
 
   // ── Send (assign form, or send uploaded doc as a signable agreement) ─────────
@@ -342,6 +369,12 @@ export function FacilitatorFormsScreen() {
               <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Guest Agreement" placeholderTextColor={colors.textMuted} />
               <View style={{ height: spacing.sm }} />
               <Button title={pendingDoc ? '✅ File attached — choose another' : '📎 Choose photo / scan'} variant="secondary" onPress={pickDoc} />
+              {Platform.OS === 'web' ? (
+                <>
+                  <View style={{ height: spacing.sm }} />
+                  <Button title={converting ? 'Converting PDF…' : '📄 Choose PDF'} variant="secondary" onPress={pickPdf} disabled={converting} />
+                </>
+              ) : null}
 
               {pendingDoc ? (
                 <View style={{ marginTop: spacing.md }}>
