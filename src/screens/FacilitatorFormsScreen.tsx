@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, ScrollView, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
@@ -24,6 +24,8 @@ function slugify(s: string) {
 interface Resident { id: string; first_name?: string; last_name?: string }
 
 export function FacilitatorFormsScreen() {
+  const { width } = useWindowDimensions();
+  const wide = Platform.OS === 'web' && width >= 900; // CRM table only on the desktop site
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -71,14 +73,18 @@ export function FacilitatorFormsScreen() {
     return r ? `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || 'Resident' : '—';
   };
 
-  // Built-in starter forms (operator + intake) shown alongside saved templates.
-  const starters = useMemo(
-    () => [
-      ...HOUSE_FORMS.map((f) => ({ title: f.title, fields: f.fields })),
-      ...BUILT_IN_TEMPLATES.map((t) => ({ title: t.title, fields: t.fields })),
-    ],
-    [],
-  );
+  // Built-in starter forms (operator + intake), de-duplicated by title.
+  const starters = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { title: string; fields: FormField[] }[] = [];
+    for (const f of [...HOUSE_FORMS, ...BUILT_IN_TEMPLATES]) {
+      const k = f.title.trim().toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ title: f.title, fields: f.fields });
+    }
+    return out;
+  }, []);
 
   // ── Builder ────────────────────────────────────────────────────────────────
   const addField = () => {
@@ -193,84 +199,28 @@ export function FacilitatorFormsScreen() {
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFormTemplate(id).catch(() => {}); load(); } },
   ]);
-  const formsList = [
-    ...templates.map((t) => ({ key: t.id, title: t.title, fields: t.fields, templateId: t.id as string | undefined, saved: true })),
-    ...starters.map((s, i) => ({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined as string | undefined, saved: false })),
-  ].sort((a, b) => (sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
+  // Saved templates first (they win), then starters — skipping any title already
+  // shown, so nothing appears twice across saved + starter lists.
+  const formsList = (() => {
+    const seen = new Set<string>();
+    const out: { key: string; title: string; fields: FormField[]; templateId?: string; saved: boolean }[] = [];
+    for (const t of templates) {
+      const k = t.title.trim().toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, saved: true });
+    }
+    starters.forEach((s, i) => {
+      const k = s.title.trim().toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined, saved: false });
+    });
+    return out.sort((a, b) => (sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
+  })();
 
-  return (
-    <Screen>
-      <View style={styles.headerRow}>
-        <Text style={styles.pageTitle}>Forms</Text>
-        <TouchableOpacity style={styles.newBtn} onPress={openBuilder}><Text style={styles.newBtnText}>＋ New form</Text></TouchableOpacity>
-      </View>
-      <View style={styles.subActions}>
-        <TouchableOpacity onPress={openWrite}><Text style={styles.subAction}>✍️ Write agreement</Text></TouchableOpacity>
-        <TouchableOpacity onPress={openUpload}><Text style={styles.subAction}>⬆️ Upload document</Text></TouchableOpacity>
-      </View>
-
-      <View style={styles.tabs}>
-        <TouchableOpacity style={[styles.tabBtn, tab === 'forms' && styles.tabBtnActive]} onPress={() => setTab('forms')}>
-          <Text style={[styles.tabText, tab === 'forms' && styles.tabTextActive]}>Forms</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabBtn, tab === 'submissions' && styles.tabBtnActive]} onPress={() => setTab('submissions')}>
-          <Text style={[styles.tabText, tab === 'submissions' && styles.tabTextActive]}>Submissions</Text>
-          <View style={styles.badge}><Text style={styles.badgeText}>{responses.length}</Text></View>
-        </TouchableOpacity>
-      </View>
-
-      {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null}
-
-      {tab === 'forms' ? (
-        <Card style={{ padding: 0 }}>
-          <View style={styles.thead}>
-            <TouchableOpacity style={styles.colTitle} onPress={() => setSortAsc((a) => !a)}>
-              <Text style={styles.th}>TITLE {sortAsc ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-            <Text style={[styles.th, styles.colType]}>FIELDS</Text>
-            <Text style={[styles.th, styles.colRight]}>SUBMISSIONS</Text>
-          </View>
-          {formsList.map((f) => (
-            <View key={f.key} style={styles.tr}>
-              <View style={styles.colTitle}>
-                <Text style={styles.cellTitle}>{f.title}</Text>
-                {f.saved
-                  ? <TouchableOpacity onPress={() => del(f.templateId!, f.title)}><Text style={styles.delLink}>Delete</Text></TouchableOpacity>
-                  : <Text style={styles.starterTag}>Starter template</Text>}
-              </View>
-              <Text style={[styles.cell, styles.colType]}>{f.fields.length}</Text>
-              <View style={[styles.colRight, styles.rightCell]}>
-                <TouchableOpacity onPress={() => setTab('submissions')}><Text style={styles.link}>{countFor(f.title)} ›</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => openSend(f)} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </Card>
-      ) : (
-        <Card style={{ padding: 0 }}>
-          <View style={styles.thead}>
-            <Text style={[styles.th, styles.colTitle]}>NAME</Text>
-            <Text style={[styles.th, styles.colType]}>FORM</Text>
-            <Text style={[styles.th, styles.colRight]}>STATUS</Text>
-          </View>
-          {responses.length === 0 ? (
-            <View style={styles.tr}><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></View>
-          ) : responses.slice(0, 100).map((r) => (
-            <View key={r.id} style={styles.tr}>
-              <View style={styles.colTitle}>
-                <Text style={styles.cellTitle}>{nameOf(r.individualId)}</Text>
-                <Text style={typography.caption}>{formatDateTime(r.createdAt)}</Text>
-              </View>
-              <Text style={[styles.cell, styles.colType]} numberOfLines={1}>{r.title}</Text>
-              <View style={[styles.colRight, styles.rightCell]}>
-                <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
-              </View>
-            </View>
-          ))}
-        </Card>
-      )}
-      <View style={{ height: spacing.xl }} />
-
+  const Modals = (
+    <>
       {/* ── New form builder modal ───────────────────────────────────────────── */}
       <Modal visible={builderOpen} transparent animationType="slide" onRequestClose={() => setBuilderOpen(false)}>
         <View style={styles.backdrop}>
@@ -366,6 +316,131 @@ export function FacilitatorFormsScreen() {
           </View>
         </View>
       </Modal>
+    </>
+  );
+
+  // Phone / narrow: keep the simple, touch-friendly card layout (app stays as-is).
+  if (!wide) {
+    return (
+      <Screen>
+        <ScreenTitle title="Forms" subtitle="Build forms, collect signatures, and send documents to residents." />
+        <View style={{ marginBottom: spacing.sm }}>
+          <Button title="✍️ Write agreement" onPress={openWrite} />
+          <View style={{ height: spacing.sm }} />
+          <Button title="➕ New form" variant="secondary" onPress={openBuilder} />
+          <View style={{ height: spacing.sm }} />
+          <Button title="⬆️ Upload document" variant="secondary" onPress={openUpload} />
+        </View>
+
+        {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null}
+
+        <SectionTitle>Your forms</SectionTitle>
+        {formsList.map((f) => (
+          <Card key={f.key} style={styles.rowCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.body, { fontWeight: '700' }]}>{f.title}</Text>
+              <Text style={typography.caption}>{f.fields.length} field{f.fields.length === 1 ? '' : 's'}{f.saved ? '' : ' · starter'}</Text>
+            </View>
+            <TouchableOpacity onPress={() => openSend(f)}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+            {f.saved ? (
+              <TouchableOpacity onPress={() => del(f.templateId!, f.title)} style={{ marginLeft: spacing.sm }}>
+                <Text style={{ color: colors.textMuted, fontSize: 18 }}>🗑</Text>
+              </TouchableOpacity>
+            ) : null}
+          </Card>
+        ))}
+
+        <SectionTitle>Submissions</SectionTitle>
+        {responses.length === 0 ? (
+          <Card><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></Card>
+        ) : responses.slice(0, 40).map((r) => (
+          <Card key={r.id} style={styles.rowCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.body, { fontWeight: '700' }]}>{r.title}</Text>
+              <Text style={typography.caption}>{nameOf(r.individualId)} · {formatDateTime(r.createdAt)}</Text>
+            </View>
+            <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+          </Card>
+        ))}
+        <View style={{ height: spacing.xl }} />
+        {Modals}
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      <View style={styles.headerRow}>
+        <Text style={styles.pageTitle}>Forms</Text>
+        <TouchableOpacity style={styles.newBtn} onPress={openBuilder}><Text style={styles.newBtnText}>＋ New form</Text></TouchableOpacity>
+      </View>
+      <View style={styles.subActions}>
+        <TouchableOpacity onPress={openWrite}><Text style={styles.subAction}>✍️ Write agreement</Text></TouchableOpacity>
+        <TouchableOpacity onPress={openUpload}><Text style={styles.subAction}>⬆️ Upload document</Text></TouchableOpacity>
+      </View>
+
+      <View style={styles.tabs}>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'forms' && styles.tabBtnActive]} onPress={() => setTab('forms')}>
+          <Text style={[styles.tabText, tab === 'forms' && styles.tabTextActive]}>Forms</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'submissions' && styles.tabBtnActive]} onPress={() => setTab('submissions')}>
+          <Text style={[styles.tabText, tab === 'submissions' && styles.tabTextActive]}>Submissions</Text>
+          <View style={styles.badge}><Text style={styles.badgeText}>{responses.length}</Text></View>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null}
+
+      {tab === 'forms' ? (
+        <Card style={{ padding: 0 }}>
+          <View style={styles.thead}>
+            <TouchableOpacity style={styles.colTitle} onPress={() => setSortAsc((a) => !a)}>
+              <Text style={styles.th}>TITLE {sortAsc ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            <Text style={[styles.th, styles.colType]}>FIELDS</Text>
+            <Text style={[styles.th, styles.colRight]}>SUBMISSIONS</Text>
+          </View>
+          {formsList.map((f) => (
+            <View key={f.key} style={styles.tr}>
+              <View style={styles.colTitle}>
+                <Text style={styles.cellTitle}>{f.title}</Text>
+                {f.saved
+                  ? <TouchableOpacity onPress={() => del(f.templateId!, f.title)}><Text style={styles.delLink}>Delete</Text></TouchableOpacity>
+                  : <Text style={styles.starterTag}>Starter template</Text>}
+              </View>
+              <Text style={[styles.cell, styles.colType]}>{f.fields.length}</Text>
+              <View style={[styles.colRight, styles.rightCell]}>
+                <TouchableOpacity onPress={() => setTab('submissions')}><Text style={styles.link}>{countFor(f.title)} ›</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => openSend(f)} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </Card>
+      ) : (
+        <Card style={{ padding: 0 }}>
+          <View style={styles.thead}>
+            <Text style={[styles.th, styles.colTitle]}>NAME</Text>
+            <Text style={[styles.th, styles.colType]}>FORM</Text>
+            <Text style={[styles.th, styles.colRight]}>STATUS</Text>
+          </View>
+          {responses.length === 0 ? (
+            <View style={styles.tr}><Text style={typography.caption}>No submissions yet. Send a form to get started.</Text></View>
+          ) : responses.slice(0, 100).map((r) => (
+            <View key={r.id} style={styles.tr}>
+              <View style={styles.colTitle}>
+                <Text style={styles.cellTitle}>{nameOf(r.individualId)}</Text>
+                <Text style={typography.caption}>{formatDateTime(r.createdAt)}</Text>
+              </View>
+              <Text style={[styles.cell, styles.colType]} numberOfLines={1}>{r.title}</Text>
+              <View style={[styles.colRight, styles.rightCell]}>
+                <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+              </View>
+            </View>
+          ))}
+        </Card>
+      )}
+      <View style={{ height: spacing.xl }} />
+      {Modals}
     </Screen>
   );
 }
