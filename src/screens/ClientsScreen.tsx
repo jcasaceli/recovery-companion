@@ -6,7 +6,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -76,10 +76,11 @@ export function ClientsScreen() {
   const exportMembers = async () => {
     setExporting(true);
     try {
-      // Full records + all-time meeting check-ins for a rich export.
-      const [rowsRaw, checkins] = await Promise.all([
+      // Full records + all-time meeting check-ins + payments for a rich export.
+      const [rowsRaw, checkins, pays] = await Promise.all([
         listFacilitatorIndividuals().catch(() => [] as any[]),
         listOrgCheckins('1970-01-01T00:00:00Z').catch(() => [] as { individualId: string; createdAt: string }[]),
+        listOrgPayments().catch(() => [] as any[]),
       ]);
       const byId: Record<string, { count: number; last?: string }> = {};
       for (const c of checkins) {
@@ -88,10 +89,14 @@ export function ClientsScreen() {
         if (!e.last || c.createdAt > e.last) e.last = c.createdAt;
         byId[c.individualId] = e;
       }
+      const paidById: Record<string, number> = {};
+      for (const p of pays as any[]) {
+        if (p.status === 'paid') paidById[p.individualId] = (paidById[p.individualId] || 0) + (p.amountCents || 0);
+      }
       const d = (s?: string) => (s ? String(s).slice(0, 10) : '');
       const headers = [
         'First Name', 'Last Name', 'Phone', 'Email', 'House', 'Bed', 'Status', 'Level of Care',
-        'Monthly Fee', 'Rent Due Day', 'Move-in Date', 'Discharge Date', 'Sobriety Date',
+        'Monthly Fee', 'Rent Due Day', 'Total Paid to Date', 'Move-in Date', 'Discharge Date', 'Sobriety Date',
         'Program', 'Meeting Check-ins', 'Last Check-in', 'Join Code',
       ];
       const rows = (rowsRaw as any[]).map((r) => {
@@ -101,12 +106,39 @@ export function ClientsScreen() {
           houseLabel(r.house_id) ?? r.house_name ?? '', r.bed_label ?? '',
           r.status === 'completed' ? 'Completed' : 'In Care', r.level_of_care ?? '',
           r.monthly_rent_cents != null ? (r.monthly_rent_cents / 100).toFixed(2) : '',
-          r.rent_due_day ?? '', d(r.move_in_date), d(r.discharge_date), d(r.sobriety_date),
+          r.rent_due_day ?? '', ((paidById[r.id] || 0) / 100).toFixed(2),
+          d(r.move_in_date), d(r.discharge_date), d(r.sobriety_date),
           r.program_name ?? '', ci.count, ci.last ? new Date(ci.last).toISOString().slice(0, 10) : '',
           r.join_code ?? '',
         ];
       });
       downloadCsv(`members-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
+    } catch (e: any) { Alert.alert('Export', e?.message ?? 'Could not export.'); }
+    finally { setExporting(false); }
+  };
+
+  // One row per payment — QuickBooks-friendly transaction list.
+  const exportPayments = async () => {
+    setExporting(true);
+    try {
+      const [pays, rowsRaw] = await Promise.all([
+        listOrgPayments().catch(() => [] as any[]),
+        listFacilitatorIndividuals().catch(() => [] as any[]),
+      ]);
+      const nameById: Record<string, string> = {};
+      (rowsRaw as any[]).forEach((r) => { nameById[r.id] = `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(); });
+      const headers = ['Date', 'Member', 'Amount', 'Method', 'Status', 'Period', 'On Time'];
+      const rows = (pays as any[]).map((p) => [
+        p.paidAt ? new Date(p.paidAt).toISOString().slice(0, 10) : '',
+        nameById[p.individualId] || p.memberName || '',
+        ((p.amountCents || 0) / 100).toFixed(2),
+        p.method ?? '',
+        p.status === 'reported' ? 'Reported' : 'Paid',
+        p.periodMonth ?? '',
+        p.onTime === true ? 'Yes' : p.onTime === false ? 'No' : '',
+      ]);
+      if (!rows.length) { Alert.alert('No payments', 'There are no payments to export yet.'); return; }
+      downloadCsv(`payments-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
     } catch (e: any) { Alert.alert('Export', e?.message ?? 'Could not export.'); }
     finally { setExporting(false); }
   };
@@ -219,6 +251,13 @@ export function ClientsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Button title={exporting ? 'Exporting…' : '⬇️ Export CSV'} variant="secondary" onPress={exportMembers} disabled={exporting || !clients.length} />
+                </View>
+              </View>
+            ) : null}
+            {onWeb ? (
+              <View style={[styles.ioRow, { marginTop: 0 }]}>
+                <View style={{ flex: 1 }}>
+                  <Button title={exporting ? 'Exporting…' : '💵 Export payments (QuickBooks)'} variant="secondary" onPress={exportPayments} disabled={exporting} />
                 </View>
               </View>
             ) : null}
