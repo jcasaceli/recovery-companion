@@ -363,13 +363,7 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            {Platform.OS !== 'web' ? (
-              <Text style={typography.caption}>
-                Add or remove house managers from the web dashboard at soberlivingcompanion.com.
-              </Text>
-            ) : (
-              <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => setMgrOpen(true)} />
-            )}
+            <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => setMgrOpen(true)} />
           </Card>
 
           <HousesManager managers={managers} />

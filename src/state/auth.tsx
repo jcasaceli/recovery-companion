@@ -85,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone: row.phone ?? undefined,
           emailVerified: row.email_verified ?? false,
           phoneVerified: row.phone_verified ?? false,
+          mustChangePassword: row.must_change_password ?? false,
         });
         registerPush(); // save this device's push token for fan-out
         return;

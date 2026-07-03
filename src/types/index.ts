@@ -192,6 +192,7 @@ export interface Profile {
   phone?: string;
   emailVerified: boolean;
   phoneVerified: boolean;
+  mustChangePassword?: boolean;
 }
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly';

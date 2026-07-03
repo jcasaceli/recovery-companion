@@ -105,6 +105,8 @@ export function RootNavigator() {
     // even though the link already created a session.
     if (auth.recovery) return <SetPasswordScreen />;
     if (auth.status === 'signedOut') return <AuthScreen />;
+    // Accounts created with a temp password (house managers) must set their own.
+    if (auth.profile?.mustChangePassword) return <SetPasswordScreen />;
     // Facilitators get an admin console (Clients / Payments / Resources /
     // Account) until they open a client, at which point they enter its app.
     if (auth.profile?.role === 'facilitator' && !cloudHasIndividual) {

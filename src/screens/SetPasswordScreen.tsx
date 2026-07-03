@@ -23,6 +23,7 @@ export function SetPasswordScreen() {
     try {
       await updatePassword(pw1);
       auth.completeRecovery();
+      await auth.refreshProfile(); // clears the must-change-password gate
       Alert.alert('Password updated ✅', 'You’re all set — you’re now signed in.');
     } catch (e: any) {
       Alert.alert('Could not update password', e?.message ?? 'Try again.');
@@ -59,11 +60,13 @@ export function SetPasswordScreen() {
         />
         <Button title={busy ? 'Saving…' : 'Save new password'} onPress={save} disabled={busy || !pw1 || !pw2} />
         {busy ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} /> : null}
-        <View style={{ alignItems: 'center', marginTop: spacing.md }}>
-          <Text style={typography.caption} onPress={() => auth.completeRecovery()}>
-            Skip for now
-          </Text>
-        </View>
+        {auth.profile?.mustChangePassword ? null : (
+          <View style={{ alignItems: 'center', marginTop: spacing.md }}>
+            <Text style={typography.caption} onPress={() => auth.completeRecovery()}>
+              Skip for now
+            </Text>
+          </View>
+        )}
       </Card>
     </Screen>
   );

@@ -102,6 +102,11 @@ export async function signInWithPassword(email: string, password: string) {
 export async function updatePassword(newPassword: string) {
   const { error } = await db().auth.updateUser({ password: newPassword });
   if (error) throw error;
+  // Once they've set their own password, they no longer need to be forced to.
+  try {
+    const { data: u } = await db().auth.getUser();
+    if (u.user) await db().from('profiles').update({ must_change_password: false }).eq('id', u.user.id);
+  } catch {}
 }
 
 /** Send a password-reset email. We pass an explicit redirectTo so the link
@@ -1694,10 +1699,15 @@ export async function toggleLike(postId: string, like: boolean) {
 
 /** Facilitator: their org row (for CashApp/Zelle + settings). */
 export async function getMyOrg() {
-  const { data: m } = await db().from('org_members').select('org_id').limit(1).maybeSingle();
-  if (!m) return null;
-  const { data } = await db().from('organizations').select('*').eq('id', m.org_id).maybeSingle();
-  return data;
+  const { data: members } = await db().from('org_members').select('org_id');
+  if (!members || !members.length) return null;
+  const ids = members.map((m: any) => m.org_id);
+  const { data: orgs } = await db().from('organizations').select('*').in('id', ids);
+  if (!orgs || !orgs.length) return null;
+  // A house manager may also have a stray auto-created demo org — always prefer a
+  // subscribed org so they get the same access as the owner (no extra cost).
+  const active = orgs.find((o: any) => o.subscription_status === 'active' || o.subscription_status === 'trialing');
+  return active || orgs[0];
 }
 
 export async function setOrgPaymentHandles(_orgId: string, cashapp: string, zelle: string) {
