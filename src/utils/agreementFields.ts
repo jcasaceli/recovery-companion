@@ -60,6 +60,45 @@ export function extractLabeledValues(html: string, values: Record<string, any>):
   return out;
 }
 
+// Parse a rich-text agreement into blocks of inline runs (plain text + field
+// tokens) so native can render the fields tappable IN the document flow.
+export interface DocRun { kind: 'text' | 'field'; text?: string; key?: string; type?: string }
+export interface DocBlock { bullet: boolean; runs: DocRun[] }
+
+function stripToText(s: string): string {
+  return s.replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+export function parseInlineDoc(html: string): DocBlock[] {
+  if (!html) return [];
+  const chunks = html
+    .replace(/<li[^>]*>/gi, '[[BULLET]]')
+    .split(/<\/(?:p|div|li|h[1-6]|tr)>|<br\s*\/?>/i);
+  const blocks: DocBlock[] = [];
+  for (let raw of chunks) {
+    const bullet = raw.indexOf('[[BULLET]]') >= 0;
+    raw = raw.split('[[BULLET]]').join('');
+    const runs: DocRun[] = [];
+    let last = 0;
+    let m: RegExpExecArray | null;
+    SPAN_RE.lastIndex = 0;
+    while ((m = SPAN_RE.exec(raw))) {
+      const pre = stripToText(raw.slice(last, m.index));
+      if (pre) runs.push({ kind: 'text', text: pre });
+      const type = attr(m[0], 'data-sl-field');
+      const key = attr(m[0], 'data-sl-key');
+      if (type && key) runs.push({ kind: 'field', key, type });
+      last = m.index + m[0].length;
+    }
+    const tail = stripToText(raw.slice(last));
+    if (tail) runs.push({ kind: 'text', text: tail });
+    if (runs.length) blocks.push({ bullet, runs });
+  }
+  return blocks;
+}
+
 export function agreementFieldLabel(type: string): string {
   switch (type) {
     case 'signature': return '✍️ Signature';

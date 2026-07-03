@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SignaturePad } from './SignaturePad';
-import { RichTextView } from './RichTextView';
 import { colors, spacing, radius, typography } from '../theme';
-import { parseAgreementFields, agreementFieldLabel, isFieldFilled } from '../utils/agreementFields';
+import { parseInlineDoc, agreementFieldLabel, isFieldFilled, DocRun } from '../utils/agreementFields';
 
 const kbType = (t: string): any => (t === 'number' ? 'number-pad' : t === 'phone' ? 'phone-pad' : t === 'email' ? 'email-address' : 'default');
 
 /**
- * Native fallback: render the agreement text, then list its fields below for the
- * resident to sign/fill (inline-in-document tapping is the web experience).
+ * Native: render the agreement with its fields tappable INLINE in the document
+ * (no separate list). Tapping a field opens a signature pad / input, or toggles
+ * a checkbox, right where it sits in the text.
  */
 export function SignableAgreement({
   html,
@@ -22,7 +22,7 @@ export function SignableAgreement({
   values: Record<string, any>;
   onChangeValue: (key: string, value: any) => void;
 }) {
-  const fields = parseAgreementFields(html);
+  const blocks = parseInlineDoc(html);
   const [active, setActive] = useState<{ key: string; type: string } | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
   const [text, setText] = useState('');
@@ -38,35 +38,42 @@ export function SignableAgreement({
     onChangeValue(active.key, active.type === 'signature' ? { paths } : text.trim());
     setActive(null);
   };
+  const tapField = (r: DocRun) => {
+    if (mode !== 'sign' || !r.key || !r.type) return;
+    if (r.type === 'checkbox') { onChangeValue(r.key, isFieldFilled('checkbox', values[r.key]) ? '' : 'checked'); return; }
+    open(r.key, r.type);
+  };
+
+  const fieldText = (r: DocRun) => {
+    const filled = isFieldFilled(r.type!, values[r.key!]);
+    if (r.type === 'signature') return filled ? ' ✓ Signed ' : ' ✍️ Sign ';
+    if (r.type === 'checkbox') return filled ? ' ☑ ' : ' ☐ ';
+    if (filled) return ` ${String(values[r.key!])} `;
+    return ` ${agreementFieldLabel(r.type!)} `;
+  };
 
   return (
     <View>
-      <RichTextView html={html} />
-      {fields.length ? (
-        <View style={{ marginTop: spacing.md }}>
-          <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.xs }]}>Fields to complete</Text>
-          {fields.map((f, i) => {
-            const filled = isFieldFilled(f.type, values[f.key]);
-            return (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.fieldRow, filled && styles.fieldRowDone]}
-                onPress={() => {
-                  if (mode !== 'sign') return;
-                  if (f.type === 'checkbox') { onChangeValue(f.key, filled ? '' : 'checked'); return; }
-                  open(f.key, f.type);
-                }}
-                disabled={mode !== 'sign'}
-              >
-                <Text style={[typography.body, { flex: 1 }]}>{agreementFieldLabel(f.type)} {i + 1}</Text>
-                <Text style={{ fontWeight: '700', color: filled ? colors.success : colors.warning }}>
-                  {filled ? (f.type === 'signature' ? '✓ Signed' : f.type === 'checkbox' ? '☑ Checked' : String(values[f.key])) : (mode === 'sign' ? 'Tap to fill' : '—')}
+      {blocks.map((b, bi) => (
+        <View key={bi} style={styles.block}>
+          {b.bullet ? <Text style={[typography.body, { marginRight: 6 }]}>•</Text> : null}
+          <Text style={[typography.body, { flex: 1, lineHeight: 24, color: colors.textPrimary }]}>
+            {b.runs.map((r, ri) => {
+              if (r.kind === 'text') return <Text key={ri}>{r.text}</Text>;
+              const filled = isFieldFilled(r.type!, values[r.key!]);
+              return (
+                <Text
+                  key={ri}
+                  onPress={() => tapField(r)}
+                  style={[styles.chip, filled ? styles.chipFilled : styles.chipEmpty]}
+                >
+                  {fieldText(r)}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
+              );
+            })}
+          </Text>
         </View>
-      ) : null}
+      ))}
 
       <Modal visible={!!active} transparent animationType="fade" onRequestClose={() => setActive(null)}>
         <View style={styles.backdrop}>
@@ -103,8 +110,10 @@ export function SignableAgreement({
 }
 
 const styles = StyleSheet.create({
-  fieldRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: '#FCE8A6', borderRadius: radius.md, marginBottom: spacing.sm },
-  fieldRowDone: { backgroundColor: '#CDE9D6' },
+  block: { flexDirection: 'row', marginBottom: spacing.sm },
+  chip: { fontWeight: '700', borderRadius: 4, overflow: 'hidden' },
+  chipEmpty: { backgroundColor: '#FCE8A6', color: '#7a5b00' },
+  chipFilled: { backgroundColor: '#CDE9D6', color: '#1f5130' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.sm },

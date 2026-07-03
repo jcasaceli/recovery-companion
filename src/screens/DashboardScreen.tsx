@@ -186,8 +186,11 @@ export function DashboardScreen() {
   const notPaid = withRent.filter((m) => paidSum(m.id) < (m.monthly_rent_cents || 0));
   const pct = expected ? Math.round((collected / expected) * 100) : 0;
 
-  const signed = agreements.filter((a) => a.status === 'signed');
-  const pendingAgs = agreements.filter((a) => a.status !== 'signed');
+  // Only count/show agreements for current (in-care) members — hide them for
+  // discharged or deleted residents so the dashboard doesn't clutter.
+  const activeIds = new Set(members.filter((m: any) => (m.status ?? 'in_care') !== 'completed').map((m: any) => m.id));
+  const signed = agreements.filter((a) => a.status === 'signed' && activeIds.has(a.individualId));
+  const pendingAgs = agreements.filter((a) => a.status !== 'signed' && activeIds.has(a.individualId));
   const recentPays = [...payments].filter((p) => p.status === 'paid').slice(0, 6);
 
   // Curfew compliance: latest check-in today per member.
