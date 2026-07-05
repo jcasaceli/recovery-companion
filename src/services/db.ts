@@ -1710,10 +1710,11 @@ export async function getMyOrg() {
   return active || orgs[0];
 }
 
-export async function setOrgPaymentHandles(_orgId: string, cashapp: string, zelle: string) {
+export async function setOrgPaymentHandles(orgId: string, cashapp: string, zelle: string) {
   // RPC so house managers (not just the owner) can set handles, without being
-  // able to change billing/join-code on the organizations row.
-  const { error } = await db().rpc('set_org_payment_handles', { p_cashapp: cashapp || '', p_zelle: zelle || '' });
+  // able to change billing/join-code. Pass the explicit org so it lands on the
+  // org the owner is viewing (not an arbitrary membership).
+  const { error } = await db().rpc('set_org_payment_handles', { p_org_id: orgId, p_cashapp: cashapp || '', p_zelle: zelle || '' });
   if (error) throw error;
 }
 

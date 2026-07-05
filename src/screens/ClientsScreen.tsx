@@ -56,8 +56,9 @@ export function ClientsScreen() {
   // Preview mode shows sample residents until the org subscribes.
   const sourceClients = (locked ? DEMO_CLIENTS : clients).filter((c) => {
     if (locked) return true;
-    // House managers only see members in their assigned house(s).
-    if (scope && !scope.isOwner && (!c.houseId || !scope.houseIds.includes(c.houseId))) return false;
+    // House managers see everyone by default (full access, same as the owner).
+    // Only when explicitly assigned to specific house(s) are they scoped to those.
+    if (scope && !scope.isOwner && scope.houseIds.length > 0 && (!c.houseId || !scope.houseIds.includes(c.houseId))) return false;
     // Owner can filter to one house.
     if (houseFilter !== 'ALL' && c.houseId !== houseFilter) return false;
     return true;

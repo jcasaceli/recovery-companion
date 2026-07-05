@@ -30,6 +30,7 @@ export function SettingsScreen() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [cashapp, setCashapp] = useState('');
   const [zelle, setZelle] = useState('');
+  const [handlesSaved, setHandlesSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // Owner vs house manager: the owner is the profile that created the org.
@@ -152,6 +153,8 @@ export function SettingsScreen() {
     }
     try {
       await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim());
+      setHandlesSaved(true);
+      setTimeout(() => setHandlesSaved(false), 2500);
       Alert.alert('Saved ✅', 'Your CashApp and Zelle details were saved. Members will see them on the Pay membership fee screen.');
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
@@ -314,20 +317,27 @@ export function SettingsScreen() {
             </Text>
             <TextInput style={styles.input} value={cashapp} onChangeText={setCashapp} placeholder="CashApp tag (e.g. $YourTag)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
             <TextInput style={styles.input} value={zelle} onChangeText={setZelle} placeholder="Zelle email or phone" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
-            <Button title="Save CashApp / Zelle" variant="secondary" onPress={saveHandles} />
+            <Button title={handlesSaved ? 'Saved ✓' : 'Save CashApp / Zelle'} variant="secondary" onPress={saveHandles} />
+            {handlesSaved ? <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ Saved — members will see these on the Pay screen.</Text> : null}
           </Card>
           {isOwner ? (
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>
-            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              $60/month to use Sober Living Companion for your sober living.
-            </Text>
-            {Platform.OS !== 'web' ? (
-              <Text style={typography.caption}>
-                Manage your subscription from the web dashboard at soberlivingcompanion.com.
-              </Text>
+            {subscriptionActive ? (
+              <Text style={[typography.body, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ You’re subscribed — thank you!</Text>
             ) : (
-              <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
+              <>
+                <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+                  $60/month to use Sober Living Companion for your sober living.
+                </Text>
+                {Platform.OS !== 'web' ? (
+                  <Text style={typography.caption}>
+                    Manage your subscription from the web dashboard at soberlivingcompanion.com.
+                  </Text>
+                ) : (
+                  <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
+                )}
+              </>
             )}
           </Card>
           ) : null}
