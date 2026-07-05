@@ -423,6 +423,11 @@ export function FacilitatorFormsScreen() {
               <TextInput style={styles.input} value={agrTitle} onChangeText={setAgrTitle} placeholder="e.g. House Membership Agreement" placeholderTextColor={colors.textMuted} />
               <View style={{ height: spacing.sm }} />
               <RichTextEditor key={editingId || 'new'} valueHtml={agrHtml} onChangeHtml={setAgrHtml} placeholder="Type or paste your agreement here…" />
+              {/^[\s\S]*data-sl-field="signature"/.test(agrHtml) ? (
+                <Text style={[typography.caption, { color: colors.primaryDark, marginTop: spacing.xs }]}>✍️ You've added a signature field — the member signs there. No extra signature line will be added at the bottom.</Text>
+              ) : (
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>Tip: if you don't drop a Signature field into the text, a signature line is added automatically at the bottom for the member. Don't add both.</Text>
+              )}
               <View style={{ height: spacing.sm }} />
               <Button title={busy ? 'Saving…' : (editingId ? '💾 Save changes' : '💾 Save as template')} variant="secondary" onPress={saveWrittenTemplate} disabled={busy} />
               <RecipientPicker />

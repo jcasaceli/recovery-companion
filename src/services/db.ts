@@ -1240,6 +1240,13 @@ export async function getSubmittedInfo(individualId: string): Promise<{ label: s
   const { extractLabeledValues } = await import('../utils/agreementFields');
   const out: { label: string; value: string; type: string; title: string; date: string }[] = [];
 
+  // Only keep MEANINGFUL info — skip signatures and generic un-labeled builder
+  // fields ("Text 1", "Number 2") that would clutter the profile. A label counts
+  // as meaningful if it's more than a bare field-type word.
+  const GENERIC = /^(text|number|date|signature|initials?|checkbox|answer|field)\s*#?\d*$/i;
+  const keep = (label: string, value: string) =>
+    !!value && !!label && !GENERIC.test(label.trim());
+
   const { data: ags } = await db()
     .from('agreements')
     .select('title, body_html, field_values, signed_at, created_at, status')
@@ -1248,6 +1255,7 @@ export async function getSubmittedInfo(individualId: string): Promise<{ label: s
   for (const a of ags ?? []) {
     if (!a.body_html || !a.field_values) continue;
     for (const f of extractLabeledValues(a.body_html, a.field_values)) {
+      if (f.type === 'signature' || !keep(f.label, f.value)) continue;
       out.push({ label: f.label, value: f.value, type: f.type, title: a.title, date: a.signed_at || a.created_at });
     }
   }
@@ -1264,12 +1272,20 @@ export async function getSubmittedInfo(individualId: string): Promise<{ label: s
       if (['heading', 'paragraph', 'signature', 'initial'].includes(fld.type)) continue;
       const v = answers[fld.key];
       if (v == null || String(v).trim() === '') continue;
-      out.push({ label: fld.label, value: fld.type === 'yesno' ? (v ? 'Yes' : 'No') : String(v), type: fld.type, title: r.title, date: r.created_at });
+      const value = fld.type === 'yesno' ? (v ? 'Yes' : 'No') : String(v);
+      if (!keep(fld.label, value)) continue;
+      out.push({ label: fld.label, value, type: fld.type, title: r.title, date: r.created_at });
     }
   }
 
-  out.sort((a, b) => (a.date < b.date ? 1 : -1));
-  return out;
+  // De-dupe by label (keep the most recent value for each field).
+  const seen = new Set<string>();
+  const deduped = out.sort((a, b) => (a.date < b.date ? 1 : -1)).filter((e) => {
+    const k = e.label.toLowerCase().trim();
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  return deduped;
 }
 
 /** Member: sign an agreement that has placed fields. Stores each box's value
