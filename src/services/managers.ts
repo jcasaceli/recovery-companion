@@ -29,8 +29,8 @@ export async function listManagers(): Promise<{ managers: Manager[]; priceConfig
   return call('/api/managers', 'GET');
 }
 
-/** Returns the temp password to share with the new manager. */
-export async function addManager(name: string, email: string, phone: string): Promise<{ email: string; password: string; billed: boolean }> {
+/** Returns the new manager's id + the temp password to share with them. */
+export async function addManager(name: string, email: string, phone: string): Promise<{ id: string; email: string; password: string; billed: boolean }> {
   return call('/api/managers', 'POST', { name, email, phone });
 }
 

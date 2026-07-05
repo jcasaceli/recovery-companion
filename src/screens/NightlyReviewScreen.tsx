@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { formatDate } from '../utils/format';
+import { scheduleNightlyReminder, cancelNightlyReminder } from '../services/push';
+
+const REMIND_KEY = 'nightly-reminder';
+const TIME_OPTS = [
+  { label: '8:00 PM', h: 20, m: 0 },
+  { label: '9:00 PM', h: 21, m: 0 },
+  { label: '9:30 PM', h: 21, m: 30 },
+  { label: '10:00 PM', h: 22, m: 0 },
+];
 
 /**
  * Nightly Review — based on the nightly inventory ("When We Retire at Night")
@@ -37,6 +46,8 @@ export function NightlyReviewScreen() {
   const [history, setHistory] = useState<Review[]>([]);
   const [savedToday, setSavedToday] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [remindOn, setRemindOn] = useState(false);
+  const [remindIdx, setRemindIdx] = useState(1); // default 9:00 PM
 
   useEffect(() => {
     AsyncStorage.getItem(STORE_KEY).then((raw) => {
@@ -45,7 +56,24 @@ export function NightlyReviewScreen() {
       const today = list.find((r) => r.date === todayStr());
       if (today) { setAnswers(today.answers); setSavedToday(true); }
     }).catch(() => {});
+    AsyncStorage.getItem(REMIND_KEY).then((raw) => {
+      if (!raw) return;
+      try { const p = JSON.parse(raw); setRemindOn(!!p.on); setRemindIdx(p.idx ?? 1); } catch {}
+    }).catch(() => {});
   }, []);
+
+  const applyReminder = async (on: boolean, idx: number) => {
+    setRemindOn(on); setRemindIdx(idx);
+    AsyncStorage.setItem(REMIND_KEY, JSON.stringify({ on, idx })).catch(() => {});
+    if (on) {
+      const t = TIME_OPTS[idx];
+      const ok = await scheduleNightlyReminder(t.h, t.m);
+      if (!ok) { setRemindOn(false); Alert.alert('Allow notifications', 'Turn on notifications for Sober Living Companion to get a nightly reminder.'); }
+      else Alert.alert('Reminder set 🌙', `We'll remind you every night at ${t.label}.`);
+    } else {
+      await cancelNightlyReminder();
+    }
+  };
 
   const set = (k: string, v: string) => { setAnswers((a) => ({ ...a, [k]: v })); setSavedToday(false); };
 
@@ -73,6 +101,27 @@ export function NightlyReviewScreen() {
           A few honest minutes before bed. This is just for you — it’s private and never shared.
         </Text>
       </Card>
+
+      {Platform.OS !== 'web' ? (
+        <Card>
+          <TouchableOpacity style={styles.remindRow} activeOpacity={0.7} onPress={() => applyReminder(!remindOn, remindIdx)}>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.body, { fontWeight: '600' }]}>🔔 Nightly reminder</Text>
+              <Text style={typography.caption}>Get a gentle nudge to do your review before bed.</Text>
+            </View>
+            <View style={[styles.switch, remindOn && styles.switchOn]}><View style={[styles.knob, remindOn && styles.knobOn]} /></View>
+          </TouchableOpacity>
+          {remindOn ? (
+            <View style={styles.timeRow}>
+              {TIME_OPTS.map((t, i) => (
+                <TouchableOpacity key={t.label} onPress={() => applyReminder(true, i)} style={[styles.timeChip, remindIdx === i && styles.timeChipOn]}>
+                  <Text style={[styles.timeText, remindIdx === i && { color: colors.textInverse }]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      ) : null}
 
       <SectionTitle>Looking back on today</SectionTitle>
       <Card>
@@ -159,4 +208,13 @@ const styles = StyleSheet.create({
   ynBad: { backgroundColor: colors.warning },
   ynText: { fontWeight: '700', color: colors.textSecondary },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, minHeight: 60, textAlignVertical: 'top' },
+  remindRow: { flexDirection: 'row', alignItems: 'center' },
+  switch: { width: 48, height: 28, borderRadius: 14, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', padding: 2 },
+  switchOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignSelf: 'flex-start' },
+  knobOn: { alignSelf: 'flex-end' },
+  timeRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm, gap: spacing.xs },
+  timeChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  timeChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  timeText: { fontWeight: '700', color: colors.textSecondary, fontSize: 13 },
 });

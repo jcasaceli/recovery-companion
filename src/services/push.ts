@@ -143,3 +143,28 @@ export function describeAudience(audiences: NotifyAudience[]): string {
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
   return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
 }
+
+// ── Nightly review reminder (local, repeating daily notification) ────────────
+const NIGHTLY_ID = 'nightly-review-reminder';
+
+/** Schedule a daily local reminder at hour:minute (24h). Returns false if the
+ *  user declined notifications or on web (no local scheduling there). */
+export async function scheduleNightlyReminder(hour: number, minute: number): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  let status = existing;
+  if (existing !== 'granted') status = (await Notifications.requestPermissionsAsync()).status;
+  if (status !== 'granted') return false;
+  try { await Notifications.cancelScheduledNotificationAsync(NIGHTLY_ID); } catch {}
+  await Notifications.scheduleNotificationAsync({
+    identifier: NIGHTLY_ID,
+    content: { title: '🌙 Nightly Review', body: 'Take a few honest minutes to review your day before bed.' },
+    trigger: { hour, minute, repeats: true } as any,
+  });
+  return true;
+}
+
+export async function cancelNightlyReminder(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try { await Notifications.cancelScheduledNotificationAsync(NIGHTLY_ID); } catch {}
+}

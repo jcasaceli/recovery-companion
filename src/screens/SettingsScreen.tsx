@@ -6,7 +6,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, House } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
@@ -43,6 +43,15 @@ export function SettingsScreen() {
   const [mgrPhone, setMgrPhone] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
   const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
+  const [newMgr, setNewMgr] = useState<{ id: string; name: string } | null>(null);
+  const [houses, setHouses] = useState<House[]>([]);
+  const [assignedHouses, setAssignedHouses] = useState<Set<string>>(new Set());
+  const toggleAssign = async (houseId: string) => {
+    if (!newMgr) return;
+    const on = !assignedHouses.has(houseId);
+    setAssignedHouses((s) => { const n = new Set(s); if (on) n.add(houseId); else n.delete(houseId); return n; });
+    try { if (on) await assignManagerToHouse(houseId, newMgr.id); } catch (e: any) { Alert.alert('Could not assign', e?.message ?? 'Try again.'); }
+  };
   const [notifyActivity, setNotifyActivity] = useState(true);
 
   const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
@@ -124,6 +133,9 @@ export function SettingsScreen() {
     try {
       const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim());
       setNewCreds({ email: r.email, password: r.password });
+      setNewMgr({ id: r.id, name: mgrName.trim() });
+      setAssignedHouses(new Set());
+      listHouses().then(setHouses).catch(() => {});
       setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone('');
       loadManagers();
     } catch (e: any) {
@@ -463,7 +475,28 @@ export function SettingsScreen() {
               <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
               <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
             </View>
-            <Button title="Done" onPress={() => setNewCreds(null)} />
+
+            <Text style={[typography.body, { fontWeight: '700', marginBottom: 4 }]}>Which house{houses.length === 1 ? '' : 's'} should {newMgr?.name || 'this manager'} manage?</Text>
+            {houses.length === 0 ? (
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>You don't have any houses yet. This manager will see all members. You can create houses under Account → Houses (scroll down) and assign them later.</Text>
+            ) : (
+              <>
+                {houses.map((h) => {
+                  const on = assignedHouses.has(h.id);
+                  return (
+                    <TouchableOpacity key={h.id} style={styles.mgrRow} onPress={() => toggleAssign(h.id)}>
+                      <View style={[styles.assignBox, on && styles.assignBoxOn]}>{on ? <Text style={styles.assignCheck}>✓</Text> : null}</View>
+                      <Text style={typography.body}>{h.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
+                  Leave all unchecked to give this manager access to every house. You can add more houses anytime under Account → Houses (scroll down to “Houses”).
+                </Text>
+              </>
+            )}
+
+            <Button title="Done" onPress={() => { setNewCreds(null); setNewMgr(null); }} />
           </View>
         </View>
       </Modal>
@@ -491,4 +524,7 @@ const styles = StyleSheet.create({
   credBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   credLabel: { ...typography.caption, color: colors.textMuted },
   credValue: { ...typography.body, fontWeight: '700' },
+  assignBox: { width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
+  assignBoxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  assignCheck: { color: colors.textInverse, fontWeight: '800', fontSize: 13 },
 });

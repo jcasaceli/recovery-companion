@@ -171,7 +171,7 @@ managersRouter.post('/', async (req, res) => {
     }
 
     const billing = await syncManagerSeats(org);
-    res.json({ email, password, billed: billing.billed, seats: billing.seats });
+    res.json({ id: uid, email, password, billed: billing.billed, seats: billing.seats });
   } catch (e) {
     console.error('[managers] create', e);
     res.status(500).json({ error: e.message });
