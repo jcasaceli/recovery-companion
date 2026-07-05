@@ -29,6 +29,12 @@ export function DateField({
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysIn; d++) cells.push(d);
+  // Pad to whole weeks and chunk into rows of 7. Rendering explicit week rows
+  // (with flex columns) keeps every day under the right weekday — percentage
+  // widths sub-pixel-round and can wrap a row at 6, shifting all later dates.
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   const todayIso = isoOf(now.getFullYear(), now.getMonth(), now.getDate());
   const move = (delta: number) => {
@@ -61,23 +67,25 @@ export function DateField({
             <View style={styles.dowRow}>
               {DOW.map((d) => <Text key={d} style={styles.dowText}>{d}</Text>)}
             </View>
-            <View style={styles.grid}>
-              {cells.map((d, i) => {
-                if (d === null) return <View key={`b${i}`} style={styles.cell} />;
-                const iso = isoOf(cur.y, cur.m, d);
-                const sel = iso === value;
-                const isToday = iso === todayIso;
-                return (
-                  <TouchableOpacity
-                    key={iso}
-                    style={[styles.cell, sel && styles.cellSel, !sel && isToday && styles.cellToday]}
-                    onPress={() => { onChange(iso); setOpen(false); }}
-                  >
-                    <Text style={[styles.cellText, sel && styles.cellTextSel]}>{d}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {weeks.map((week, wi) => (
+              <View key={wi} style={styles.weekRow}>
+                {week.map((d, i) => {
+                  if (d === null) return <View key={`b${wi}-${i}`} style={styles.cell} />;
+                  const iso = isoOf(cur.y, cur.m, d);
+                  const sel = iso === value;
+                  const isToday = iso === todayIso;
+                  return (
+                    <TouchableOpacity
+                      key={iso}
+                      style={[styles.cell, sel && styles.cellSel, !sel && isToday && styles.cellToday]}
+                      onPress={() => { onChange(iso); setOpen(false); }}
+                    >
+                      <Text style={[styles.cellText, sel && styles.cellTextSel]}>{d}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -146,9 +154,9 @@ const styles = StyleSheet.create({
   calTitle: { ...typography.h3 },
   navArrow: { fontSize: 28, color: colors.primary, fontWeight: '700', paddingHorizontal: spacing.sm },
   dowRow: { flexDirection: 'row' },
-  dowText: { width: `${100 / 7}%`, textAlign: 'center', fontSize: 12, fontWeight: '700', color: colors.textMuted, paddingVertical: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+  dowText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', color: colors.textMuted, paddingVertical: 4 },
+  weekRow: { flexDirection: 'row' },
+  cell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   cellSel: { backgroundColor: colors.primary },
   cellToday: { borderWidth: 1, borderColor: colors.primary },
   cellText: { fontSize: 15, color: colors.textPrimary },
