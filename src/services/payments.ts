@@ -54,9 +54,22 @@ export interface ConnectStatus {
   detailsSubmitted?: boolean;
 }
 
-/** Facilitator: open Stripe Connect onboarding in the browser. */
+/** Facilitator: open Stripe Connect onboarding (creates a NEW account). */
 export async function startConnectOnboarding() {
   const { url } = await call('/api/stripe/connect/onboard', 'POST');
+  await openCheckout(url);
+}
+
+/** Is the "connect an existing Stripe account" (OAuth) option available yet?
+ *  Returns the authorize URL when the platform has configured the OAuth client. */
+export async function getConnectExistingUrl(): Promise<{ available: boolean; url?: string }> {
+  return call('/api/stripe/connect/existing-url', 'GET');
+}
+
+/** Facilitator: link their EXISTING Stripe account via OAuth. */
+export async function startConnectExisting() {
+  const { available, url } = await getConnectExistingUrl();
+  if (!available || !url) throw new Error('Connecting an existing account isn’t enabled yet.');
   await openCheckout(url);
 }
 

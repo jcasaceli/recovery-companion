@@ -176,6 +176,53 @@ stripeRouter.post('/connect/onboard', async (req, res) => {
   }
 });
 
+// ── Connect: link an EXISTING Stripe account via OAuth (Standard) ────────────
+const CONNECT_CLIENT_ID = process.env.STRIPE_CONNECT_CLIENT_ID;
+const SERVER_BASE = process.env.PUBLIC_SERVER_URL || 'https://recovery-companion-y4x6.onrender.com';
+
+// Returns the "Connect with Stripe" authorize URL, or { available:false } when
+// the OAuth client isn't configured yet (so the app hides the option).
+stripeRouter.get('/connect/existing-url', async (req, res) => {
+  if (!ready(res)) return;
+  if (!CONNECT_CLIENT_ID) return res.json({ available: false });
+  try {
+    const user = await getUser(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated.' });
+    const org = await facilitatorOrg(user.id);
+    if (!org) return res.status(400).json({ error: 'No organization found.' });
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: CONNECT_CLIENT_ID,
+      scope: 'read_write',
+      redirect_uri: `${SERVER_BASE}/api/stripe/connect/oauth/callback`,
+      state: org.id,
+    });
+    if (user.email) params.set('stripe_user[email]', user.email);
+    res.json({ available: true, url: `https://connect.stripe.com/oauth/authorize?${params.toString()}` });
+  } catch (e) {
+    console.error('[stripe] existing-url', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Stripe redirects the operator back here after they authorize with their
+// existing account. Exchange the code for their account id and store it.
+stripeRouter.get('/connect/oauth/callback', async (req, res) => {
+  if (!ready(res)) return;
+  const { code, state, error: oerr } = req.query;
+  if (oerr || !code || !state) return res.redirect(`${RETURN_URL}?stripe=cancelled`);
+  try {
+    const tok = await stripe.oauth.token({ grant_type: 'authorization_code', code });
+    await supabaseAdmin.from('organizations')
+      .update({ stripe_account_id: tok.stripe_user_id, stripe_account_type: 'standard' })
+      .eq('id', state);
+    res.redirect(`${RETURN_URL}?stripe=connected`);
+  } catch (e) {
+    console.error('[stripe] oauth callback', e);
+    res.redirect(`${RETURN_URL}?stripe=error`);
+  }
+});
+
 // ── Connect: status ────────────────────────────────────────────────────────
 stripeRouter.get('/connect/status', async (req, res) => {
   if (!ready(res)) return;

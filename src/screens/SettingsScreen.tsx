@@ -5,7 +5,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/u
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, ConnectStatus } from '../services/payments';
+import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, startConnectExisting, getConnectExistingUrl, ConnectStatus } from '../services/payments';
 import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, House } from '../services/db';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
@@ -27,6 +27,16 @@ export function SettingsScreen() {
   const [savingPw, setSavingPw] = useState(false);
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
+  const [canConnectExisting, setCanConnectExisting] = useState(false);
+  const connectExisting = async () => {
+    setConnectBusy(true);
+    try {
+      await startConnectExisting();
+      const s = await getConnectStatus().catch(() => null);
+      if (s) setConnect(s);
+    } catch (e: any) { Alert.alert('Could not connect', e?.message ?? 'Try again.'); }
+    finally { setConnectBusy(false); }
+  };
   const [orgId, setOrgId] = useState<string | null>(null);
   const [cashapp, setCashapp] = useState('');
   const [zelle, setZelle] = useState('');
@@ -87,6 +97,7 @@ export function SettingsScreen() {
   useEffect(() => {
     if (isFacilitator) {
       getConnectStatus().then(setConnect).catch(() => setConnect(null));
+      getConnectExistingUrl().then((r) => setCanConnectExisting(!!r.available)).catch(() => setCanConnectExisting(false));
       getNotifyMemberActivity().then(setNotifyActivity).catch(() => {});
       getMyOrg().then((o: any) => {
         if (o) {
@@ -314,11 +325,20 @@ export function SettingsScreen() {
                 ? 'Setup started — finish Stripe onboarding to accept payments.'
                 : 'Connect Stripe to accept one-time and recurring fees. Funds go directly to your bank.'}
             </Text>
-            <Button
-              title={connect?.chargesEnabled ? 'Manage payment setup' : 'Set up payments'}
-              onPress={onboard}
-              disabled={connectBusy}
-            />
+            {canConnectExisting && !connect?.connected ? (
+              <>
+                <Button title="🔗 I already have Stripe — connect it" onPress={connectExisting} disabled={connectBusy} />
+                <View style={{ height: spacing.sm }} />
+                <Button title="Set up a new Stripe account" variant="secondary" onPress={onboard} disabled={connectBusy} />
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6 }]}>Already use Stripe for your business? Connect it — no new account needed.</Text>
+              </>
+            ) : (
+              <Button
+                title={connect?.chargesEnabled ? 'Manage payment setup' : 'Set up payments'}
+                onPress={onboard}
+                disabled={connectBusy}
+              />
+            )}
             {connectBusy ? <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} /> : null}
           </Card>
           ) : null}
