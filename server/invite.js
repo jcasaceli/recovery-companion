@@ -19,7 +19,7 @@ const admin =
     : null;
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const INVITE_FROM = process.env.WELCOME_FROM || 'Sober Living Companion <joseph@soberlivingdirectory.com>';
+const INVITE_FROM = process.env.WELCOME_FROM || 'Sober Living Companion <joseph@mail.soberlivingdirectory.com>';
 const APP_STORE = 'https://apps.apple.com/app/sober-living-companion/id6780705094';
 const PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.soberlivingcompanion.app';
 const WEB_APP = 'https://app.soberlivingcompanion.com';

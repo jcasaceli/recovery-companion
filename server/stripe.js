@@ -40,7 +40,7 @@ const RETURN_URL = process.env.PUBLIC_RETURN_URL || 'https://example.com/return'
 
 // ----- Welcome email for new paying operators (sent on first $60 payment) -----
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const WELCOME_FROM = process.env.WELCOME_FROM || 'Sober Living Companion <joseph@soberlivingdirectory.com>';
+const WELCOME_FROM = process.env.WELCOME_FROM || 'Sober Living Companion <joseph@mail.soberlivingdirectory.com>';
 
 async function sendWelcomeEmail(to, orgName) {
   if (!RESEND_API_KEY || !to) {
