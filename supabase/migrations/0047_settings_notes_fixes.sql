@@ -4,6 +4,10 @@
 -- 1) Force password change for temp-password (manager) accounts.
 alter table profiles add column if not exists must_change_password boolean not null default false;
 
+-- 1b) Multi-page (PDF) agreements: per-page images so members read one legible
+--     page at a time and fields can be placed per page.
+alter table agreements add column if not exists document_pages jsonb;
+
 -- 2) Payment handles: take an explicit org id so the save lands on the org the
 --    owner is actually viewing (the old limit-1 version could write to a stray org).
 drop function if exists set_org_payment_handles(text, text);

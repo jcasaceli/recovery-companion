@@ -10,7 +10,7 @@ import {
 } from '../services/db';
 import { DocumentFieldEditor } from '../components/DocumentFieldEditor';
 import { RichTextEditor } from '../components/RichTextEditor';
-import { pdfToImage } from '../utils/pdf';
+import { pdfToPages } from '../utils/pdf';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { HOUSE_FORMS } from '../content/houseForms';
 import { formatDateTime } from '../utils/format';
@@ -73,6 +73,7 @@ export function FacilitatorFormsScreen() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docTitle, setDocTitle] = useState('');
   const [pendingDoc, setPendingDoc] = useState<string | null>(null);
+  const [pendingPages, setPendingPages] = useState<string[]>([]);
   const [docFields, setDocFields] = useState<PlacedField[]>([]);
   const [converting, setConverting] = useState(false);
   // Write-agreement (rich text) modal
@@ -153,10 +154,11 @@ export function FacilitatorFormsScreen() {
     if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo access to upload a document.'); return; }
     const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.4, base64: true, allowsEditing: false });
     if (r.canceled || !r.assets?.[0]?.base64) return;
-    setPendingDoc(`data:image/jpeg;base64,${r.assets[0].base64}`);
+    const img = `data:image/jpeg;base64,${r.assets[0].base64}`;
+    setPendingDoc(img); setPendingPages([img]); setDocFields([]);
   };
 
-  // Web: pick a PDF, render it to one tall image, then place fields on it.
+  // Web: pick a PDF, render each page to its OWN image, then place fields per page.
   const pickPdf = () => {
     const g: any = globalThis;
     if (!g.document) { Alert.alert('PDF', 'Upload a PDF from the web app.'); return; }
@@ -170,8 +172,10 @@ export function FacilitatorFormsScreen() {
       reader.onload = async () => {
         setConverting(true);
         try {
-          const img = await pdfToImage(String(reader.result || ''));
-          setPendingDoc(img);
+          const pages = await pdfToPages(String(reader.result || ''));
+          if (!pages.length) throw new Error('No pages found.');
+          setPendingPages(pages);
+          setPendingDoc(pages[0]);
           setDocFields([]);
         } catch (e: any) { Alert.alert('Could not read PDF', e?.message ?? 'Try again.'); }
         finally { setConverting(false); }
@@ -210,9 +214,14 @@ export function FacilitatorFormsScreen() {
     setBusy(true);
     try {
       for (const id of ids) {
-        await createAgreement({ orgId, individualId: id, title: docTitle.trim(), documentData: pendingDoc, fields: docFields });
+        await createAgreement({
+          orgId, individualId: id, title: docTitle.trim(),
+          documentData: pendingDoc,
+          documentPages: pendingPages.length > 1 ? pendingPages : undefined,
+          fields: docFields,
+        });
       }
-      setUploadOpen(false); setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({});
+      setUploadOpen(false); setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({});
       Alert.alert('Sent ✅', `“${docTitle.trim()}” was sent to ${ids.length} resident${ids.length > 1 ? 's' : ''} to sign.`);
       load();
     } catch (e: any) { Alert.alert('Could not send', e?.message ?? 'Try again.'); }
@@ -259,7 +268,7 @@ export function FacilitatorFormsScreen() {
 
   const openBuilder = () => { setEditingId(null); setTitle(''); setFields([]); setBuilderOpen(true); };
   const openWrite = () => { setEditingId(null); setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
-  const openUpload = () => { setDocTitle(''); setPendingDoc(null); setDocFields([]); setSelected({}); setUploadOpen(true); };
+  const openUpload = () => { setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({}); setUploadOpen(true); };
   // Unified submissions: sent agreements + any legacy form responses.
   const submissions = [
     ...agrs.map((a) => ({ id: a.id, title: a.title, individualId: a.individualId, createdAt: a.createdAt, done: a.status === 'signed' })),
@@ -390,8 +399,8 @@ export function FacilitatorFormsScreen() {
 
               {pendingDoc ? (
                 <View style={{ marginTop: spacing.md }}>
-                  <Text style={[styles.lbl, { marginBottom: spacing.xs }]}>Place signature fields</Text>
-                  <DocumentFieldEditor imageUri={pendingDoc} fields={docFields} onChange={setDocFields} />
+                  <Text style={[styles.lbl, { marginBottom: spacing.xs }]}>Place signature / date / text fields{pendingPages.length > 1 ? ` (${pendingPages.length} pages)` : ''}</Text>
+                  <DocumentFieldEditor imageUri={pendingDoc} pages={pendingPages} fields={docFields} onChange={setDocFields} />
                 </View>
               ) : null}
 

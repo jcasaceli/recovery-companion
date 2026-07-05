@@ -42,6 +42,7 @@ export function AgreementViewScreen() {
   const [activeField, setActiveField] = useState<PlacedField | null>(null);
   const [fieldPaths, setFieldPaths] = useState<string[]>([]);
   const [fieldText, setFieldText] = useState('');
+  const [page, setPage] = useState(0); // current page of a multi-page (PDF) document
 
   useEffect(() => {
     getAgreement(id).then((a) => { setAgreement(a); setFieldValues(a?.fieldValues ?? {}); setLoading(false); }).catch(() => setLoading(false));
@@ -105,15 +106,30 @@ export function AgreementViewScreen() {
     return <SafeAreaView style={styles.screen} edges={['bottom']}><Text style={[typography.body, { padding: spacing.md }]}>Agreement not found.</Text></SafeAreaView>;
   }
 
+  // Per-page images: a multi-page PDF has documentPages; a photo/scan is one page.
+  const pages: string[] = (agreement.documentPages && agreement.documentPages.length)
+    ? agreement.documentPages
+    : (agreement.documentData ? [agreement.documentData] : []);
+  const curPage = Math.min(page, Math.max(0, pages.length - 1));
+
+  const Pager = pages.length > 1 ? (
+    <View style={styles.pagerBar}>
+      <TouchableOpacity onPress={() => setPage((p) => Math.max(0, p - 1))} disabled={curPage === 0} style={[styles.pagerBtn, curPage === 0 && styles.pagerBtnOff]}><Text style={styles.pagerBtnText}>‹ Prev</Text></TouchableOpacity>
+      <Text style={[typography.caption, { fontWeight: '700' }]}>Page {curPage + 1} of {pages.length}</Text>
+      <TouchableOpacity onPress={() => setPage((p) => Math.min(pages.length - 1, p + 1))} disabled={curPage === pages.length - 1} style={[styles.pagerBtn, curPage === pages.length - 1 && styles.pagerBtnOff]}><Text style={styles.pagerBtnText}>Next ›</Text></TouchableOpacity>
+    </View>
+  ) : null;
+
   const Document = (
     <Card>
       <Text style={[typography.h3, { marginBottom: spacing.sm }]}>{agreement.title}</Text>
       {agreement.bodyHtml ? (
         <RichTextView html={agreement.bodyHtml} />
-      ) : agreement.documentData ? (
+      ) : pages.length ? (
         <>
+          {Pager}
           <TouchableOpacity activeOpacity={0.9} onPress={() => setViewer(true)}>
-            <Image source={{ uri: agreement.documentData }} style={styles.doc} resizeMode="contain" />
+            <Image source={{ uri: pages[curPage] }} style={styles.doc} resizeMode="contain" />
           </TouchableOpacity>
           <Button title="🔍 Open & read full screen" variant="secondary" onPress={() => setViewer(true)} />
         </>
@@ -131,6 +147,13 @@ export function AgreementViewScreen() {
           <Text style={styles.viewerTitle} numberOfLines={1}>{agreement.title}</Text>
           <TouchableOpacity onPress={() => setViewer(false)} hitSlop={12}><Text style={styles.viewerClose}>Done</Text></TouchableOpacity>
         </View>
+        {pages.length > 1 ? (
+          <View style={styles.viewerPager}>
+            <TouchableOpacity onPress={() => setPage((p) => Math.max(0, p - 1))} disabled={curPage === 0}><Text style={[styles.viewerClose, curPage === 0 && { opacity: 0.4 }]}>‹ Prev</Text></TouchableOpacity>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Page {curPage + 1} / {pages.length}</Text>
+            <TouchableOpacity onPress={() => setPage((p) => Math.min(pages.length - 1, p + 1))} disabled={curPage === pages.length - 1}><Text style={[styles.viewerClose, curPage === pages.length - 1 && { opacity: 0.4 }]}>Next ›</Text></TouchableOpacity>
+          </View>
+        ) : null}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.viewerContent}
@@ -139,11 +162,11 @@ export function AgreementViewScreen() {
           centerContent
           showsVerticalScrollIndicator
         >
-          {agreement.documentData ? (
-            <Image source={{ uri: agreement.documentData }} style={styles.viewerImage} resizeMode="contain" />
+          {pages.length ? (
+            <Image source={{ uri: pages[curPage] }} style={styles.viewerImage} resizeMode="contain" />
           ) : null}
         </ScrollView>
-        <Text style={styles.viewerHint}>Pinch to zoom · scroll to read</Text>
+        <Text style={styles.viewerHint}>Pinch to zoom · scroll to read{pages.length > 1 ? ' · swipe pages with Prev/Next' : ''}</Text>
       </SafeAreaView>
     </Modal>
   );
@@ -153,15 +176,16 @@ export function AgreementViewScreen() {
   const DocWithFields = (interactive: boolean) => (
     <Card>
       <Text style={[typography.h3, { marginBottom: spacing.sm }]}>{agreement.title}</Text>
-      {agreement.documentData ? (
+      {pages.length ? (
         <View style={styles.fieldCanvas}>
+          {Pager}
           <Image
-            source={{ uri: agreement.documentData }}
+            source={{ uri: pages[curPage] }}
             style={styles.fieldImg}
             resizeMode="contain"
             onLayout={(e) => setImgSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
           />
-          {imgSize.w > 0 && (agreement.fields ?? []).map((f) => {
+          {imgSize.w > 0 && (agreement.fields ?? []).filter((f) => (f.page ?? 0) === curPage).map((f) => {
             const filled = fieldFilled(f);
             const bs = { left: f.x * imgSize.w, top: f.y * imgSize.h, width: f.w * imgSize.w, height: f.h * imgSize.h };
             const inner = isSigField(f.type)
@@ -408,4 +432,9 @@ const styles = StyleSheet.create({
   fBoxInner: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
   viewerContent2: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: spacing.lg },
   fieldModal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  pagerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  pagerBtn: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  pagerBtnOff: { opacity: 0.4 },
+  pagerBtnText: { fontWeight: '700', color: colors.primaryDark, fontSize: 13 },
+  viewerPager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
 });

@@ -1122,13 +1122,15 @@ export interface PlacedField {
   x: number; y: number; w: number; h: number;
   label?: string;
   required?: boolean;
+  page?: number; // 0-based page index for multi-page (PDF) documents
 }
 
 export interface Agreement {
   id: string;
   individualId: string;
   title: string;
-  documentData?: string;       // base64 data URI of the uploaded document photo
+  documentData?: string;       // base64 data URI of the uploaded document photo (page 1)
+  documentPages?: string[];    // per-page images for multi-page (PDF) documents
   bodyHtml?: string;           // rich-text agreement body authored in the CRM editor
   status: 'pending' | 'signed';
   signaturePaths?: string[];   // SVG path strings making up the signature
@@ -1146,6 +1148,7 @@ function mapAgreement(r: any): Agreement {
     individualId: r.individual_id,
     title: r.title,
     documentData: r.document_data ?? undefined,
+    documentPages: r.document_pages ?? undefined,
     bodyHtml: r.body_html ?? undefined,
     status: (r.status ?? 'pending') as 'pending' | 'signed',
     signaturePaths: r.signature_paths ?? undefined,
@@ -1158,12 +1161,13 @@ function mapAgreement(r: any): Agreement {
   };
 }
 
-/** Facilitator: upload a membership agreement (document photo) for a resident. */
+/** Facilitator: upload a membership agreement (document photo/PDF) for a resident. */
 export async function createAgreement(input: {
   orgId?: string;
   individualId: string;
   title: string;
   documentData?: string;
+  documentPages?: string[];
   bodyHtml?: string;
   fields?: PlacedField[];
 }) {
@@ -1176,6 +1180,7 @@ export async function createAgreement(input: {
   // Only reference the `fields` column when placed fields are provided, so plain
   // agreement uploads keep working even before migration 0040 is applied.
   if (input.fields && input.fields.length) row.fields = input.fields;
+  if (input.documentPages && input.documentPages.length) row.document_pages = input.documentPages;
   if (input.bodyHtml) row.body_html = input.bodyHtml;
   const { error } = await db().from('agreements').insert(row);
   if (error) throw error;
