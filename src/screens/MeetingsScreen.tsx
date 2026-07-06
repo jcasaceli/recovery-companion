@@ -40,16 +40,47 @@ function to12h(hhmm: string): string {
   return `${hr}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-// A packed weekly schedule of demo meetings (online + local). In production this
-// comes from live AA/NA/SMART/Dharma directories filtered by the member's area.
+// A packed weekly schedule of common online meeting formats (a guide). "Join
+// online" opens each fellowship's official, always-current meeting finder — for
+// AA that's the Online Intergroup (OIAA) at aa-intergroup.org, which runs live
+// Zoom meetings 24/7 — so the button never lands on a stale/dead link.
 const MEETINGS: Mtg[] = [
-  // Daily online "anytime" options
-  { id: 'm1', fellowship: 'AA', name: 'Early Bird (Online)', region: 'Online', dayOfWeek: 1, startTime: '06:30', isOnline: true, zoomUrl: 'https://zoom.us/j/1000001' },
-  { id: 'm2', fellowship: 'AA', name: 'Sunrise Sobriety (Online)', region: 'Online', dayOfWeek: 2, startTime: '07:00', isOnline: true, zoomUrl: 'https://zoom.us/j/1000002' },
-  { id: 'm3', fellowship: 'AA', name: 'Noon Reflections (Online)', region: 'Online', dayOfWeek: 3, startTime: '12:00', isOnline: true, zoomUrl: 'https://zoom.us/j/1000003' },
-  { id: 'm4', fellowship: 'AA', name: 'Big Book Study (Online)', region: 'Online', dayOfWeek: 4, startTime: '18:00', isOnline: true, zoomUrl: 'https://zoom.us/j/1000004' },
-  { id: 'm5', fellowship: 'AA', name: 'Candlelight (Online)', region: 'Online', dayOfWeek: 5, startTime: '20:00', isOnline: true, zoomUrl: 'https://zoom.us/j/1000005' },
-  { id: 'm6', fellowship: 'AA', name: 'Sunday Serenity (Online)', region: 'Online', dayOfWeek: 0, startTime: '10:00', isOnline: true, zoomUrl: 'https://zoom.us/j/1000006' },
+  // ---- AA online (opens the live OIAA Zoom directory) — meetings run 24/7 ----
+  // Sunday
+  { id: 'aa-su-1', fellowship: 'AA', name: 'Sunday Morning Gratitude', region: 'Online', dayOfWeek: 0, startTime: '08:00', isOnline: true },
+  { id: 'aa-su-2', fellowship: 'AA', name: 'Big Book Study', region: 'Online', dayOfWeek: 0, startTime: '10:00', isOnline: true },
+  { id: 'aa-su-3', fellowship: 'AA', name: 'As Bill Sees It', region: 'Online', dayOfWeek: 0, startTime: '17:00', isOnline: true },
+  { id: 'aa-su-4', fellowship: 'AA', name: 'Candlelight Meeting', region: 'Online', dayOfWeek: 0, startTime: '20:00', isOnline: true },
+  // Monday
+  { id: 'aa-mo-1', fellowship: 'AA', name: 'Early Bird', region: 'Online', dayOfWeek: 1, startTime: '06:30', isOnline: true },
+  { id: 'aa-mo-2', fellowship: 'AA', name: 'Living Sober (Lunchtime)', region: 'Online', dayOfWeek: 1, startTime: '12:00', isOnline: true },
+  { id: 'aa-mo-3', fellowship: 'AA', name: 'Beginners Meeting', region: 'Online', dayOfWeek: 1, startTime: '19:00', isOnline: true },
+  { id: 'aa-mo-4', fellowship: 'AA', name: 'Night Owl', region: 'Online', dayOfWeek: 1, startTime: '22:00', isOnline: true },
+  // Tuesday
+  { id: 'aa-tu-1', fellowship: 'AA', name: '11th Step Meditation', region: 'Online', dayOfWeek: 2, startTime: '07:00', isOnline: true },
+  { id: 'aa-tu-2', fellowship: 'AA', name: 'Daily Reflections', region: 'Online', dayOfWeek: 2, startTime: '13:00', isOnline: true },
+  { id: 'aa-tu-3', fellowship: 'AA', name: 'Step Study', region: 'Online', dayOfWeek: 2, startTime: '18:30', isOnline: true },
+  { id: 'aa-tu-4', fellowship: 'AA', name: 'Came to Believe', region: 'Online', dayOfWeek: 2, startTime: '21:00', isOnline: true },
+  // Wednesday
+  { id: 'aa-we-1', fellowship: 'AA', name: 'Sunrise Sobriety', region: 'Online', dayOfWeek: 3, startTime: '06:00', isOnline: true },
+  { id: 'aa-we-2', fellowship: 'AA', name: 'Noon Reflections', region: 'Online', dayOfWeek: 3, startTime: '12:00', isOnline: true },
+  { id: 'aa-we-3', fellowship: 'AA', name: 'Grapevine Meeting', region: 'Online', dayOfWeek: 3, startTime: '19:30', isOnline: true },
+  { id: 'aa-we-4', fellowship: 'AA', name: '24/7 Marathon (Late Night)', region: 'Online', dayOfWeek: 3, startTime: '23:00', isOnline: true },
+  // Thursday
+  { id: 'aa-th-1', fellowship: 'AA', name: 'Attitude of Gratitude', region: 'Online', dayOfWeek: 4, startTime: '07:30', isOnline: true },
+  { id: 'aa-th-2', fellowship: 'AA', name: 'Lunchtime Serenity', region: 'Online', dayOfWeek: 4, startTime: '12:30', isOnline: true },
+  { id: 'aa-th-3', fellowship: 'AA', name: 'Big Book Study', region: 'Online', dayOfWeek: 4, startTime: '18:00', isOnline: true },
+  { id: 'aa-th-4', fellowship: 'AA', name: 'Women in Sobriety', region: 'Online', dayOfWeek: 4, startTime: '20:30', isOnline: true },
+  // Friday
+  { id: 'aa-fr-1', fellowship: 'AA', name: 'Early Bird', region: 'Online', dayOfWeek: 5, startTime: '06:30', isOnline: true },
+  { id: 'aa-fr-2', fellowship: 'AA', name: 'Living Sober (Lunchtime)', region: 'Online', dayOfWeek: 5, startTime: '12:00', isOnline: true },
+  { id: 'aa-fr-3', fellowship: 'AA', name: 'Primary Purpose', region: 'Online', dayOfWeek: 5, startTime: '19:00', isOnline: true },
+  { id: 'aa-fr-4', fellowship: 'AA', name: 'Friday Night Speaker', region: 'Online', dayOfWeek: 5, startTime: '20:00', isOnline: true },
+  // Saturday
+  { id: 'aa-sa-1', fellowship: 'AA', name: 'Saturday Serenity', region: 'Online', dayOfWeek: 6, startTime: '09:00', isOnline: true },
+  { id: 'aa-sa-2', fellowship: 'AA', name: "Men's Meeting", region: 'Online', dayOfWeek: 6, startTime: '11:00', isOnline: true },
+  { id: 'aa-sa-3', fellowship: 'AA', name: 'LGBTQ+ Meeting', region: 'Online', dayOfWeek: 6, startTime: '15:00', isOnline: true },
+  { id: 'aa-sa-4', fellowship: 'AA', name: 'Speaker Meeting', region: 'Online', dayOfWeek: 6, startTime: '18:00', isOnline: true },
 
   { id: 'n1', fellowship: 'NA', name: 'Just For Today (Online)', region: 'Online', dayOfWeek: 1, startTime: '19:00', isOnline: true, zoomUrl: 'https://zoom.us/j/2000001' },
   { id: 'n2', fellowship: 'NA', name: 'Hillside Group', region: 'Austin, TX', dayOfWeek: 2, startTime: '19:30', isOnline: false, address: '123 Hill St' },
@@ -139,8 +170,9 @@ export function MeetingsScreen() {
       ))}
 
       <Text style={styles.note}>
-        The weekly times are a guide. “Join online” opens the fellowship’s official meeting finder,
-        which has live meetings running around the clock.
+        The weekly times are a guide to common meeting formats. Tap “Join online” to open the
+        fellowship’s official directory and join the exact live meeting — AA’s Online Intergroup
+        (aa-intergroup.org) runs Zoom meetings 24/7, so there’s almost always one starting soon.
       </Text>
     </Screen>
   );

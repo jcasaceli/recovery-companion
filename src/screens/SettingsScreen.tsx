@@ -414,7 +414,12 @@ export function SettingsScreen() {
           </>
           ) : null}
 
-          <HousesManager managers={managers} isOwner={isOwner} />
+          <HousesManager
+            managers={isOwner && auth.session?.user?.id
+              ? [{ id: auth.session.user.id, name: `${auth.profile?.fullName || 'You'} (You — owner)`, email: auth.profile?.email }, ...managers]
+              : managers}
+            isOwner={isOwner}
+          />
           </>
           ) : null}
         </>
