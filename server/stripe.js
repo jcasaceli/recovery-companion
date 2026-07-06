@@ -61,6 +61,11 @@ async function sendWelcomeEmail(to, orgName) {
         <li style="margin:6px 0"><strong>Send agreements &amp; upload documents</strong> from each resident's profile — they sign right on their phone.</li>
         <li style="margin:6px 0"><strong>Track payments &amp; meeting check-ins</strong> on your Dashboard.</li>
       </ol>
+      <p style="margin:0 0 16px;background:#E4F1ED;border-radius:10px;padding:16px;text-align:center">
+        <strong style="display:block;margin-bottom:10px;font-size:15px">🎬 New here? Watch our 4 quick video guides</strong>
+        <a href="https://soberlivingcompanion.com/guides" style="background:#3E8E7E;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;display:inline-block">Watch the guides →</a>
+        <span style="display:block;margin-top:10px;color:#6b6b6b;font-size:13px">Getting started · Forms &amp; agreements · Payments · The resident app</span>
+      </p>
       <p style="margin:0 0 16px;background:#F3F7F5;border-radius:10px;padding:12px 14px;color:#2b2b2b"><strong>Running more than one house?</strong> You can add as many houses as you like — each with its own join code — under the <strong>Account</strong> tab.</p>
       <p style="margin:0 0 16px"><a href="https://app.soberlivingcompanion.com" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open my dashboard →</a></p>
       <p style="margin:0;color:#6b6b6b;font-size:14px">Questions? Just reply to this email, or call Joseph at (213) 321-6518. We're a non-profit and we're here to help you succeed.</p>
