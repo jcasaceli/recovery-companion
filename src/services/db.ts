@@ -341,12 +341,13 @@ export async function recordMeetingCheckin(
 
 // ── Notification preferences (facilitator/manager) ───────────────────────────
 
-/** Whether the current staff user wants routine resident-activity pushes. */
+/** Whether the current staff user wants routine resident-activity pushes.
+ *  Defaults to OFF — staff opt IN by turning the toggle on. */
 export async function getNotifyMemberActivity(): Promise<boolean> {
   const { data: u } = await db().auth.getUser();
-  if (!u.user) return true;
+  if (!u.user) return false;
   const { data } = await db().from('profiles').select('notify_member_activity').eq('id', u.user.id).maybeSingle();
-  return data ? data.notify_member_activity !== false : true;
+  return data?.notify_member_activity === true;
 }
 
 export async function setNotifyMemberActivity(on: boolean) {
@@ -812,6 +813,36 @@ export async function updateFormTemplate(id: string, input: { title?: string; fi
 
 export async function deleteFormTemplate(id: string) {
   const { error } = await db().from('form_templates').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Archived templates (org-wide): hide unused templates from the picker. ---
+async function orgIdOr(orgId?: string): Promise<string | undefined> {
+  if (orgId) return orgId;
+  const o = await getMyOrg();
+  return o?.id;
+}
+
+/** Template keys the org has archived ('bi:<builtin>' or 'cs:<templateId>'). */
+export async function listArchivedTemplateKeys(orgId?: string): Promise<string[]> {
+  const id = await orgIdOr(orgId);
+  if (!id) return [];
+  const { data, error } = await db().from('archived_form_templates').select('template_key').eq('org_id', id);
+  if (error) return [];
+  return (data ?? []).map((r: any) => r.template_key);
+}
+
+export async function archiveTemplate(key: string, orgId?: string) {
+  const id = await orgIdOr(orgId);
+  if (!id) throw new Error('No organization found.');
+  const { error } = await db().from('archived_form_templates').upsert({ org_id: id, template_key: key }, { onConflict: 'org_id,template_key' });
+  if (error) throw error;
+}
+
+export async function unarchiveTemplate(key: string, orgId?: string) {
+  const id = await orgIdOr(orgId);
+  if (!id) return;
+  const { error } = await db().from('archived_form_templates').delete().eq('org_id', id).eq('template_key', key);
   if (error) throw error;
 }
 
@@ -1941,11 +1972,18 @@ function mapNote(r: any): Note {
   };
 }
 
-/** Owner/manager roster for the caller's org (to label who wrote a note). */
-export async function listOrgStaff(): Promise<{ profileId: string; isOwner: boolean }[]> {
+/** Owner/manager roster for the caller's org (to label who wrote a note), with
+ *  real names. Uses a SECURITY DEFINER RPC so the author's name always resolves
+ *  even when profile RLS would otherwise hide a co-worker's profile (which is
+ *  what made notes read "Care team" instead of the manager's name). */
+export async function listOrgStaff(): Promise<{ profileId: string; isOwner: boolean; name?: string }[]> {
+  const { data, error } = await db().rpc('get_org_staff');
+  if (!error && data) {
+    return (data as any[]).map((r) => ({ profileId: r.profile_id, isOwner: !!r.is_owner, name: r.full_name ?? undefined }));
+  }
+  // Fallback for older backends without the RPC (names may be missing).
   const org = await getMyOrg();
   if (!org?.id) return [];
-  const { data, error } = await db().from('org_members').select('profile_id, is_owner').eq('org_id', org.id);
-  if (error) return [];
-  return (data ?? []).map((r: any) => ({ profileId: r.profile_id, isOwner: !!r.is_owner }));
+  const { data: m } = await db().from('org_members').select('profile_id, is_owner').eq('org_id', org.id);
+  return (m ?? []).map((r: any) => ({ profileId: r.profile_id, isOwner: !!r.is_owner }));
 }

@@ -76,12 +76,13 @@ notifyRouter.post('/care', async (req, res) => {
       const { data: mems } = await admin.from('org_members').select('profile_id').eq('org_id', ind.org_id);
       let staff = (mems ?? []).map((m) => m.profile_id);
       // Routine resident activity (check-ins, payment reports) respects each
-      // staff member's "notify me about resident activity" toggle. SOS / alerts
-      // always go through.
+      // staff member's "notify me about resident activity" toggle, which is OFF
+      // by default — staff only get these if they explicitly opted in
+      // (notify_member_activity === true). SOS / alerts always go through.
       if (kind === 'activity' && staff.length) {
         const { data: prefs } = await admin.from('profiles').select('id, notify_member_activity').in('id', staff);
-        const muted = new Set((prefs ?? []).filter((p) => p.notify_member_activity === false).map((p) => p.id));
-        staff = staff.filter((id) => !muted.has(id));
+        const optedIn = new Set((prefs ?? []).filter((p) => p.notify_member_activity === true).map((p) => p.id));
+        staff = staff.filter((id) => optedIn.has(id));
       }
       staff.forEach((id) => recipients.push(id));
     }

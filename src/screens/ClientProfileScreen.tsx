@@ -70,6 +70,8 @@ export function ClientProfileScreen() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [staffNotes, setStaffNotes] = useState<any[]>([]);
   const [ownerIds, setOwnerIds] = useState<Set<string>>(new Set());
+  const [staffById, setStaffById] = useState<Record<string, { name?: string; isOwner: boolean }>>({});
+  const [showSignedAgreements, setShowSignedAgreements] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
@@ -207,7 +209,12 @@ export function ClientProfileScreen() {
     loadSubmitted();
     // Facilitator-only notes: split member-flagged alerts vs. staff notes.
     reloadNotes();
-    listOrgStaff().then((s) => setOwnerIds(new Set(s.filter((x) => x.isOwner).map((x) => x.profileId)))).catch(() => {});
+    listOrgStaff().then((s) => {
+      setOwnerIds(new Set(s.filter((x) => x.isOwner).map((x) => x.profileId)));
+      const map: Record<string, { name?: string; isOwner: boolean }> = {};
+      s.forEach((x) => { map[x.profileId] = { name: x.name, isOwner: x.isOwner }; });
+      setStaffById(map);
+    }).catch(() => {});
   }, [id]);
 
   // Auto-populate empty contact fields from what the resident submitted.
@@ -242,9 +249,14 @@ export function ClientProfileScreen() {
   const removeStaffNote = (noteId: string) => confirmThen('Delete note?', 'This permanently removes the note.', 'Delete',
     async () => { setStaffNotes((n) => n.filter((x) => x.id !== noteId)); try { await deleteNote(noteId); } catch {} });
   const noteAuthorLabel = (n: any) => {
-    const who = n.authorName || 'Staff';
+    // Prefer the name from the org-staff roster (always resolves), then the
+    // note's embedded author name — but never the "Care team" placeholder.
+    const staff = n.authorId ? staffById[n.authorId] : undefined;
+    const embedded = n.authorName && n.authorName !== 'Care team' ? n.authorName : undefined;
+    const who = staff?.name || embedded || 'Staff';
     if (n.authorRole !== 'facilitator') return who;
-    return `${n.authorId && ownerIds.has(n.authorId) ? 'Owner' : 'Manager'} ${who}`;
+    const isOwner = staff?.isOwner ?? (n.authorId ? ownerIds.has(n.authorId) : false);
+    return `${isOwner ? 'Owner' : 'Manager'} ${who}`;
   };
 
   const dismissAlert = (noteId: string) => {
@@ -641,37 +653,57 @@ export function ClientProfileScreen() {
         <Button title="Save membership fee" onPress={saveRent} />
       </Card>
 
-      {/* Forms & Documents — one unified section: send agreements to sign,
-          assign forms, and store paperwork all in one place. */}
-      <SectionTitle>Forms &amp; Documents</SectionTitle>
+      {/* Forms & Agreements — ONE unified card: upload agreements to sign AND
+          assign/send forms, all together. (Document storage lives at the very
+          bottom of the page, just above Status, to keep this uncluttered.) */}
+      <SectionTitle>Forms &amp; Agreements</SectionTitle>
       <Card>
         <Text style={[typography.body, { fontWeight: '700', marginBottom: 2 }]}>Agreements to sign</Text>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
           Upload an agreement for {client.firstName} to review and sign. Signed copies appear here.
         </Text>
         <Button title="📄 Upload agreement" onPress={uploadAgreement} />
-        {agreements.length ? (
-          <View style={{ marginTop: spacing.sm }}>
-            {agreements.map((a) => (
-              <TouchableOpacity
-                key={a.id}
-                style={styles.agreementRow}
-                activeOpacity={0.7}
-                onPress={() => nav.navigate('AgreementView', { id: a.id })}
-                onLongPress={() => removeAgreement(a)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.body}>{a.title}</Text>
-                  <Text style={[typography.caption, { color: a.status === 'signed' ? colors.success : colors.warning }]}>
-                    {a.status === 'signed' ? `✓ Signed by ${a.signerName ?? 'resident'}${a.signedAt ? ` · ${formatDate(a.signedAt)}` : ''}` : '⏳ Awaiting signature'}
-                  </Text>
-                </View>
-                <Text style={styles.chevronSm}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press to delete.</Text>
-          </View>
-        ) : null}
+        {(() => {
+          const renderAgreement = (a: Agreement) => (
+            <TouchableOpacity
+              key={a.id}
+              style={styles.agreementRow}
+              activeOpacity={0.7}
+              onPress={() => nav.navigate('AgreementView', { id: a.id })}
+              onLongPress={() => removeAgreement(a)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>{a.title}</Text>
+                <Text style={[typography.caption, { color: a.status === 'signed' ? colors.success : colors.warning }]}>
+                  {a.status === 'signed' ? `✓ Signed by ${a.signerName ?? 'resident'}${a.signedAt ? ` · ${formatDate(a.signedAt)}` : ''}` : '⏳ Awaiting signature'}
+                </Text>
+              </View>
+              <Text style={styles.chevronSm}>›</Text>
+            </TouchableOpacity>
+          );
+          const pending = agreements.filter((a) => a.status !== 'signed');
+          const signed = agreements.filter((a) => a.status === 'signed');
+          if (!agreements.length) return null;
+          return (
+            <View style={{ marginTop: spacing.sm }}>
+              {pending.map(renderAgreement)}
+              {signed.length ? (
+                <>
+                  <TouchableOpacity style={styles.collapseBtn} onPress={() => setShowSignedAgreements((v) => !v)}>
+                    <Text style={styles.collapseText}>{showSignedAgreements ? '▾' : '▸'} View signed agreements ({signed.length})</Text>
+                  </TouchableOpacity>
+                  {showSignedAgreements ? signed.map(renderAgreement) : null}
+                </>
+              ) : null}
+              <Text style={[typography.caption, { marginTop: 4, color: colors.textMuted }]}>Long-press to delete.</Text>
+            </View>
+          );
+        })()}
+
+        {/* Divider between agreements and forms, inside the same card. */}
+        <View style={styles.fdDivider} />
+        <Text style={[typography.body, { fontWeight: '700', marginBottom: 2 }]}>Forms</Text>
+        <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader hideCard />
       </Card>
 
       {/* Title prompt after picking a document */}
@@ -689,10 +721,6 @@ export function ClientProfileScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Lease & intake forms + document storage — same "Forms & Documents" section. */}
-      <FormsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
-      <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
 
       {/* Curfew check-ins */}
       <CurfewManager individualId={id} memberName={client.firstName} />
@@ -800,6 +828,11 @@ export function ClientProfileScreen() {
         <Button title={bedSaving ? 'Saving…' : 'Save bed & intake'} onPress={saveBed} disabled={bedSaving} />
       </Card>
 
+      {/* Document storage — kept at the very bottom, just above Status, so the
+          Forms & Agreements card up top stays clean. */}
+      <SectionTitle>Documents</SectionTitle>
+      <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
+
       {/* Status / discharge */}
       <SectionTitle>Status</SectionTitle>
       <Card>
@@ -904,6 +937,9 @@ const styles = StyleSheet.create({
   dismissText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   agreementRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
   chevronSm: { fontSize: 22, color: colors.textMuted, marginLeft: spacing.sm },
+  fdDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
+  collapseBtn: { paddingVertical: spacing.sm },
+  collapseText: { ...typography.caption, color: colors.primary, fontWeight: '800' },
   docPreview: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, marginVertical: spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },

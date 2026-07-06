@@ -5,6 +5,7 @@ import { Card, SectionTitle, Button, Pill } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
 import {
   listFormResponses, assignForm, deleteFormResponse, listFormTemplates, createFormTemplate,
+  listArchivedTemplateKeys, archiveTemplate, unarchiveTemplate,
   FormResponse, FormField, FormFieldType, FormTemplate,
 } from '../services/db';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
@@ -15,12 +16,15 @@ function slugify(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '_')
 
 /** Staff: assign lease/intake forms to a resident (built-in, saved, or custom),
  *  and review what they've signed. */
-export function FormsManager({ individualId, orgId, memberName, hideHeader }: { individualId: string; orgId?: string; memberName?: string; hideHeader?: boolean }) {
+export function FormsManager({ individualId, orgId, memberName, hideHeader, hideCard }: { individualId: string; orgId?: string; memberName?: string; hideHeader?: boolean; hideCard?: boolean }) {
   const nav = useNavigation<any>();
   const [responses, setResponses] = useState<FormResponse[]>([]);
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
+  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false); // in picker
+  const [showSigned, setShowSigned] = useState(false);      // in list
 
   // custom builder state
   const [title, setTitle] = useState('');
@@ -34,8 +38,18 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader }: { 
   const load = () => {
     listFormResponses(individualId).then(setResponses).catch(() => {});
     listFormTemplates().then(setTemplates).catch(() => {});
+    listArchivedTemplateKeys(orgId).then((keys) => setArchivedKeys(new Set(keys))).catch(() => {});
   };
   useEffect(() => { load(); }, [individualId]);
+
+  // Archive/restore a template (built-in or custom), org-wide, to declutter the picker.
+  const setArchived = async (key: string, on: boolean) => {
+    setArchivedKeys((s) => { const n = new Set(s); if (on) n.add(key); else n.delete(key); return n; });
+    try { on ? await archiveTemplate(key, orgId) : await unarchiveTemplate(key, orgId); }
+    catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); load(); }
+  };
+  const biKey = (k: string) => `bi:${k}`;
+  const csKey = (id: string) => `cs:${id}`;
 
   const assign = async (t: { title: string; fields: FormField[]; templateId?: string }) => {
     setBusy(true);
@@ -84,43 +98,64 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader }: { 
     ]);
   };
 
+  const renderFormRow = (r: FormResponse) => (
+    <TouchableOpacity key={r.id} style={styles.row} onPress={() => nav.navigate('FormFill', { id: r.id })} onLongPress={() => remove(r)}>
+      <Text style={styles.icon}>📋</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={typography.body}>{r.title}</Text>
+        <Text style={typography.caption}>{r.status === 'completed' ? `Signed ${r.signedAt ? formatDate(r.signedAt) : ''}` : `Sent ${formatDate(r.createdAt)}`}</Text>
+      </View>
+      <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
+    </TouchableOpacity>
+  );
+
+  const pendingForms = responses.filter((r) => r.status !== 'completed');
+  const signedForms = responses.filter((r) => r.status === 'completed');
+
+  const Body = (
+    <>
+      <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+        Choose a ready-made form (guest agreement, intake, head of house, write-up, house terms) or build your own.
+        Fill in {memberName || 'the resident'}’s details and e-sign — you can complete it yourself or have {memberName || 'the resident'} fill it in.
+      </Text>
+
+      {responses.length === 0 ? (
+        <Text style={typography.bodySecondary}>No forms sent yet.</Text>
+      ) : pendingForms.length === 0 ? (
+        <Text style={typography.bodySecondary}>No forms awaiting signature.</Text>
+      ) : (
+        pendingForms.map(renderFormRow)
+      )}
+
+      {/* Signed forms collapse behind a drop-open button so the list stays clean. */}
+      {signedForms.length ? (
+        <>
+          <TouchableOpacity style={styles.collapseBtn} onPress={() => setShowSigned((v) => !v)}>
+            <Text style={styles.collapseText}>{showSigned ? '▾' : '▸'} View signed forms ({signedForms.length})</Text>
+          </TouchableOpacity>
+          {showSigned ? signedForms.map(renderFormRow) : null}
+        </>
+      ) : null}
+
+      <View style={{ height: spacing.sm }} />
+      <Button title="➕ Send a form" variant="secondary" onPress={() => setPickerOpen(true)} />
+      {responses.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Tap a form to view it · long-press to delete.</Text> : null}
+    </>
+  );
+
   return (
     <>
       {hideHeader ? null : <SectionTitle>Forms &amp; Agreements</SectionTitle>}
-      <Card>
-        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Choose a ready-made form (guest agreement, intake, head of house, write-up, house terms) or build your own.
-          Fill in {memberName || 'the resident'}’s details and e-sign — you can complete it yourself or have {memberName || 'the resident'} fill it in.
-        </Text>
-
-        {responses.length === 0 ? (
-          <Text style={typography.bodySecondary}>No forms sent yet.</Text>
-        ) : (
-          responses.map((r) => (
-            <TouchableOpacity key={r.id} style={styles.row} onPress={() => nav.navigate('FormFill', { id: r.id })} onLongPress={() => remove(r)}>
-              <Text style={styles.icon}>📋</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={typography.body}>{r.title}</Text>
-                <Text style={typography.caption}>{r.status === 'completed' ? `Signed ${r.signedAt ? formatDate(r.signedAt) : ''}` : `Sent ${formatDate(r.createdAt)}`}</Text>
-              </View>
-              <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
-            </TouchableOpacity>
-          ))
-        )}
-
-        <View style={{ height: spacing.sm }} />
-        <Button title="➕ Send a form" variant="secondary" onPress={() => setPickerOpen(true)} />
-        {responses.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Tap a form to view it · long-press to delete.</Text> : null}
-      </Card>
+      {hideCard ? Body : <Card>{Body}</Card>}
 
       {/* Picker: built-in + saved templates + custom */}
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.sheet}>
             <Text style={typography.h3}>Choose a form</Text>
-            <ScrollView style={{ maxHeight: 380, marginVertical: spacing.sm }}>
+            <ScrollView style={{ maxHeight: 400, marginVertical: spacing.sm }}>
               <Text style={styles.group}>Ready-made</Text>
-              {BUILT_IN_TEMPLATES.map((t) => (
+              {BUILT_IN_TEMPLATES.filter((t) => !archivedKeys.has(biKey(t.key))).map((t) => (
                 <View key={t.key} style={styles.tmpl}>
                   <Text style={typography.body}>{t.title}</Text>
                   <Text style={typography.caption}>{t.description}</Text>
@@ -131,16 +166,57 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader }: { 
                     <TouchableOpacity disabled={busy} onPress={() => editTemplate(t)}>
                       <Text style={styles.tmplEdit}>✏️ Edit first</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setArchived(biKey(t.key), true)}>
+                      <Text style={styles.tmplArchive}>🗄 Archive</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))}
-              {templates.length ? <Text style={styles.group}>Your saved forms</Text> : null}
-              {templates.map((t) => (
-                <TouchableOpacity key={t.id} style={styles.tmpl} disabled={busy} onPress={() => assign({ title: t.title, fields: t.fields, templateId: t.id })}>
-                  <Text style={typography.body}>{t.title}</Text>
-                  <Text style={typography.caption}>{t.fields.length} question{t.fields.length === 1 ? '' : 's'}</Text>
-                </TouchableOpacity>
+              {templates.filter((t) => !archivedKeys.has(csKey(t.id))).length ? <Text style={styles.group}>Your saved forms</Text> : null}
+              {templates.filter((t) => !archivedKeys.has(csKey(t.id))).map((t) => (
+                <View key={t.id} style={styles.tmpl}>
+                  <TouchableOpacity disabled={busy} onPress={() => assign({ title: t.title, fields: t.fields, templateId: t.id })}>
+                    <Text style={typography.body}>{t.title}</Text>
+                    <Text style={typography.caption}>{t.fields.length} question{t.fields.length === 1 ? '' : 's'}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.tmplActions}>
+                    <TouchableOpacity onPress={() => setArchived(csKey(t.id), true)}>
+                      <Text style={styles.tmplArchive}>🗄 Archive</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               ))}
+
+              {/* Archived templates — hidden behind a drop-open button; Restore puts them back. */}
+              {archivedKeys.size ? (
+                <>
+                  <TouchableOpacity style={styles.collapseBtn} onPress={() => setShowArchived((v) => !v)}>
+                    <Text style={styles.collapseText}>{showArchived ? '▾' : '▸'} View archived templates ({archivedKeys.size})</Text>
+                  </TouchableOpacity>
+                  {showArchived ? (
+                    <>
+                      {BUILT_IN_TEMPLATES.filter((t) => archivedKeys.has(biKey(t.key))).map((t) => (
+                        <View key={`a-${t.key}`} style={[styles.tmpl, styles.tmplArchived]}>
+                          <Text style={typography.body}>{t.title}</Text>
+                          <Text style={typography.caption}>{t.description}</Text>
+                          <View style={styles.tmplActions}>
+                            <TouchableOpacity onPress={() => setArchived(biKey(t.key), false)}><Text style={styles.tmplSend}>↩︎ Restore</Text></TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                      {templates.filter((t) => archivedKeys.has(csKey(t.id))).map((t) => (
+                        <View key={`a-${t.id}`} style={[styles.tmpl, styles.tmplArchived]}>
+                          <Text style={typography.body}>{t.title}</Text>
+                          <Text style={typography.caption}>{t.fields.length} question{t.fields.length === 1 ? '' : 's'}</Text>
+                          <View style={styles.tmplActions}>
+                            <TouchableOpacity onPress={() => setArchived(csKey(t.id), false)}><Text style={styles.tmplSend}>↩︎ Restore</Text></TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
+                </>
+              ) : null}
             </ScrollView>
             <Button title="✏️ Build a custom form" onPress={() => { setPickerOpen(false); setBuilderOpen(true); }} />
             <TouchableOpacity onPress={() => setPickerOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
@@ -203,9 +279,13 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.lg, paddingBottom: spacing.xl },
   group: { ...typography.caption, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', marginTop: spacing.sm, marginBottom: spacing.xs },
   tmpl: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
+  tmplArchived: { opacity: 0.7, borderWidth: 1, borderColor: colors.divider },
   tmplActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm },
   tmplSend: { ...typography.caption, color: colors.primary, fontWeight: '800' },
   tmplEdit: { ...typography.caption, color: colors.textSecondary, fontWeight: '800' },
+  tmplArchive: { ...typography.caption, color: colors.textMuted, fontWeight: '800' },
+  collapseBtn: { paddingVertical: spacing.sm, marginTop: spacing.xs },
+  collapseText: { ...typography.caption, color: colors.primary, fontWeight: '800' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   fieldRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider },
   typeChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.xs },

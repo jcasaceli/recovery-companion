@@ -12,7 +12,7 @@ import { Manager } from '../services/managers';
  * Owner-only: manage the homes under this account. Create houses, share each
  * one's join code, and assign house managers to specific homes.
  */
-export function HousesManager({ managers }: { managers: Manager[] }) {
+export function HousesManager({ managers, isOwner = true }: { managers: Manager[]; isOwner?: boolean }) {
   const [houses, setHouses] = useState<House[]>([]);
   const [staff, setStaff] = useState<Record<string, string[]>>({}); // houseId -> profileIds
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -80,14 +80,16 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
       <SectionTitle>Houses</SectionTitle>
       <Card>
         <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-          Run multiple homes under one account. Each house has its own join code, members, and assigned managers.
+          {isOwner
+            ? 'Run multiple homes under one account. Each house has its own join code, members, and assigned managers.'
+            : 'Assign house managers to the homes they oversee. Tap a house to choose who manages it.'}
         </Text>
         {houses.map((h) => {
           const open = expanded === h.id;
           const assigned = staff[h.id] || [];
           return (
             <View key={h.id} style={styles.house}>
-              <TouchableOpacity style={styles.houseRow} onPress={() => setExpanded(open ? null : h.id)} onLongPress={() => removeHouse(h)}>
+              <TouchableOpacity style={styles.houseRow} onPress={() => setExpanded(open ? null : h.id)} onLongPress={() => isOwner && removeHouse(h)}>
                 <View style={{ flex: 1 }}>
                   <Text style={[typography.body, { fontWeight: '700' }]}>{h.name}</Text>
                   <Text style={typography.caption}>Join code: <Text style={styles.code}>{h.joinCode}</Text> · {assigned.length} manager{assigned.length === 1 ? '' : 's'}</Text>
@@ -96,6 +98,8 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
               </TouchableOpacity>
               {open ? (
                 <View style={styles.assignArea}>
+                  {isOwner ? (
+                  <>
                   <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>House name</Text>
                   <View style={styles.capRow}>
                     <TextInput
@@ -120,9 +124,11 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
                     />
                     <TouchableOpacity style={styles.capSave} onPress={() => saveCap(h.id)}><Text style={styles.capSaveText}>Save</Text></TouchableOpacity>
                   </View>
+                  </>
+                  ) : null}
                   <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4, marginTop: spacing.sm }]}>Assign house managers</Text>
                   {managers.length === 0 ? (
-                    <Text style={typography.caption}>Add house managers first (below), then assign them here.</Text>
+                    <Text style={typography.caption}>{isOwner ? 'Add house managers first (below), then assign them here.' : 'No house managers have been added yet. Ask the owner to add one.'}</Text>
                   ) : managers.map((m) => {
                     const on = assigned.includes(m.id);
                     return (
@@ -132,13 +138,13 @@ export function HousesManager({ managers }: { managers: Manager[] }) {
                       </TouchableOpacity>
                     );
                   })}
-                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press the house to delete it.</Text>
+                  {isOwner ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press the house to delete it.</Text> : null}
                 </View>
               ) : null}
             </View>
           );
         })}
-        <Button title="➕ Add a house" variant="secondary" onPress={() => setAddOpen(true)} />
+        {isOwner ? <Button title="➕ Add a house" variant="secondary" onPress={() => setAddOpen(true)} /> : null}
       </Card>
 
       <Modal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>

@@ -62,7 +62,7 @@ export function SettingsScreen() {
     setAssignedHouses((s) => { const n = new Set(s); if (on) n.add(houseId); else n.delete(houseId); return n; });
     try { if (on) await assignManagerToHouse(houseId, newMgr.id); } catch (e: any) { Alert.alert('Could not assign', e?.message ?? 'Try again.'); }
   };
-  const [notifyActivity, setNotifyActivity] = useState(true);
+  const [notifyActivity, setNotifyActivity] = useState(false);
 
   const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
 
@@ -104,7 +104,9 @@ export function SettingsScreen() {
           setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setOrgName(o.name ?? '');
           const owner = !!o.created_by && o.created_by === auth.session?.user?.id;
           setIsOwner(owner);
-          if (owner) loadManagers();
+          // Load the manager roster for ALL staff (owner + house managers) so
+          // house managers can assign managers to houses too — not just owners.
+          loadManagers();
         }
       }).catch(() => {});
     } else {
@@ -273,8 +275,8 @@ export function SettingsScreen() {
             <View style={{ flex: 1, paddingRight: spacing.md }}>
               <Text style={[typography.body, { fontWeight: '600' }]}>Resident activity alerts</Text>
               <Text style={typography.caption}>
-                Get a push when residents check in at meetings or report a payment. SOS and resident
-                messages always come through.
+                Off by default. Turn on to get a push when residents check in at meetings or report a
+                payment. SOS and resident messages always come through.
               </Text>
             </View>
             <Switch value={notifyActivity} onValueChange={toggleNotify} trackColor={{ true: colors.primary }} />
@@ -388,6 +390,8 @@ export function SettingsScreen() {
 
           {subscriptionActive ? (
           <>
+          {isOwner ? (
+          <>
           <SectionTitle>House managers</SectionTitle>
           <Card>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
@@ -407,8 +411,10 @@ export function SettingsScreen() {
             ))}
             <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => setMgrOpen(true)} />
           </Card>
+          </>
+          ) : null}
 
-          <HousesManager managers={managers} />
+          <HousesManager managers={managers} isOwner={isOwner} />
           </>
           ) : null}
         </>

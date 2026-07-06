@@ -29,6 +29,7 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<Document | null>(null);
+  const [showDocs, setShowDocs] = useState(false);
 
   const load = () => listDocuments(individualId).then(setDocs).catch(() => {});
   useEffect(() => { load(); }, [individualId]);
@@ -129,17 +130,24 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
 
         {docs.length ? (
           <View style={{ marginTop: spacing.sm }}>
-            {docs.map((d) => (
-              <TouchableOpacity key={d.id} style={styles.row} onPress={() => open(d)} onLongPress={() => remove(d)}>
-                <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.body}>{d.title}</Text>
-                  <Text style={typography.caption}>{d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}</Text>
-                </View>
-                <Text style={[typography.caption, { color: colors.primary }]}>Open</Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press a document to delete it.</Text>
+            <TouchableOpacity style={styles.collapseBtn} onPress={() => setShowDocs((v) => !v)}>
+              <Text style={styles.collapseText}>{showDocs ? '▾' : '▸'} View documents ({docs.length})</Text>
+            </TouchableOpacity>
+            {showDocs ? (
+              <>
+                {docs.map((d) => (
+                  <TouchableOpacity key={d.id} style={styles.row} onPress={() => open(d)} onLongPress={() => remove(d)}>
+                    <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={typography.body}>{d.title}</Text>
+                      <Text style={typography.caption}>{d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}</Text>
+                    </View>
+                    <Text style={[typography.caption, { color: colors.primary }]}>Open</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press a document to delete it.</Text>
+              </>
+            ) : null}
           </View>
         ) : null}
       </Card>
@@ -168,6 +176,8 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
   icon: { fontSize: 20, marginRight: spacing.sm },
+  collapseBtn: { paddingVertical: spacing.sm },
+  collapseText: { ...typography.caption, color: colors.primary, fontWeight: '800' },
   viewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: spacing.md },
   viewTitle: { ...typography.h3, color: colors.textInverse, marginBottom: spacing.md, textAlign: 'center' },
   full: { width: '100%', height: '70%' },
