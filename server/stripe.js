@@ -85,6 +85,27 @@ async function sendWelcomeEmail(to, orgName) {
   }
 }
 
+// ----- Internal alert to YOU when a new home subscribes ----------------------
+const SIGNUP_ALERT_TO = process.env.SIGNUP_ALERT_TO || 'josephbizofficial@gmail.com';
+async function sendSignupAlert(orgName, email) {
+  if (!RESEND_API_KEY) return;
+  const name = orgName || 'A sober living home';
+  const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:520px;color:#16242a">
+    <h2 style="color:#2E9E5B;margin:0 0 8px">🎉 New paying home just signed up!</h2>
+    <p style="margin:0 0 6px"><strong>${name}</strong> subscribed to Sober Living Companion ($60/mo).</p>
+    <p style="margin:0 0 6px">Contact: <strong>${email || 'unknown'}</strong></p>
+    <p style="margin:12px 0 0;color:#3a474c">Reach out to welcome them and offer free CSV migration.</p>
+  </div>`;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: WELCOME_FROM, to: SIGNUP_ALERT_TO, reply_to: email || undefined,
+        subject: `🎉 New signup: ${name}`, html }),
+    }).then((r) => { if (!r.ok) r.text().then((t) => console.error('[signup-alert] failed', r.status, t)); });
+  } catch (e) { console.error('[signup-alert] error', e); }
+}
+
 function ready(res) {
   if (!stripe) {
     res.status(503).json({ error: 'Stripe not configured (set STRIPE_SECRET_KEY).' });
@@ -341,6 +362,7 @@ stripeRouter.post('/platform/subscribe', async (req, res) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: user.email || undefined,
+      allow_promotion_codes: true, // lets operators enter a promo code (e.g. first-month-free)
       metadata: { org_id: org.id },
     });
     res.json({ url: session.url });
@@ -427,6 +449,7 @@ export async function stripeWebhook(req, res) {
           } catch {}
           const to = s.customer_email || s.customer_details?.email;
           await sendWelcomeEmail(to, orgName);
+          await sendSignupAlert(orgName, to);
         }
         break;
       }
