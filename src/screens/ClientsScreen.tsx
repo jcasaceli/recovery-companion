@@ -223,12 +223,12 @@ export function ClientsScreen() {
       ) : null}
 
       {!locked && houses.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.houseFilterRow} contentContainerStyle={{ paddingHorizontal: spacing.md }}>
-          <TouchableOpacity onPress={() => setHouseFilter('ALL')} style={[styles.houseChip, houseFilter === 'ALL' ? styles.houseChipOn : null]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.houseFilterRow} contentContainerStyle={styles.houseFilterContent}>
+          <TouchableOpacity onPress={() => setHouseFilter('ALL')} style={[styles.houseChip, styles.filterChip, houseFilter === 'ALL' ? styles.houseChipOn : null]}>
             <Text style={[styles.houseChipText, houseFilter === 'ALL' ? styles.houseChipTextOn : null]}>All houses</Text>
           </TouchableOpacity>
           {houses.filter((h) => !scope || scope.isOwner || scope.houseIds.includes(h.id)).map((h) => (
-            <TouchableOpacity key={h.id} onPress={() => setHouseFilter(h.id)} style={[styles.houseChip, houseFilter === h.id ? styles.houseChipOn : null]}>
+            <TouchableOpacity key={h.id} onPress={() => setHouseFilter(h.id)} style={[styles.houseChip, styles.filterChip, houseFilter === h.id ? styles.houseChipOn : null]}>
               <Text style={[styles.houseChipText, houseFilter === h.id ? styles.houseChipTextOn : null]}>{h.name}</Text>
             </TouchableOpacity>
           ))}
@@ -419,7 +419,9 @@ const styles = StyleSheet.create({
   bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
-  houseFilterRow: { marginBottom: spacing.sm, maxHeight: 44 },
+  houseFilterRow: { marginBottom: spacing.sm, flexGrow: 0 },
+  houseFilterContent: { paddingHorizontal: spacing.md, alignItems: 'center' },
+  filterChip: { marginBottom: 0 },
   pickerLabel: { ...typography.caption, marginBottom: 4 },
   houseChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   houseChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
