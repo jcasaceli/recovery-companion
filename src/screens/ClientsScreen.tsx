@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -25,6 +25,12 @@ export function ClientsScreen() {
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
 
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [avatars, setAvatars] = useState<Record<string, string>>({}); // path -> signed url
+  useEffect(() => {
+    const paths = clients.map((c) => c.avatarPath).filter(Boolean) as string[];
+    if (!paths.length) { setAvatars({}); return; }
+    getAvatarUrls(paths).then(setAvatars).catch(() => {});
+  }, [clients]);
   const [houses, setHouses] = useState<House[]>([]);
   const [scope, setScope] = useState<{ isOwner: boolean; houseIds: string[] } | null>(null);
   const [houseFilter, setHouseFilter] = useState<string | 'ALL'>('ALL'); // owner can filter
@@ -308,6 +314,8 @@ export function ClientsScreen() {
             >
               {selectMode ? (
                 <Text style={styles.check}>{selected[c.id] ? '☑️' : '⬜️'}</Text>
+              ) : c.avatarPath && avatars[c.avatarPath] ? (
+                <Image source={{ uri: avatars[c.avatarPath] }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatar}><Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text></View>
               )}

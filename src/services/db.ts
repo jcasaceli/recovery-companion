@@ -724,6 +724,17 @@ export async function getAvatarUrl(storagePath?: string | null): Promise<string 
   return data?.signedUrl ?? null;
 }
 
+/** Batch: signed URLs for many avatars at once (path -> url) for roster grids. */
+export async function getAvatarUrls(paths: string[]): Promise<Record<string, string>> {
+  const clean = Array.from(new Set(paths.filter(Boolean)));
+  if (!clean.length) return {};
+  const { data, error } = await db().storage.from('avatars').createSignedUrls(clean, 3600);
+  if (error || !data) return {};
+  const out: Record<string, string> = {};
+  data.forEach((d: any) => { if (d?.path && d?.signedUrl) out[d.path] = d.signedUrl; });
+  return out;
+}
+
 /** Resident: set my own profile picture. */
 export async function setMyAvatar(bytes: ArrayBuffer, contentType: string): Promise<string | null> {
   const me = await resolveMyIndividual();

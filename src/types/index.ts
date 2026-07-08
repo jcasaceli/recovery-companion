@@ -182,6 +182,8 @@ export interface ClientSummary {
   levelOfCare?: LevelOfCare;
   monthlyRentCents?: number;
   rentDueDay?: number;
+  /** Storage path of the resident's profile photo (sign with getAvatarUrls to display). */
+  avatarPath?: string;
 }
 
 export interface Profile {

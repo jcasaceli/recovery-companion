@@ -352,6 +352,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           levelOfCare: c.level_of_care ?? undefined,
           monthlyRentCents: c.monthly_rent_cents ?? undefined,
           rentDueDay: c.rent_due_day ?? undefined,
+          avatarPath: c.avatar_path ?? undefined,
         }));
         // Subscription gate: only an active/trialing org can manage real clients.
         const org: any = await dbApi.getMyOrg().catch(() => null);
