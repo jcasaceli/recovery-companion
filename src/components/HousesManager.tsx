@@ -22,20 +22,24 @@ export function HousesManager({ managers, isOwner = true }: { managers: Manager[
   const [capDraft, setCapDraft] = useState<Record<string, string>>({});
   const [nameDraft, setNameDraft] = useState<Record<string, string>>({});
 
+  // Auto-save on blur — no Save button. Only writes when the value actually changed.
   const saveName = async (houseId: string) => {
     const v = (nameDraft[houseId] ?? '').trim();
-    if (!v) return;
+    const current = houses.find((h) => h.id === houseId)?.name ?? '';
+    if (!v || v === current) return;
     try {
       await renameHouse(houseId, v);
       setHouses((hs) => hs.map((h) => (h.id === houseId ? { ...h, name: v } : h)));
-      Alert.alert('Saved ✅', 'House name updated.');
     } catch (e: any) { Alert.alert('Could not rename', e?.message ?? 'Try again.'); }
   };
 
   const saveCap = async (houseId: string) => {
     const raw = capDraft[houseId];
-    const n = raw == null || raw.trim() === '' ? null : parseInt(raw, 10);
+    if (raw === undefined) return; // field wasn't touched — don't overwrite
+    const n = raw.trim() === '' ? null : parseInt(raw, 10);
     if (n != null && (isNaN(n) || n < 0)) { Alert.alert('Enter a number', 'Bed capacity must be a whole number.'); return; }
+    const current = houses.find((h) => h.id === houseId)?.capacity ?? null;
+    if (n === current) return;
     try { await setHouseCapacity(houseId, n); setHouses((hs) => hs.map((h) => h.id === houseId ? { ...h, capacity: n ?? undefined } : h)); }
     catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
   };
@@ -101,29 +105,26 @@ export function HousesManager({ managers, isOwner = true }: { managers: Manager[
                   {isOwner ? (
                   <>
                   <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4 }]}>House name</Text>
-                  <View style={styles.capRow}>
-                    <TextInput
-                      style={styles.capInput}
-                      defaultValue={h.name}
-                      onChangeText={(t) => setNameDraft((d) => ({ ...d, [h.id]: t }))}
-                      placeholder="House name"
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="words"
-                    />
-                    <TouchableOpacity style={styles.capSave} onPress={() => saveName(h.id)}><Text style={styles.capSaveText}>Save</Text></TouchableOpacity>
-                  </View>
+                  <TextInput
+                    style={styles.capInput}
+                    defaultValue={h.name}
+                    onChangeText={(t) => setNameDraft((d) => ({ ...d, [h.id]: t }))}
+                    onBlur={() => saveName(h.id)}
+                    placeholder="House name"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                  />
                   <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4, marginTop: spacing.sm }]}>Bed capacity</Text>
-                  <View style={styles.capRow}>
-                    <TextInput
-                      style={styles.capInput}
-                      defaultValue={h.capacity != null ? String(h.capacity) : ''}
-                      onChangeText={(t) => setCapDraft((d) => ({ ...d, [h.id]: t }))}
-                      placeholder="# beds"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="number-pad"
-                    />
-                    <TouchableOpacity style={styles.capSave} onPress={() => saveCap(h.id)}><Text style={styles.capSaveText}>Save</Text></TouchableOpacity>
-                  </View>
+                  <TextInput
+                    style={styles.capInput}
+                    defaultValue={h.capacity != null ? String(h.capacity) : ''}
+                    onChangeText={(t) => setCapDraft((d) => ({ ...d, [h.id]: t }))}
+                    onBlur={() => saveCap(h.id)}
+                    placeholder="# beds"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                  />
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Changes save automatically.</Text>
                   </>
                   ) : null}
                   <Text style={[typography.caption, { fontWeight: '700', marginBottom: 4, marginTop: spacing.sm }]}>Assign house managers</Text>
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginVertical: spacing.md },
   capRow: { flexDirection: 'row', alignItems: 'center' },
-  capInput: { flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.sm, fontSize: 15, color: colors.textPrimary, marginRight: spacing.sm },
+  capInput: { alignSelf: 'stretch', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.sm, fontSize: 15, color: colors.textPrimary },
   capSave: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   capSaveText: { color: colors.textInverse, fontWeight: '700' },
 });

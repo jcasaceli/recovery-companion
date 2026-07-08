@@ -956,16 +956,12 @@ export async function renameHouse(id: string, name: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Make sure the operator has at least one house. A new account's first house is
- *  named after their sober living (the org name), with its own join code. They
- *  can add more houses anytime under the Account tab. Best-effort, idempotent. */
+/** Make sure the operator has at least one house — named after their sober living,
+ *  with its own join code. Uses an atomic, advisory-locked RPC so two concurrent
+ *  app loads / devices can't each create a duplicate default house. Best-effort. */
 export async function ensureDefaultHouse(): Promise<void> {
-  try {
-    const houses = await listHouses();
-    if (houses.length) return;
-    const org = await getMyOrg();
-    if (org?.name) await createHouse(org.name);
-  } catch { /* best effort */ }
+  try { await db().rpc('ensure_default_house'); }
+  catch { /* best effort — falls back silently if the RPC isn't there yet */ }
 }
 
 export async function deleteHouse(id: string): Promise<void> {
