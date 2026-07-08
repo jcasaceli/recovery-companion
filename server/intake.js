@@ -52,7 +52,7 @@ function isoDateOrNull(v) {
 }
 
 /** Build a PDF Buffer of the whole application (text answers + embedded signatures/photos). */
-function renderPdf({ title, applicantName, submittedAt, pages }) {
+export function renderPdf({ title, applicantName, submittedAt, pages }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: 54 });
     const chunks = [];
@@ -78,16 +78,27 @@ function renderPdf({ title, applicantName, submittedAt, pages }) {
         const val = f.value;
         if (type === 'signature' || (type === 'image' && typeof val === 'string' && val.startsWith('data:'))) {
           const img = dataUrlToBuffer(val);
-          if (label) doc.fillColor('#6B6B6B').font('Helvetica-Bold').fontSize(9.5).text(label);
+          const left = doc.page.margins.left;
+          const bottom = doc.page.height - doc.page.margins.bottom;
+          const boxH = 78; // reserved height for the signature/image block
+          // Label (advances the cursor normally).
+          if (label) { doc.fillColor('#6B6B6B').font('Helvetica-Bold').fontSize(9.5).text(label); doc.moveDown(0.15); }
+          // Keep the whole block on one page.
+          if (doc.y + boxH > bottom) doc.addPage();
+          const y = doc.y;
           if (img) {
-            try {
-              if (doc.y > 620) doc.addPage();
-              doc.image(img.buf, { fit: [220, 90] });
-            } catch { doc.fillColor('#9A9A9A').font('Helvetica-Oblique').fontSize(10).text('(signed)'); }
+            // Explicit x/y — .image() does NOT advance doc.y, so we must place it
+            // and then move the cursor below it, or the next field overlaps it.
+            try { doc.image(img.buf, left, y, { fit: [240, boxH - 14] }); }
+            catch { doc.fillColor('#9A9A9A').font('Helvetica-Oblique').fontSize(10).text('(could not render image)', left, y + 22); }
           } else {
-            doc.fillColor('#9A9A9A').font('Helvetica-Oblique').fontSize(10).text('(not signed)');
+            doc.fillColor('#9A9A9A').font('Helvetica-Oblique').fontSize(10).text(type === 'signature' ? '(not signed)' : '(no file uploaded)', left, y + 22);
           }
-          doc.moveDown(0.5);
+          // Signature line + advance the cursor safely below the image.
+          const lineY = y + boxH - 6;
+          doc.moveTo(left, lineY).lineTo(left + 240, lineY).strokeColor('#E3E0D9').lineWidth(0.7).stroke();
+          doc.x = left;
+          doc.y = lineY + 10;
           continue;
         }
         // checkbox / text / select / date etc.
