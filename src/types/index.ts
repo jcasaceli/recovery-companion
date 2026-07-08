@@ -144,7 +144,7 @@ export type AppRole = 'individual' | 'supporter' | 'facilitator';
 
 export type ClientStatus = 'in_care' | 'completed';
 
-export type PaymentMethod = 'card' | 'cashapp' | 'zelle' | 'venmo' | 'cash' | 'other';
+export type PaymentMethod = 'card' | 'cashapp' | 'zelle' | 'venmo' | 'cash' | 'check' | 'other';
 
 export interface Payment {
   id: string;

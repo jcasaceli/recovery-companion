@@ -139,8 +139,10 @@ async function main() {
 
   // --- Residents --------------------------------------------------------------
   console.log('• Creating residents with pre-filled info…');
-  const firstNames = ['James', 'Michael', 'Robert', 'Chris', 'Daniel', 'Marcus', 'Tyler', 'Anthony', 'Kevin', 'Brandon'];
-  const lastNames = ['Johnson', 'Williams', 'Brown', 'Taylor', 'Miller', 'Davis', 'Garcia', 'Wilson', 'Martinez', 'Lee'];
+  // NB: index 3 must NOT be "Chris Taylor" — that's reserved for the linked demo
+  // member below, so avoid a duplicate name on the roster.
+  const firstNames = ['James', 'Michael', 'Robert', 'Ethan', 'Daniel', 'Marcus', 'Tyler', 'Anthony', 'Kevin', 'Brandon'];
+  const lastNames = ['Johnson', 'Williams', 'Brown', 'Parker', 'Miller', 'Davis', 'Garcia', 'Wilson', 'Martinez', 'Lee'];
   const bedsEast = ['Room 1 · Bed A', 'Room 1 · Bed B', 'Room 2 · Bed A', 'Room 2 · Bed B', 'Room 3 · Bed A'];
   const bedsWest = ['Room A · Bed 1', 'Room A · Bed 2', 'Room B · Bed 1', 'Room B · Bed 2', 'Room C · Bed 1'];
 

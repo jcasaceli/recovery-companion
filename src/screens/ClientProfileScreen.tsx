@@ -23,9 +23,10 @@ import { DEMO_CLIENTS } from '../data/demo';
 function money(cents?: number) {
   return cents ? `$${(cents / 100).toFixed(2)}` : '$0';
 }
-const PAY_METHODS: { value: 'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'; label: string }[] = [
+const PAY_METHODS: { value: 'zelle' | 'cash' | 'check' | 'cashapp' | 'venmo' | 'card' | 'other'; label: string }[] = [
   { value: 'zelle', label: 'Zelle' },
   { value: 'cash', label: 'Cash' },
+  { value: 'check', label: 'Check' },
   { value: 'cashapp', label: 'CashApp' },
   { value: 'venmo', label: 'Venmo' },
   { value: 'card', label: 'Card' },
@@ -104,7 +105,7 @@ export function ClientProfileScreen() {
   };
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState<'zelle' | 'cash' | 'cashapp' | 'venmo' | 'card' | 'other'>('zelle');
+  const [payMethod, setPayMethod] = useState<'zelle' | 'cash' | 'check' | 'cashapp' | 'venmo' | 'card' | 'other'>('zelle');
   const [paySaving, setPaySaving] = useState(false);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [pendingDoc, setPendingDoc] = useState<string | null>(null); // base64 data URI awaiting a title

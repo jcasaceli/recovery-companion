@@ -12,9 +12,9 @@ import { useAppState } from '../state/store';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS, DEMO_PAY_STATUS, DEMO_PIE } from '../data/demo';
 
-const METHODS: PaymentMethod[] = ['cash', 'cashapp', 'zelle', 'venmo', 'card', 'other'];
+const METHODS: PaymentMethod[] = ['cash', 'check', 'cashapp', 'zelle', 'venmo', 'card', 'other'];
 const METHOD_LABEL: Record<PaymentMethod, string> = {
-  cash: 'Cash', cashapp: 'CashApp', zelle: 'Zelle', venmo: 'Venmo', card: 'Card', other: 'Other',
+  cash: 'Cash', check: 'Check', cashapp: 'CashApp', zelle: 'Zelle', venmo: 'Venmo', card: 'Card', other: 'Other',
 };
 
 function currentPeriod(): string {
