@@ -84,6 +84,7 @@ export function ClientProfileScreen() {
   const [tagInput, setTagInput] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
   const [autoFilled, setAutoFilled] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -158,13 +159,18 @@ export function ClientProfileScreen() {
       const f = await pickPhoto(source);
       if (!f) return;
       setAvatarBusy(true);
+      setPhotoMsg(null);
       try {
         const bytes = await readFileBytes(f.uri);
+        if (!bytes || bytes.byteLength === 0) throw new Error('That image looked empty. Try a different photo.');
         const path = await uploadAvatarFile(id, bytes, f.mimeType);
         const url = await getAvatarUrl(path);
-        setAvatarUrl(url);
-      } catch (e: any) { Alert.alert('Could not update photo', e?.message ?? 'Try again.'); }
-      finally { setAvatarBusy(false); }
+        setAvatarUrl(url ? `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}` : url);
+        setPhotoMsg({ ok: true, text: '✓ Profile photo updated' });
+        setTimeout(() => setPhotoMsg(null), 4000);
+      } catch (e: any) {
+        setPhotoMsg({ ok: false, text: e?.message ?? 'Could not update photo. Try again.' });
+      } finally { setAvatarBusy(false); }
     };
     if (isWeb) { doPick('library'); return; }
     Alert.alert('Profile photo', `Add or change ${client?.firstName || 'this resident'}’s photo.`, [
@@ -564,7 +570,11 @@ export function ClientProfileScreen() {
           <TouchableOpacity onPress={changeClientPhoto} disabled={avatarBusy}>
             <Text style={styles.photoBtn}>{avatarBusy ? 'Uploading…' : `📷 ${avatarUrl ? 'Edit' : 'Add'} profile photo`}</Text>
           </TouchableOpacity>
-          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{client.firstName} can see this photo too.</Text>
+          {photoMsg ? (
+            <Text style={[typography.caption, { marginTop: 3, fontWeight: '700', color: photoMsg.ok ? colors.success : colors.crisis }]}>{photoMsg.text}</Text>
+          ) : (
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{client.firstName} can see this photo too.</Text>
+          )}
         </View>
       </View>
 

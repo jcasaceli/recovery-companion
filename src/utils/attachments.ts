@@ -16,14 +16,19 @@ export async function pickImage(): Promise<PickedFile | null> {
   return { uri: a.uri, fileName: a.fileName || `photo_${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg', size: a.fileSize, isImage: true };
 }
 
-/** Pick a photo (library or camera). Returns null if cancelled/denied. */
+/** Pick a photo (library or camera). Returns null if cancelled/denied.
+ *  On web there's no permission gate and the camera isn't available, so we
+ *  always use the library picker there. */
 export async function pickPhoto(source: 'camera' | 'library'): Promise<PickedFile | null> {
-  const perm = source === 'camera'
-    ? await ImagePicker.requestCameraPermissionsAsync()
-    : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (perm.status !== 'granted') return null;
+  const useCamera = source === 'camera' && Platform.OS !== 'web';
+  if (Platform.OS !== 'web') {
+    const perm = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') return null;
+  }
   const opts: ImagePicker.ImagePickerOptions = { quality: 0.5, allowsEditing: false };
-  const r = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+  const r = useCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   const a = r.assets?.[0];
   if (r.canceled || !a) return null;
   return { uri: a.uri, fileName: a.fileName || `photo_${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg', size: a.fileSize, isImage: true };
@@ -40,8 +45,13 @@ export async function pickDocument(): Promise<PickedFile | null> {
   return { uri: a.uri, fileName: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/octet-stream', size: a.size, isImage: (a.mimeType || '').startsWith('image/') };
 }
 
-/** Read a picked file's bytes for upload to Storage. */
+/** Read a picked file's bytes for upload to Storage. On web the picker returns a
+ *  blob:/data: URI that expo-file-system can't read, so we fetch it instead. */
 export async function readFileBytes(uri: string): Promise<ArrayBuffer> {
+  if (Platform.OS === 'web') {
+    const res = await fetch(uri);
+    return await res.arrayBuffer();
+  }
   const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
   return decode(b64);
 }
