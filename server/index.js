@@ -13,6 +13,7 @@ import { notifyRouter } from './notify.js';
 import { accountRouter } from './account.js';
 import { inviteRouter } from './invite.js';
 import { managersRouter } from './managers.js';
+import { intakeRouter } from './intake.js';
 import { runRentReminders } from './reminders.js';
 
 const PORT = process.env.PORT || 8787;
@@ -30,6 +31,10 @@ app.use(cors(ALLOWED_ORIGINS.length ? { origin: ALLOWED_ORIGINS } : {}));
 // Stripe webhook needs the RAW body for signature verification — mount it
 // BEFORE express.json() so the body isn't parsed.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+
+// Public intake submissions carry a profile photo + signatures, so they need a
+// bigger body limit. Mount BEFORE the global 1mb parser so this parser wins.
+app.use('/api/intake', express.json({ limit: '12mb' }), intakeRouter);
 
 app.use(express.json({ limit: '1mb' }));
 
