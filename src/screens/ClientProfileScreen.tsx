@@ -11,10 +11,10 @@ import {
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
-  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl,
+  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl, uploadAvatarFile,
 } from '../services/db';
 import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
-import { PickedFile, readFileBytes, attachmentIcon } from '../utils/attachments';
+import { PickedFile, readFileBytes, attachmentIcon, pickPhoto, isWeb } from '../utils/attachments';
 import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate, parseMoneyCents } from '../utils/format';
 import { DateField } from '../components/PickerFields';
@@ -83,6 +83,7 @@ export function ClientProfileScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
   const [autoFilled, setAutoFilled] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -150,6 +151,28 @@ export function ClientProfileScreen() {
     setTags(Array.isArray(r.tags) ? r.tags : []);
     getAvatarUrl(r.avatar_path).then(setAvatarUrl).catch(() => {});
   }).catch(() => {});
+
+  // Staff set/replace this client's profile photo (the resident can see it too).
+  const changeClientPhoto = async () => {
+    const doPick = async (source: 'camera' | 'library') => {
+      const f = await pickPhoto(source);
+      if (!f) return;
+      setAvatarBusy(true);
+      try {
+        const bytes = await readFileBytes(f.uri);
+        const path = await uploadAvatarFile(id, bytes, f.mimeType);
+        const url = await getAvatarUrl(path);
+        setAvatarUrl(url);
+      } catch (e: any) { Alert.alert('Could not update photo', e?.message ?? 'Try again.'); }
+      finally { setAvatarBusy(false); }
+    };
+    if (isWeb) { doPick('library'); return; }
+    Alert.alert('Profile photo', `Add or change ${client?.firstName || 'this resident'}’s photo.`, [
+      { text: 'Take photo', onPress: () => doPick('camera') },
+      { text: 'Choose from library', onPress: () => doPick('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   // Add/remove free-text tags (diagnoses, substances, etc.). Persist immediately.
   const commitTags = async (next: string[]) => {
@@ -526,6 +549,25 @@ export function ClientProfileScreen() {
         subtitle={houseList.find((h) => h.id === houseId)?.name || client.houseName || 'Sober Living'}
       />
 
+      {/* Profile photo — staff can add/edit; the resident sees it too */}
+      <View style={styles.photoRow}>
+        <TouchableOpacity onPress={changeClientPhoto} activeOpacity={0.8} disabled={avatarBusy}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.photoAvatar} />
+          ) : (
+            <View style={[styles.photoAvatar, styles.photoAvatarEmpty]}>
+              <Text style={styles.photoInitial}>{client.firstName.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.md }}>
+          <TouchableOpacity onPress={changeClientPhoto} disabled={avatarBusy}>
+            <Text style={styles.photoBtn}>{avatarBusy ? 'Uploading…' : `📷 ${avatarUrl ? 'Edit' : 'Add'} profile photo`}</Text>
+          </TouchableOpacity>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{client.firstName} can see this photo too.</Text>
+        </View>
+      </View>
+
       {/* Record a payment — first action on the profile */}
       <Button title="💵 Record payment" onPress={() => { setPayAmount(''); setPayMethod('zelle'); setPayOpen(true); }} />
       <View style={{ height: spacing.sm }} />
@@ -554,9 +596,6 @@ export function ClientProfileScreen() {
       {/* Contact info + quick actions */}
       <SectionTitle>Contact</SectionTitle>
       <Card>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.clientAvatar} />
-        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           <Text style={[typography.body, { flex: 1 }]}>
             <Text style={{ fontWeight: '700' }}>Name: </Text>
@@ -1021,7 +1060,11 @@ const styles = StyleSheet.create({
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
-  clientAvatar: { width: 64, height: 64, borderRadius: 32, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt },
+  photoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  photoAvatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.surfaceAlt },
+  photoAvatarEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryLight },
+  photoInitial: { fontSize: 28, fontWeight: '800', color: colors.primary },
+  photoBtn: { ...typography.body, color: colors.primary, fontWeight: '800' },
   attachLink: { marginTop: 4 },
   attachLinkText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
