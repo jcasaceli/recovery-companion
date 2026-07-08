@@ -12,7 +12,7 @@ import {
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
 } from '../services/db';
 import { sendMemberInvite } from '../services/payments';
-import { formatDateTime, formatDate } from '../utils/format';
+import { formatDateTime, formatDate, parseMoneyCents } from '../utils/format';
 import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
@@ -412,12 +412,14 @@ export function ClientProfileScreen() {
     } finally { setInviting(false); }
   };
 
+  // Auto-saves on blur. Accepts "$500", "500", "$1,200.50" — the "$" is optional.
   const saveRent = async () => {
-    const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
-    const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
+    const cents = parseMoneyCents(amount);
+    const dn = parseInt((dueDay || '').replace(/[^0-9]/g, ''), 10);
+    const day = isNaN(dn) ? null : Math.min(31, Math.max(1, dn));
+    if (cents === (client.monthlyRentCents ?? null) && day === (client.rentDueDay ?? null)) return;
     try {
       await setRent(id, cents, day);
-      Alert.alert('Saved ✅', `${client.firstName}'s membership fee was updated.`);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
@@ -646,11 +648,11 @@ export function ClientProfileScreen() {
         <Text style={[styles.label, { marginTop: spacing.sm }]}>Monthly membership fee (you set this)</Text>
         <View style={styles.amtRow}>
           <Text style={styles.dollar}>$</Text>
-          <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
+          <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} onBlur={saveRent} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
         </View>
         <Text style={styles.label}>Due day of month (1–31)</Text>
-        <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
-        <Button title="Save membership fee" onPress={saveRent} />
+        <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} onBlur={saveRent} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Enter the amount with or without a "$" — it saves automatically.</Text>
       </Card>
 
       {/* Forms & Agreements — ONE unified card: upload agreements to sign AND

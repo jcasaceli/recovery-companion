@@ -87,6 +87,16 @@ export function daysSince(iso: string): number {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
 }
 
+/** Parse a money string into cents, tolerating a "$", commas, and spaces —
+ *  so "$500", "500", and "$1,200.50" all work. Returns null if empty/invalid. */
+export function parseMoneyCents(input: string): number | null {
+  const cleaned = (input || '').replace(/[^0-9.]/g, '');
+  if (!cleaned) return null;
+  const val = parseFloat(cleaned);
+  if (isNaN(val) || val < 0) return null;
+  return Math.round(val * 100);
+}
+
 export interface SobrietyParts { months: number; days: number; hours: number; minutes: number; seconds: number; }
 
 /** Break the time since a sobriety date into calendar months, then days,

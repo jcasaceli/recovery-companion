@@ -10,7 +10,7 @@ import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House,
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
-import { ordinal } from '../utils/format';
+import { ordinal, parseMoneyCents } from '../utils/format';
 import { toCsv, downloadCsv, pickCsvText, parseCsv, rowsToMembers } from '../utils/csv';
 
 function money(cents?: number) {
@@ -172,7 +172,7 @@ export function ClientsScreen() {
     if (!firstName.trim()) return;
     setBusy(true);
     try {
-      const rentCents = rent ? Math.round(parseFloat(rent) * 100) : undefined;
+      const rentCents = parseMoneyCents(rent) ?? undefined;
       const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : undefined;
       await createClient({
         firstName,
@@ -360,7 +360,7 @@ function BulkRentModal({ visible, count, onClose, onSave }: { visible: boolean; 
   const [busy, setBusy] = useState(false);
   if (!visible) return null;
   const save = async () => {
-    const cents = Math.round(parseFloat(amount || '0') * 100);
+    const cents = parseMoneyCents(amount);
     if (!cents) { Alert.alert('Enter an amount'); return; }
     const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
     setBusy(true);
