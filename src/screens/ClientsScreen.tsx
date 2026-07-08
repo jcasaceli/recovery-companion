@@ -31,6 +31,8 @@ export function ClientsScreen() {
     if (!paths.length) { setAvatars({}); return; }
     getAvatarUrls(paths).then(setAvatars).catch(() => {});
   }, [clients]);
+  // Web gets a yearbook-style photo gallery; the phone app keeps the compact list.
+  const isWeb = Platform.OS === 'web';
   const [houses, setHouses] = useState<House[]>([]);
   const [scope, setScope] = useState<{ isOwner: boolean; houseIds: string[] } | null>(null);
   const [houseFilter, setHouseFilter] = useState<string | 'ALL'>('ALL'); // owner can filter
@@ -300,6 +302,31 @@ export function ClientsScreen() {
 
         {shown.length === 0 ? (
           <Text style={styles.empty}>{filter === 'in_care' ? 'No members in care yet.' : 'No completed members yet.'}</Text>
+        ) : isWeb ? (
+          <View style={styles.grid}>
+            {shown.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={styles.tile}
+                activeOpacity={0.75}
+                onPress={() => (selectMode && !locked ? toggleSel(c.id) : nav.navigate('ClientProfile', { id: c.id }))}
+              >
+                <View style={styles.tilePhotoWrap}>
+                  {c.avatarPath && avatars[c.avatarPath] ? (
+                    <Image source={{ uri: avatars[c.avatarPath] }} style={styles.tilePhoto} />
+                  ) : (
+                    <View style={[styles.tilePhoto, styles.tileFallback]}>
+                      <Text style={styles.tileInitial}>{c.firstName.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  {selectMode ? <Text style={[styles.tileBadge, styles.tileCheck]}>{selected[c.id] ? '☑️' : '⬜️'}</Text> : null}
+                  {flagged.has(c.id) ? <Text style={[styles.tileBadge, styles.tileFlag]}>🚩</Text> : null}
+                </View>
+                <Text style={styles.tileName} numberOfLines={1}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
+                <Text style={styles.tileMeta} numberOfLines={1}>{houseLabel(c.houseId) || c.houseName || 'Sober Living'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         ) : (
           shown.map((c) => (
             <TouchableOpacity
@@ -420,6 +447,18 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.card },
   check: { fontSize: 22, marginRight: spacing.md },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  // Web yearbook gallery
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  tile: { width: 158, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, ...shadow.card },
+  tilePhotoWrap: { position: 'relative' },
+  tilePhoto: { width: '100%', aspectRatio: 1, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  tileFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryLight },
+  tileInitial: { fontSize: 46, fontWeight: '800', color: colors.primary },
+  tileBadge: { position: 'absolute', fontSize: 18 },
+  tileCheck: { top: 6, left: 6 },
+  tileFlag: { top: 6, right: 6 },
+  tileName: { ...typography.body, fontWeight: '700', marginTop: spacing.sm },
+  tileMeta: { ...typography.caption, color: colors.textMuted },
   avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 18 },
   chevron: { fontSize: 28, color: colors.textMuted, marginLeft: spacing.sm },
   bulkBar: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
