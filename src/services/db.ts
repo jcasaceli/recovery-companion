@@ -833,6 +833,8 @@ export interface FormTemplate {
   description?: string;
   fields: FormField[];
   bodyHtml?: string;   // rich-text agreement body (for editable written-agreement templates)
+  documentData?: string;    // base64 data URI of an uploaded doc (page 1), if this is a document template
+  documentPages?: string[]; // base64 pages when the uploaded doc is multi-page
   createdAt: string;
 }
 
@@ -852,7 +854,12 @@ export interface FormResponse {
 }
 
 function mapTemplate(r: any): FormTemplate {
-  return { id: r.id, title: r.title, description: r.description ?? undefined, fields: r.fields ?? [], bodyHtml: r.body_html ?? undefined, createdAt: r.created_at };
+  return {
+    id: r.id, title: r.title, description: r.description ?? undefined, fields: r.fields ?? [],
+    bodyHtml: r.body_html ?? undefined,
+    documentData: r.document_data ?? undefined, documentPages: r.document_pages ?? undefined,
+    createdAt: r.created_at,
+  };
 }
 function mapFormResponse(r: any): FormResponse {
   return {
@@ -871,7 +878,7 @@ export async function listFormTemplates(): Promise<FormTemplate[]> {
 }
 
 /** Staff: save a reusable form template. Returns the new template id. */
-export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[]; bodyHtml?: string }): Promise<string | undefined> {
+export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[]; bodyHtml?: string; documentData?: string; documentPages?: string[] }): Promise<string | undefined> {
   const { data: u } = await db().auth.getUser();
   const org = await getMyOrg();
   const row: any = {
@@ -879,17 +886,21 @@ export async function createFormTemplate(input: { title: string; description?: s
     fields: input.fields, created_by: u.user?.id,
   };
   if (input.bodyHtml) row.body_html = input.bodyHtml; // guarded until migration 0042 is applied
+  if (input.documentData) row.document_data = input.documentData;   // guarded until migration 0055
+  if (input.documentPages) row.document_pages = input.documentPages;
   const { data, error } = await db().from('form_templates').insert(row).select('id').maybeSingle();
   if (error) throw error;
   return data?.id;
 }
 
-/** Staff: update an existing template's title/fields/body. */
-export async function updateFormTemplate(id: string, input: { title?: string; fields?: FormField[]; bodyHtml?: string }) {
+/** Staff: update an existing template's title/fields/body/document. */
+export async function updateFormTemplate(id: string, input: { title?: string; fields?: FormField[]; bodyHtml?: string; documentData?: string; documentPages?: string[] }) {
   const row: any = {};
   if (input.title !== undefined) row.title = input.title;
   if (input.fields !== undefined) row.fields = input.fields;
   if (input.bodyHtml !== undefined) row.body_html = input.bodyHtml;
+  if (input.documentData !== undefined) row.document_data = input.documentData;
+  if (input.documentPages !== undefined) row.document_pages = input.documentPages;
   const { error } = await db().from('form_templates').update(row).eq('id', id);
   if (error) throw error;
 }

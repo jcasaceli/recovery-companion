@@ -75,6 +75,8 @@ export function FacilitatorFormsScreen() {
   const [pendingDoc, setPendingDoc] = useState<string | null>(null);
   const [pendingPages, setPendingPages] = useState<string[]>([]);
   const [docFields, setDocFields] = useState<PlacedField[]>([]);
+  // When set, the upload modal is editing an existing saved document template.
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
   // Write-agreement (rich text) modal
   const [writeOpen, setWriteOpen] = useState(false);
@@ -221,7 +223,7 @@ export function FacilitatorFormsScreen() {
           fields: docFields,
         });
       }
-      setUploadOpen(false); setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({});
+      setUploadOpen(false); setEditingDocId(null); setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({});
       Alert.alert('Sent ✅', `“${docTitle.trim()}” was sent to ${ids.length} resident${ids.length > 1 ? 's' : ''} to sign.`);
       load();
     } catch (e: any) { Alert.alert('Could not send', e?.message ?? 'Try again.'); }
@@ -268,7 +270,32 @@ export function FacilitatorFormsScreen() {
 
   const openBuilder = () => { setEditingId(null); setTitle(''); setFields([]); setBuilderOpen(true); };
   const openWrite = () => { setEditingId(null); setAgrTitle(''); setAgrHtml(''); setSelected({}); setWriteOpen(true); };
-  const openUpload = () => { setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({}); setUploadOpen(true); };
+  const openUpload = () => { setEditingDocId(null); setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]); setSelected({}); setUploadOpen(true); };
+  // Open a saved document template in the upload modal (prefilled) to edit, re-save, or send.
+  const openDocTemplate = (f: { title: string; fields: FormField[]; templateId?: string; documentData?: string; documentPages?: string[] }) => {
+    setEditingDocId(f.templateId ?? null);
+    setDocTitle(f.title);
+    setPendingDoc(f.documentData || null);
+    setPendingPages(f.documentPages || []);
+    setDocFields((f.fields as PlacedField[]) || []);
+    setSelected({});
+    setUploadOpen(true);
+  };
+  // Save the uploaded document + placed fields as a reusable template (create or update).
+  const saveDocTemplate = async () => {
+    if (!docTitle.trim()) { Alert.alert('Name the document', 'Give the document a title.'); return; }
+    if (!pendingDoc) { Alert.alert('Add a file', 'Upload a photo/scan or PDF first.'); return; }
+    setBusy(true);
+    try {
+      const pages = pendingPages.length > 1 ? pendingPages : [];
+      if (editingDocId) await updateFormTemplate(editingDocId, { title: docTitle.trim(), fields: docFields as unknown as FormField[], documentData: pendingDoc, documentPages: pages });
+      else await createFormTemplate({ title: docTitle.trim(), fields: docFields as unknown as FormField[], documentData: pendingDoc, documentPages: pages.length ? pages : undefined });
+      setUploadOpen(false); setEditingDocId(null); setDocTitle(''); setPendingDoc(null); setPendingPages([]); setDocFields([]);
+      Alert.alert('Saved ✅', 'Your document template was saved. Open it any time to edit or send.');
+      load();
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+    finally { setBusy(false); }
+  };
   // Unified submissions: sent agreements + any legacy form responses.
   const submissions = [
     ...agrs.map((a) => ({ id: a.id, title: a.title, individualId: a.individualId, createdAt: a.createdAt, done: a.status === 'signed' })),
@@ -311,12 +338,12 @@ export function FacilitatorFormsScreen() {
   // shown, so nothing appears twice across saved + starter lists.
   const formsList = (() => {
     const seen = new Set<string>();
-    const out: { key: string; title: string; fields: FormField[]; templateId?: string; bodyHtml?: string; saved: boolean }[] = [];
+    const out: { key: string; title: string; fields: FormField[]; templateId?: string; bodyHtml?: string; documentData?: string; documentPages?: string[]; saved: boolean }[] = [];
     for (const t of templates) {
       const k = t.title.trim().toLowerCase();
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, bodyHtml: t.bodyHtml, saved: true });
+      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, bodyHtml: t.bodyHtml, documentData: t.documentData, documentPages: t.documentPages, saved: true });
     }
     starters.forEach((s, i) => {
       const k = s.title.trim().toLowerCase();
@@ -384,8 +411,8 @@ export function FacilitatorFormsScreen() {
         <View style={styles.backdrop}>
           <View style={styles.modal}>
             <ScrollView>
-              <Text style={typography.h3}>Upload a document</Text>
-              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, place signature fields on it, then send it to residents to sign.</Text>
+              <Text style={typography.h3}>{editingDocId ? 'Edit document' : 'Upload a document'}</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, place signature fields on it, then save it as a reusable template or send it to residents to sign.</Text>
               <Text style={styles.lbl}>Document name</Text>
               <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Guest Agreement" placeholderTextColor={colors.textMuted} />
               <View style={{ height: spacing.sm }} />
@@ -404,9 +431,15 @@ export function FacilitatorFormsScreen() {
                 </View>
               ) : null}
 
+              {pendingDoc ? (
+                <>
+                  <View style={{ height: spacing.md }} />
+                  <Button title={busy ? 'Saving…' : (editingDocId ? '💾 Save changes' : '💾 Save as reusable template')} variant="secondary" onPress={saveDocTemplate} disabled={busy} />
+                </>
+              ) : null}
               <RecipientPicker />
               <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendDoc} disabled={busy} />
-              <TouchableOpacity onPress={() => setUploadOpen(false)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { setUploadOpen(false); setEditingDocId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -462,8 +495,8 @@ export function FacilitatorFormsScreen() {
               <Text style={[typography.body, { fontWeight: '700' }]}>{f.title}</Text>
               <Text style={typography.caption}>{f.fields.length} field{f.fields.length === 1 ? '' : 's'}{f.saved ? '' : ' · starter'}</Text>
             </View>
-            <TouchableOpacity onPress={() => openEdit(f)} style={{ marginRight: spacing.sm }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => openSend(f)}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openEdit(f))} style={{ marginRight: spacing.sm }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openSend(f))}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
             {f.saved ? (
               <TouchableOpacity onPress={() => del(f.templateId!, f.title)} style={{ marginLeft: spacing.sm }}>
                 <Text style={{ color: colors.textMuted, fontSize: 18 }}>🗑</Text>
@@ -533,8 +566,8 @@ export function FacilitatorFormsScreen() {
               <Text style={[styles.cell, styles.colType]}>{f.fields.length}</Text>
               <View style={[styles.colRight, styles.rightCell]}>
                 <TouchableOpacity onPress={() => setTab('submissions')}><Text style={styles.link}>{countFor(f.title)} ›</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => openEdit(f)} style={{ marginLeft: spacing.md }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => openSend(f)} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+                <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openEdit(f))} style={{ marginLeft: spacing.md }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openSend(f))} style={{ marginLeft: spacing.md }}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
               </View>
             </View>
           ))}
