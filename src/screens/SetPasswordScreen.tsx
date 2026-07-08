@@ -15,10 +15,12 @@ export function SetPasswordScreen() {
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
   const save = async () => {
-    if (pw1.length < 6) { Alert.alert('Too short', 'Use at least 6 characters.'); return; }
-    if (pw1 !== pw2) { Alert.alert('Passwords don’t match', 'Re-enter the same password twice.'); return; }
+    setErr('');
+    if (pw1.length < 6) { setErr('Use at least 6 characters.'); return; }
+    if (pw1 !== pw2) { setErr('Passwords do not match.'); return; }
     setBusy(true);
     try {
       await updatePassword(pw1);
@@ -26,7 +28,7 @@ export function SetPasswordScreen() {
       await auth.refreshProfile(); // clears the must-change-password gate
       Alert.alert('Password updated ✅', 'You’re all set — you’re now signed in.');
     } catch (e: any) {
-      Alert.alert('Could not update password', e?.message ?? 'Try again.');
+      setErr(e?.message ?? 'Could not update password. Try again.');
     } finally {
       setBusy(false);
     }
@@ -43,7 +45,7 @@ export function SetPasswordScreen() {
         <TextInput
           style={styles.input}
           value={pw1}
-          onChangeText={setPw1}
+          onChangeText={(t) => { setPw1(t); if (err) setErr(''); }}
           placeholder="New password"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
@@ -52,12 +54,13 @@ export function SetPasswordScreen() {
         <TextInput
           style={styles.input}
           value={pw2}
-          onChangeText={setPw2}
+          onChangeText={(t) => { setPw2(t); if (err) setErr(''); }}
           placeholder="Confirm new password"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
           autoCapitalize="none"
         />
+        {err ? <Text style={styles.err}>{err}</Text> : null}
         <Button title={busy ? 'Saving…' : 'Save new password'} onPress={save} disabled={busy || !pw1 || !pw2} />
         {busy ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} /> : null}
         {auth.profile?.mustChangePassword ? null : (
@@ -81,4 +84,5 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: spacing.sm,
   },
+  err: { color: colors.crisis, fontSize: 13, fontWeight: '600', marginBottom: spacing.sm },
 });

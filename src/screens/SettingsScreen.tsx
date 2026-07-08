@@ -25,6 +25,7 @@ export function SettingsScreen() {
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [savingPw, setSavingPw] = useState(false);
+  const [pwErr, setPwErr] = useState('');
   const [connect, setConnect] = useState<ConnectStatus | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [canConnectExisting, setCanConnectExisting] = useState(false);
@@ -79,14 +80,15 @@ export function SettingsScreen() {
   };
 
   const savePassword = async () => {
-    if (pw1.length < 6) { Alert.alert('Too short', 'Use at least 6 characters.'); return; }
-    if (pw1 !== pw2) { Alert.alert('Passwords don’t match', 'Re-enter the same password twice.'); return; }
+    setPwErr('');
+    if (pw1.length < 6) { setPwErr('Use at least 6 characters.'); return; }
+    if (pw1 !== pw2) { setPwErr('Passwords do not match.'); return; }
     setSavingPw(true);
     try {
       await updatePassword(pw1);
       setPw1(''); setPw2('');
       Alert.alert('Password changed ✅', 'Use your new password next time you sign in.');
-    } catch (e: any) { Alert.alert('Could not change password', e?.message ?? 'Try again.'); }
+    } catch (e: any) { setPwErr(e?.message ?? 'Could not change password. Try again.'); }
     finally { setSavingPw(false); }
   };
 
@@ -290,7 +292,7 @@ export function SettingsScreen() {
         <TextInput
           style={styles.input}
           value={pw1}
-          onChangeText={setPw1}
+          onChangeText={(t) => { setPw1(t); if (pwErr) setPwErr(''); }}
           placeholder="New password"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
@@ -299,12 +301,13 @@ export function SettingsScreen() {
         <TextInput
           style={styles.input}
           value={pw2}
-          onChangeText={setPw2}
+          onChangeText={(t) => { setPw2(t); if (pwErr) setPwErr(''); }}
           placeholder="Confirm new password"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
           autoCapitalize="none"
         />
+        {pwErr ? <Text style={[typography.caption, { color: colors.crisis, fontWeight: '700', marginBottom: spacing.xs }]}>{pwErr}</Text> : null}
         <Button
           title={savingPw ? 'Saving…' : 'Change password'}
           variant="secondary"
