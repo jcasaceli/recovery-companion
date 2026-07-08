@@ -32,6 +32,10 @@ export function SobrietyClockScreen() {
   }, [date]);
 
   const parts = date ? sobrietyParts(date) : null;
+  // Split full months into years + remaining months. Show "years" only once they
+  // have at least one (no "0 years" for anyone under a year).
+  const years = parts ? Math.floor(parts.months / 12) : 0;
+  const monthsShown = parts ? (years >= 1 ? parts.months % 12 : parts.months) : 0;
 
   // Geometry for the ring.
   const screenW = Dimensions.get('window').width;
@@ -60,6 +64,7 @@ export function SobrietyClockScreen() {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your Sobriety Clock</Text>
+        <Text style={styles.cakeLine}>🎂 To the future Cake-Getters</Text>
 
         {!date ? (
           <View style={styles.empty}>
@@ -109,7 +114,8 @@ export function SobrietyClockScreen() {
             </View>
 
             <View style={styles.breakdownRow}>
-              <Stat n={parts!.months} label={parts!.months === 1 ? 'month' : 'months'} />
+              {years >= 1 ? <Stat n={years} label={years === 1 ? 'year' : 'years'} /> : null}
+              {(years >= 1 || monthsShown > 0) ? <Stat n={monthsShown} label={monthsShown === 1 ? 'month' : 'months'} /> : null}
               <Stat n={parts!.days} label={parts!.days === 1 ? 'day' : 'days'} />
               <Stat n={parts!.hours} label="hrs" />
               <Stat n={parts!.minutes} label="min" />
@@ -146,7 +152,8 @@ const styles = StyleSheet.create({
   editorLabel: { ...typography.bodySecondary, fontWeight: '700', marginBottom: spacing.xs, textAlign: 'center' },
   editBtn: { marginTop: spacing.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
   editBtnText: { color: colors.primary, fontWeight: '700' },
-  title: { ...typography.h2, marginBottom: spacing.xl, textAlign: 'center' },
+  title: { ...typography.h2, marginBottom: spacing.xs, textAlign: 'center' },
+  cakeLine: { ...typography.body, color: colors.primary, fontWeight: '800', textAlign: 'center', marginBottom: spacing.xl },
   center: { alignItems: 'center', justifyContent: 'center' },
   bigDays: { fontSize: 64, fontWeight: '800', color: colors.textPrimary, lineHeight: 68, fontVariant: ['tabular-nums'] },
   daysLabel: { ...typography.bodySecondary, marginTop: -2, marginBottom: spacing.sm },
