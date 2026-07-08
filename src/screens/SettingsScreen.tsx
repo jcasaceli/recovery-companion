@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch, Linking, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, startConnectExisting, getConnectExistingUrl, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, House } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
+import { pickPhoto, readFileBytes } from '../utils/attachments';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
@@ -18,6 +19,9 @@ export function SettingsScreen() {
 
   const auth = useAuth();
   const isFacilitator = auth.profile?.role === 'facilitator';
+  const isIndividual = auth.profile?.role === 'individual';
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [networkName, setNetworkName] = useState<string | null>(null); // member's current sober living
   const [leaving, setLeaving] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -68,6 +72,20 @@ export function SettingsScreen() {
   const toggleNotify = (v: boolean) => { setNotifyActivity(v); setNotifyMemberActivity(v).catch(() => {}); };
 
   useEffect(() => { setNameInput(auth.profile?.fullName ?? ''); }, [auth.profile?.fullName]);
+  useEffect(() => { if (isIndividual) getMyAvatarUrl().then(setAvatarUrl).catch(() => {}); }, [isIndividual]);
+
+  const changeAvatar = async () => {
+    const f = await pickPhoto('library');
+    if (!f) return;
+    setAvatarBusy(true);
+    try {
+      const bytes = await readFileBytes(f.uri);
+      await setMyAvatar(bytes, f.mimeType);
+      const url = await getMyAvatarUrl();
+      setAvatarUrl(url);
+    } catch (e: any) { Alert.alert('Could not update photo', e?.message ?? 'Try again.'); }
+    finally { setAvatarBusy(false); }
+  };
   const saveName = async () => {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -282,6 +300,27 @@ export function SettingsScreen() {
               </Text>
             </View>
             <Switch value={notifyActivity} onValueChange={toggleNotify} trackColor={{ true: colors.primary }} />
+          </Card>
+        </>
+      ) : null}
+
+      {isIndividual ? (
+        <>
+          <SectionTitle>Profile picture</SectionTitle>
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={{ fontSize: 30 }}>🙂</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Add a photo so your team recognizes you.</Text>
+                <Button title={avatarBusy ? 'Uploading…' : (avatarUrl ? 'Change photo' : 'Add a photo')} variant="secondary" onPress={changeAvatar} disabled={avatarBusy} />
+              </View>
+            </View>
           </Card>
         </>
       ) : null}
@@ -540,6 +579,8 @@ export function SettingsScreen() {
 
 const styles = StyleSheet.create({
   signupLink: { ...typography.body, color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceAlt },
+  avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,

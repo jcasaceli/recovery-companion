@@ -519,7 +519,9 @@ export async function cancelPass(id: string) {
 export interface Curfew {
   individualId: string;
   enabled: boolean;
-  times: string[];          // ["HH:MM", ...]
+  times: string[];          // ["HH:MM", ...] — the "same every day" fallback
+  /** Per-weekday overrides: { "0": ["22:00"], ... } (0=Sun…6=Sat). Empty = same every day. */
+  dayTimes?: Record<string, string[]>;
   updatedAt?: string;
 }
 
@@ -533,10 +535,27 @@ export interface CurfewCheckin {
 }
 
 function mapCurfew(r: any): Curfew {
+  const dt = r.day_times && typeof r.day_times === 'object' && !Array.isArray(r.day_times) ? r.day_times : {};
   return {
     individualId: r.individual_id, enabled: !!r.enabled,
-    times: Array.isArray(r.times) ? r.times : [], updatedAt: r.updated_at,
+    times: Array.isArray(r.times) ? r.times : [],
+    dayTimes: dt, updatedAt: r.updated_at,
   };
+}
+
+/** The curfew times that apply on a given weekday (0=Sun…6=Sat): a per-day
+ *  override if one is set, otherwise the "same every day" list. */
+export function curfewTimesForDay(curfew: Pick<Curfew, 'times' | 'dayTimes'>, weekday: number): string[] {
+  const override = curfew.dayTimes?.[String(weekday)];
+  if (override && override.length) return override;
+  // An explicit empty override means "no curfew that day"; only fall back when unset.
+  if (curfew.dayTimes && Object.prototype.hasOwnProperty.call(curfew.dayTimes, String(weekday))) return override ?? [];
+  return curfew.times;
+}
+
+/** True when any per-weekday override is configured. */
+export function curfewUsesPerDay(curfew: Pick<Curfew, 'dayTimes'>): boolean {
+  return !!curfew.dayTimes && Object.keys(curfew.dayTimes).length > 0;
 }
 function mapCurfewCheckin(r: any): CurfewCheckin {
   return {
@@ -553,11 +572,12 @@ export async function getCurfew(individualId: string): Promise<Curfew | null> {
 }
 
 /** Staff: enable/disable curfew for a member and set the check-in times. */
-export async function setCurfew(individualId: string, input: { enabled: boolean; times: string[] }) {
+export async function setCurfew(individualId: string, input: { enabled: boolean; times: string[]; dayTimes?: Record<string, string[]> }) {
   const { data: u } = await db().auth.getUser();
   const { error } = await db().from('curfews').upsert({
     individual_id: individualId, enabled: input.enabled,
-    times: input.times, created_by: u.user?.id, updated_at: new Date().toISOString(),
+    times: input.times, day_times: input.dayTimes ?? {},
+    created_by: u.user?.id, updated_at: new Date().toISOString(),
   }, { onConflict: 'individual_id' });
   if (error) throw error;
 }
@@ -682,6 +702,69 @@ export async function deleteDocument(id: string) {
   if (data?.storage_path) await db().storage.from('documents').remove([data.storage_path]);
   const { error } = await db().from('documents').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ── Resident profile picture (avatars bucket) ────────────────────────────────
+
+/** Upload avatar bytes to the private avatars bucket; returns the storage path. */
+export async function uploadAvatarFile(individualId: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const ext = contentType.includes('png') ? 'png' : 'jpg';
+  const path = `${individualId}/${Date.now()}.${ext}`;
+  const { error } = await db().storage.from('avatars').upload(path, bytes, { contentType, upsert: true });
+  if (error) throw error;
+  await db().from('individuals').update({ avatar_path: path }).eq('id', individualId);
+  return path;
+}
+
+/** A short-lived signed URL for an avatar (null if none / no access). */
+export async function getAvatarUrl(storagePath?: string | null): Promise<string | null> {
+  if (!storagePath) return null;
+  const { data, error } = await db().storage.from('avatars').createSignedUrl(storagePath, 3600);
+  if (error) return null;
+  return data?.signedUrl ?? null;
+}
+
+/** Resident: set my own profile picture. */
+export async function setMyAvatar(bytes: ArrayBuffer, contentType: string): Promise<string | null> {
+  const me = await resolveMyIndividual();
+  if (!me) throw new Error('We couldn’t find your member record.');
+  return uploadAvatarFile(me.individualId, bytes, contentType);
+}
+
+/** Resident: a signed URL for my own avatar (null if none set). */
+export async function getMyAvatarUrl(): Promise<string | null> {
+  const me = await resolveMyIndividual();
+  if (!me) return null;
+  return getAvatarUrl(me.record?.avatar_path);
+}
+
+// ── Free-text client tags (owners/staff) ─────────────────────────────────────
+
+/** Staff: set the free-text tags on a client (e.g. diagnoses, substances). */
+export async function updateClientTags(individualId: string, tags: string[]) {
+  const clean = Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean)));
+  const { error } = await db().from('individuals').update({ tags: clean }).eq('id', individualId);
+  if (error) throw error;
+  return clean;
+}
+
+// ── Staff-only attachments (notes + UA results) ──────────────────────────────
+
+/** Upload a STAFF-ONLY attachment (note/UA). Residents can never read this bucket. */
+export async function uploadStaffFile(individualId: string, kind: 'notes' | 'ua', fileName: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const safe = fileName.replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = `${individualId}/${kind}/${Date.now()}_${safe}`;
+  const { error } = await db().storage.from('staff-files').upload(path, bytes, { contentType, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+/** Signed URL for a staff-only attachment (null if none / no access). */
+export async function getStaffFileUrl(storagePath?: string | null): Promise<string | null> {
+  if (!storagePath) return null;
+  const { data, error } = await db().storage.from('staff-files').createSignedUrl(storagePath, 3600);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }
 
 // ── Meeting attendance (staff-recorded) ──────────────────────────────────────
@@ -1059,6 +1142,10 @@ export interface UATest {
   notes?: string;
   dismissed: boolean;
   createdAt: string;
+  /** STAFF-ONLY attachment (e.g. lab result photo/PDF). Residents can never open it. */
+  attachmentPath?: string;
+  attachmentName?: string;
+  attachmentMime?: string;
 }
 
 function mapUA(r: any): UATest {
@@ -1071,6 +1158,9 @@ function mapUA(r: any): UATest {
     notes: r.notes ?? undefined,
     dismissed: !!r.dismissed,
     createdAt: r.created_at,
+    attachmentPath: r.attachment_path ?? undefined,
+    attachmentName: r.attachment_name ?? undefined,
+    attachmentMime: r.attachment_mime ?? undefined,
   };
 }
 
@@ -1082,6 +1172,7 @@ export async function createUATest(input: {
   result: UAResult;
   substances?: string;
   notes?: string;
+  attachment?: { path: string; name: string; mime: string };
 }) {
   const { error } = await db().from('ua_tests').insert({
     org_id: input.orgId ?? null,
@@ -1090,6 +1181,9 @@ export async function createUATest(input: {
     result: input.result,
     substances: input.substances ?? null,
     notes: input.notes ?? null,
+    attachment_path: input.attachment?.path ?? null,
+    attachment_name: input.attachment?.name ?? null,
+    attachment_mime: input.attachment?.mime ?? null,
   });
   if (error) throw error;
 }
@@ -1568,6 +1662,7 @@ export async function addNote(
   individualId: string,
   body: string,
   visibility: NoteVisibility,
+  attachment?: { path: string; name: string; mime: string },
 ) {
   const { data: u } = await db().auth.getUser();
   const { data, error } = await db()
@@ -1577,6 +1672,9 @@ export async function addNote(
       author_id: u.user?.id ?? null,
       body,
       visibility,
+      attachment_path: attachment?.path ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_mime: attachment?.mime ?? null,
     })
     .select('*, profiles:author_id(full_name, role)')
     .single();
@@ -1965,6 +2063,9 @@ function mapNote(r: any): Note {
     authorName: r.profiles?.full_name ?? 'Care team',
     authorRole: (r.profiles?.role as AppRole) ?? 'facilitator',
     createdAt: r.created_at,
+    attachmentPath: r.attachment_path ?? undefined,
+    attachmentName: r.attachment_name ?? undefined,
+    attachmentMime: r.attachment_mime ?? undefined,
   };
 }
 

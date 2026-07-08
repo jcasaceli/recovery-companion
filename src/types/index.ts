@@ -223,6 +223,10 @@ export interface Note {
   authorRole: AppRole;
   /** ISO datetime string */
   createdAt: string;
+  /** STAFF-ONLY file attached to the note (e.g. a UA result). Residents can never open it. */
+  attachmentPath?: string;
+  attachmentName?: string;
+  attachmentMime?: string;
 }
 
 export interface Meeting {

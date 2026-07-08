@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator, Share, ScrollView } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
@@ -10,7 +11,10 @@ import {
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
+  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl,
 } from '../services/db';
+import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
+import { PickedFile, readFileBytes, attachmentIcon } from '../utils/attachments';
 import { sendMemberInvite } from '../services/payments';
 import { formatDateTime, formatDate, parseMoneyCents } from '../utils/format';
 import { DateField } from '../components/PickerFields';
@@ -75,6 +79,10 @@ export function ClientProfileScreen() {
   const [showSignedAgreements, setShowSignedAgreements] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  const [noteFile, setNoteFile] = useState<PickedFile | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<{ label: string; value: string; type: string; title: string; date: string }[]>([]);
   const [autoFilled, setAutoFilled] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -139,7 +147,29 @@ export function ClientProfileScreen() {
     setBedLabel(r.bed_label ?? '');
     setMoveInDate(r.move_in_date ?? '');
     setDischargeDate(r.discharge_date ?? undefined);
+    setTags(Array.isArray(r.tags) ? r.tags : []);
+    getAvatarUrl(r.avatar_path).then(setAvatarUrl).catch(() => {});
   }).catch(() => {});
+
+  // Add/remove free-text tags (diagnoses, substances, etc.). Persist immediately.
+  const commitTags = async (next: string[]) => {
+    setTags(next);
+    try { await updateClientTags(id, next); } catch (e: any) { Alert.alert('Could not save tag', e?.message ?? 'Try again.'); }
+  };
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (!t || tags.some((x) => x.toLowerCase() === t.toLowerCase())) { setTagInput(''); return; }
+    commitTags([...tags, t]); setTagInput('');
+  };
+  const removeTag = (t: string) => commitTags(tags.filter((x) => x !== t));
+
+  // Open a STAFF-ONLY attachment (note/UA) — signed URL, staff bucket only.
+  const openAttachment = async (path?: string) => {
+    if (!path) return;
+    const url = await getStaffFileUrl(path);
+    if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
+    await WebBrowser.openBrowserAsync(url);
+  };
 
   const loadPayments = () => listMyPayments(id).then((pays: any[]) => {
     const sum = pays.filter((p) => p.periodMonth === currentPeriod() && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
@@ -168,17 +198,25 @@ export function ClientProfileScreen() {
   const [uaSubstances, setUaSubstances] = useState('');
   const [uaNotes, setUaNotes] = useState('');
   const [uaSaving, setUaSaving] = useState(false);
+  const [uaFile, setUaFile] = useState<PickedFile | null>(null);
   const loadUA = () => listUATests(id).then(setUaTests).catch(() => {});
 
   const saveUA = async () => {
     setUaSaving(true);
     try {
+      let attachment: { path: string; name: string; mime: string } | undefined;
+      if (uaFile) {
+        const bytes = await readFileBytes(uaFile.uri);
+        const path = await uploadStaffFile(id, 'ua', uaFile.fileName, bytes, uaFile.mimeType);
+        attachment = { path, name: uaFile.fileName, mime: uaFile.mimeType };
+      }
       await createUATest({
         orgId: org?.id, individualId: id, testedAt: uaDate, result: uaResult,
         substances: uaResult === 'positive' ? uaSubstances.trim() || undefined : undefined,
         notes: uaNotes.trim() || undefined,
+        attachment,
       });
-      setUaOpen(false); setUaResult('negative'); setUaSubstances(''); setUaNotes('');
+      setUaOpen(false); setUaResult('negative'); setUaSubstances(''); setUaNotes(''); setUaFile(null);
       setUaDate(new Date().toISOString().slice(0, 10));
       loadUA();
     } catch (e: any) {
@@ -238,11 +276,17 @@ export function ClientProfileScreen() {
   }).catch(() => {});
 
   const addStaffNote = async () => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim() && !noteFile) return;
     setNoteSaving(true);
     try {
-      await addNote(id, noteText.trim(), 'facilitators');
-      setNoteText('');
+      let attachment: { path: string; name: string; mime: string } | undefined;
+      if (noteFile) {
+        const bytes = await readFileBytes(noteFile.uri);
+        const path = await uploadStaffFile(id, 'notes', noteFile.fileName, bytes, noteFile.mimeType);
+        attachment = { path, name: noteFile.fileName, mime: noteFile.mimeType };
+      }
+      await addNote(id, noteText.trim() || '(file attached)', 'facilitators', attachment);
+      setNoteText(''); setNoteFile(null);
       await reloadNotes();
     } catch (e: any) { Alert.alert('Could not add note', e?.message ?? 'Try again.'); }
     finally { setNoteSaving(false); }
@@ -510,6 +554,9 @@ export function ClientProfileScreen() {
       {/* Contact info + quick actions */}
       <SectionTitle>Contact</SectionTitle>
       <Card>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.clientAvatar} />
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           <Text style={[typography.body, { flex: 1 }]}>
             <Text style={{ fontWeight: '700' }}>Name: </Text>
@@ -595,6 +642,37 @@ export function ClientProfileScreen() {
         </Card>
       ) : null}
 
+      {/* Free-text tags — diagnoses, substances, risk flags. Staff-only. */}
+      <SectionTitle>Tags</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Add anything you want to flag — diagnoses, substances, risk notes (e.g. schizophrenia, methamphetamine). {client.firstName} can’t see these.
+        </Text>
+        {tags.length ? (
+          <View style={styles.tagWrap}>
+            {tags.map((t) => (
+              <TouchableOpacity key={t} style={styles.tagChip} onPress={() => removeTag(t)}>
+                <Text style={styles.tagChipText}>{t}</Text>
+                <Text style={styles.tagChipX}>  ✕</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            value={tagInput}
+            onChangeText={setTagInput}
+            placeholder="Type a tag and press Add"
+            placeholderTextColor={colors.textMuted}
+            onSubmitEditing={addTag}
+            returnKeyType="done"
+          />
+          <Button title="Add" onPress={addTag} disabled={!tagInput.trim()} />
+        </View>
+        {tags.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>Tap a tag to remove it.</Text> : null}
+      </Card>
+
       {/* Staff-only notes (owner/manager care coordination) — residents can't see these */}
       <SectionTitle>Notes (staff only)</SectionTitle>
       <Card>
@@ -609,13 +687,19 @@ export function ClientProfileScreen() {
           placeholderTextColor={colors.textMuted}
           multiline
         />
-        <Button title={noteSaving ? 'Saving…' : '➕ Add note'} onPress={addStaffNote} disabled={noteSaving || !noteText.trim()} />
+        <StaffAttachmentPicker value={noteFile} onChange={setNoteFile} memberName={client.firstName} />
+        <Button title={noteSaving ? 'Saving…' : '➕ Add note'} onPress={addStaffNote} disabled={noteSaving || (!noteText.trim() && !noteFile)} />
         {staffNotes.length ? (
           <View style={{ marginTop: spacing.sm }}>
             {staffNotes.map((n) => (
               <View key={n.id} style={styles.noteRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={typography.body}>{n.body}</Text>
+                  {n.attachmentPath ? (
+                    <TouchableOpacity onPress={() => openAttachment(n.attachmentPath)} style={styles.attachLink}>
+                      <Text style={styles.attachLinkText}>{attachmentIcon(n.attachmentMime, n.attachmentName)} {n.attachmentName || 'Attachment'} · 🔒 staff only</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <Text style={[typography.caption, { marginTop: 2 }]}>
                     <Text style={{ fontWeight: '700', color: colors.primaryDark }}>{noteAuthorLabel(n)}</Text> · {formatDateTime(n.createdAt)}
                   </Text>
@@ -746,6 +830,11 @@ export function ClientProfileScreen() {
                   </Text>
                   {t.substances ? <Text style={typography.caption}>Detected: {t.substances}</Text> : null}
                   {t.notes ? <Text style={typography.caption}>{t.notes}</Text> : null}
+                  {t.attachmentPath ? (
+                    <TouchableOpacity onPress={() => openAttachment(t.attachmentPath)} style={styles.attachLink}>
+                      <Text style={styles.attachLinkText}>{attachmentIcon(t.attachmentMime, t.attachmentName)} {t.attachmentName || 'Result file'} · 🔒 staff only</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </TouchableOpacity>
             ))}
@@ -778,8 +867,10 @@ export function ClientProfileScreen() {
             ) : null}
             <Text style={styles.label}>Notes (optional)</Text>
             <TextInput style={styles.input} value={uaNotes} onChangeText={setUaNotes} placeholder="Observed collection, etc." placeholderTextColor={colors.textMuted} />
+            <Text style={styles.label}>Attach result (optional)</Text>
+            <StaffAttachmentPicker value={uaFile} onChange={setUaFile} memberName={client.firstName} />
             <Button title={uaSaving ? 'Saving…' : 'Save result'} onPress={saveUA} disabled={uaSaving} />
-            <TouchableOpacity onPress={() => setUaOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+            <TouchableOpacity onPress={() => { setUaOpen(false); setUaFile(null); }} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -930,6 +1021,13 @@ const styles = StyleSheet.create({
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  clientAvatar: { width: 64, height: 64, borderRadius: 32, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt },
+  attachLink: { marginTop: 4 },
+  attachLinkText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  tagChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
+  tagChipText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  tagChipX: { color: colors.primaryDark, fontSize: 12 },
   submittedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider, gap: spacing.md },
   mergeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   payMethods: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },

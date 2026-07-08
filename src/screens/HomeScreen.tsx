@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -382,11 +382,14 @@ export function HomeScreen() {
       {!isFacilitator && curfew?.enabled ? (
         <Card style={{ borderWidth: 1, borderColor: colors.primary }}>
           <Text style={[typography.body, { fontWeight: '700', marginBottom: spacing.xs }]}>🌙 Curfew check-in</Text>
-          {curfew.times.length ? (
-            <Text style={typography.caption}>Check in by: {curfew.times.map(to12h).join(' · ')}</Text>
-          ) : (
-            <Text style={typography.caption}>Check in when asked by your facilitator.</Text>
-          )}
+          {(() => {
+            const todayTimes = curfewTimesForDay(curfew, new Date().getDay());
+            return todayTimes.length ? (
+              <Text style={typography.caption}>Check in by today: {todayTimes.map(to12h).join(' · ')}</Text>
+            ) : (
+              <Text style={typography.caption}>No curfew today — check in when asked by your facilitator.</Text>
+            );
+          })()}
           <Text style={[typography.caption, { marginTop: spacing.xs, color: curfewToday.length ? colors.success : colors.warning, fontWeight: '600' }]}>
             {curfewToday.length
               ? `✓ Checked in today at ${formatTime(curfewToday[0].checkedAt)}`
