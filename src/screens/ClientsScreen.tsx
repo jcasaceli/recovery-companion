@@ -324,6 +324,7 @@ export function ClientsScreen() {
                 </View>
                 <Text style={styles.tileName} numberOfLines={1}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
                 <Text style={styles.tileMeta} numberOfLines={1}>{houseLabel(c.houseId) || c.houseName || 'Sober Living'}</Text>
+                {c.tags && c.tags.length ? <Text style={styles.tileTags} numberOfLines={2}>{c.tags.join(' · ')}</Text> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -353,6 +354,7 @@ export function ClientsScreen() {
                 <Text style={typography.caption}>
                   {houseLabel(c.houseId) || c.houseName ? `${houseLabel(c.houseId) || c.houseName} · ` : ''}Fee: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}
                 </Text>
+                {c.tags && c.tags.length ? <Text style={styles.rowTags} numberOfLines={1}>{c.tags.join(' · ')}</Text> : null}
               </View>
               {!selectMode ? <Text style={styles.chevron}>›</Text> : null}
             </TouchableOpacity>
@@ -459,6 +461,8 @@ const styles = StyleSheet.create({
   tileFlag: { top: 6, right: 6 },
   tileName: { ...typography.body, fontWeight: '700', marginTop: spacing.sm },
   tileMeta: { ...typography.caption, color: colors.textMuted },
+  tileTags: { fontSize: 11, color: colors.primaryDark, marginTop: 3, lineHeight: 14 },
+  rowTags: { fontSize: 11, color: colors.primaryDark, marginTop: 1 },
   avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 18 },
   chevron: { fontSize: 28, color: colors.textMuted, marginLeft: spacing.sm },
   bulkBar: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },

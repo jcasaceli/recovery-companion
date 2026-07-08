@@ -184,6 +184,8 @@ export interface ClientSummary {
   rentDueDay?: number;
   /** Storage path of the resident's profile photo (sign with getAvatarUrls to display). */
   avatarPath?: string;
+  /** Free-text staff tags (diagnoses, substances, flags). */
+  tags?: string[];
 }
 
 export interface Profile {
