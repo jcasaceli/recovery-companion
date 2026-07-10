@@ -15,6 +15,7 @@ import { inviteRouter } from './invite.js';
 import { managersRouter } from './managers.js';
 import { intakeRouter } from './intake.js';
 import { runRentReminders } from './reminders.js';
+import { initCampaigns, guardedRun } from './campaigns/index.js';
 
 const PORT = process.env.PORT || 8787;
 
@@ -62,6 +63,28 @@ cron.schedule('0 9 * * *', () => {
   runRentReminders()
     .then((r) => console.log(`[reminders] daily run: sent ${r.sent}, checked ${r.checked}`))
     .catch((e) => console.warn('[reminders] daily run failed', e));
+});
+
+// ── Cold-email campaigns (directory + app), moved off the Mac ────────────────
+// Imports the send history on boot, then schedules the 8am Pacific run
+// (only if CAMPAIGNS_ENABLED=true).
+initCampaigns().catch((e) => console.warn('[campaigns] init failed', e.message));
+
+// Token-guarded trigger. Default is a DRY RUN (sends nothing) so you can verify
+// exactly who would be emailed. Add &live=1 to actually send this run.
+app.get('/api/campaigns/run', async (req, res) => {
+  const token = process.env.CAMPAIGN_ADMIN_TOKEN;
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'forbidden' });
+  const dry = req.query.live !== '1';
+  try {
+    if (dry) {
+      const results = await guardedRun({ dry: true });
+      return res.json({ dry: true, results });
+    }
+    // Live run happens in the background (it takes ~1 hr with 90s spacing).
+    guardedRun({ dry: false }).catch((e) => console.warn('[campaigns] live run failed', e.message));
+    return res.json({ dry: false, started: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
 app.get('/health', (_req, res) => {
