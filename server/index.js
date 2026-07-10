@@ -16,6 +16,8 @@ import { managersRouter } from './managers.js';
 import { intakeRouter } from './intake.js';
 import { runRentReminders } from './reminders.js';
 import { initCampaigns, guardedRun } from './campaigns/index.js';
+import { sendTestDirectory } from './campaigns/directory.js';
+import { sendTestApp } from './campaigns/app.js';
 
 const PORT = process.env.PORT || 8787;
 
@@ -75,6 +77,27 @@ initCampaigns().catch((e) => console.warn('[campaigns] init failed', e.message))
 app.get('/api/campaigns/run', async (req, res) => {
   const token = process.env.CAMPAIGN_ADMIN_TOKEN;
   if (!token || req.query.token !== token) return res.status(403).json({ error: 'forbidden' });
+
+  // Config/armed status.
+  if (req.query.status === '1') {
+    return res.json({
+      cronArmed: process.env.CAMPAIGNS_ENABLED === 'true',
+      unsubSecretSet: !!process.env.UNSUB_SECRET,
+      resendKeySet: !!process.env.RESEND_API_KEY,
+      schedule: '0 8 * * * (America/Los_Angeles)',
+    });
+  }
+
+  // Real test send to one address (not logged to campaign state).
+  if (req.query.test) {
+    if (!process.env.UNSUB_SECRET) return res.status(400).json({ error: 'UNSUB_SECRET not set' });
+    try {
+      const to = String(req.query.test);
+      const [dir, app] = await Promise.all([sendTestDirectory(to), sendTestApp(to)]);
+      return res.json({ test: to, directory: dir, app });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
   const dry = req.query.live !== '1';
   try {
     if (dry) {

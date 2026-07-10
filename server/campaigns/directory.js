@@ -119,6 +119,15 @@ export function buildEmail(email, homes, VIEWS) {
   return { subject, html, text };
 }
 
+/** Send ONE real sample directory email to a test address (not logged to state). */
+export async function sendTestDirectory(to) {
+  const groups = loadProspects();
+  const first = [...groups.values()][0];
+  const { subject, html, text } = buildEmail(to, first, {});
+  const resp = await sendViaResend({ from: FROM, to, replyTo: REPLY_TO, subject, html, text });
+  return { campaign: 'directory', from: FROM, to, subject, ...resp };
+}
+
 /** Order: all non-CA first, California last (matches the original). */
 function orderProspects(groups) {
   const caOnly = (homes) => homes.every((h) => (h.state || '').toUpperCase() === 'CA');

@@ -112,6 +112,15 @@ export function buildFollowup(stage, email, homes) {
   return { subject, html: wrapFollowup(inner, email, name), text };
 }
 
+/** Send ONE real sample app email to a test address (not logged to state). */
+export async function sendTestApp(to) {
+  const groups = loadProspects();
+  const first = [...groups.values()][0];
+  const { subject, html, text } = buildOutreach(to, first);
+  const resp = await sendViaResend({ from: FROM, to, replyTo: REPLY_TO, subject, html, text });
+  return { campaign: 'app', from: FROM, to, subject, ...resp };
+}
+
 /** Initial app outreach (suppresses directory + app sends). */
 export async function runAppOutreach({ cap = 30, delayMs = 90000, dry = false, log = console.log } = {}) {
   const groups = loadProspects();
