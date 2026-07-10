@@ -14,6 +14,9 @@ const DELAY_MS = 90000;
 /** Run everything once. Directory runs concurrently with (app → follow-ups);
  *  the two app steps are sequential so we don't double the app subdomain's rate. */
 export async function runAll({ dry = false, log = console.log } = {}) {
+  if (!dry && !process.env.UNSUB_SECRET) {
+    throw new Error('UNSUB_SECRET not set — refusing to send (unsubscribe links would break)');
+  }
   log(`[campaigns] run start (dry=${dry}) ${new Date().toISOString()}`);
   const [directory, appChain] = await Promise.all([
     runDirectory({ cap: CAPS.directory, delayMs: DELAY_MS, dry, log }).catch((e) => ({ campaign: 'directory', error: e.message })),
