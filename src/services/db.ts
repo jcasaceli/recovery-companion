@@ -197,6 +197,15 @@ export async function getIndividual(id: string) {
   return data;
 }
 
+/** Owner: promote a resident to a house manager (role → facilitator + org/house
+ *  access). Returns 'promoted' | 'no_account' | 'not_authorized' | 'not_found' |
+ *  'already_owner'. */
+export async function promoteToManager(individualId: string): Promise<string> {
+  const { data, error } = await db().rpc('promote_to_manager', { p_individual_id: individualId });
+  if (error) throw error;
+  return String(data);
+}
+
 /** Facilitator: move a client between 'in_care' and 'completed'. */
 export async function updateClientStatus(id: string, status: 'in_care' | 'completed') {
   const { error } = await db().from('individuals').update({ status }).eq('id', id);

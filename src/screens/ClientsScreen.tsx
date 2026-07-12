@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   houseChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
   houseChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   houseChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-  houseChipTextOn: { color: colors.textInverse },
+  houseChipTextOn: { color: '#FFFFFF', fontWeight: '800' },
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { color: colors.textSecondary },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },

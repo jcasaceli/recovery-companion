@@ -11,7 +11,7 @@ import {
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
-  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl, uploadAvatarFile,
+  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl, uploadAvatarFile, promoteToManager,
 } from '../services/db';
 import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
 import { PickedFile, readFileBytes, attachmentIcon, pickPhoto, isWeb } from '../utils/attachments';
@@ -376,6 +376,22 @@ export function ClientProfileScreen() {
     try { await readmitMember(id); setDischargeDate(undefined); await setClientStatus(id, 'in_care'); }
     catch (e: any) { Alert.alert('Could not re-admit', e?.message ?? 'Try again.'); }
   };
+
+  const makeManager = () => confirmThen(
+    'Make house manager?',
+    `Promote ${client?.firstName ?? 'this resident'} to a house manager? They'll get manager access to your homes and be assigned to their current house. They need to have signed in to the app at least once first.`,
+    'Make manager',
+    async () => {
+      try {
+        const r = await promoteToManager(id);
+        if (r === 'promoted') Alert.alert('Done ✅', `${client?.firstName ?? 'They'} is now a house manager. They'll see the manager view next time they open the app.`);
+        else if (r === 'no_account') Alert.alert('They need an account first', `${client?.firstName ?? 'This resident'} has to open the app and sign in once before they can be made a manager. Share your join code so they can get set up.`);
+        else if (r === 'not_authorized') Alert.alert('Owner only', 'Only the account owner can promote someone to a house manager.');
+        else if (r === 'already_owner') Alert.alert('Already the owner', 'This person is the account owner.');
+        else Alert.alert('Could not promote', 'Please try again.');
+      } catch (e: any) { Alert.alert('Could not promote', e?.message ?? 'Try again.'); }
+    },
+  );
 
   if (!client) {
     // Preview mode: tapping a sample resident opens a read-only sample profile so
@@ -977,6 +993,14 @@ export function ClientProfileScreen() {
       <DocumentsManager individualId={id} orgId={org?.id} memberName={client.firstName} hideHeader />
 
       {/* Status / discharge */}
+      <SectionTitle>Manager access</SectionTitle>
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+          Trust {client.firstName} to help run the house? Make them a house manager — they'll get manager access and be assigned to their current house. (They need to have signed in to the app once first.)
+        </Text>
+        <Button title="👤➕ Make house manager" variant="secondary" onPress={makeManager} />
+      </Card>
+
       <SectionTitle>Status</SectionTitle>
       <Card>
         <Text style={[typography.body, { marginBottom: spacing.xs }]}>

@@ -73,9 +73,9 @@ export function HousesManager({ managers, isOwner = true }: { managers: Manager[
   };
 
   const removeHouse = (h: House) => {
-    Alert.alert('Delete house?', `Remove “${h.name}”? Members in it will become unassigned. This can't be undone.`, [
+    Alert.alert('Delete house?', `Remove “${h.name}”? Everyone in it will be moved to “no house” — they keep their accounts, data, and history; they just won't be assigned to a house. This can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteHouse(h.id).catch(() => {}); load(); } },
+      { text: 'Delete house', style: 'destructive', onPress: async () => { await deleteHouse(h.id).catch((e: any) => Alert.alert('Could not delete', e?.message ?? 'Try again.')); setExpanded(null); load(); } },
     ]);
   };
 
@@ -139,7 +139,11 @@ export function HousesManager({ managers, isOwner = true }: { managers: Manager[
                       </TouchableOpacity>
                     );
                   })}
-                  {isOwner ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press the house to delete it.</Text> : null}
+                  {isOwner ? (
+                    <TouchableOpacity onPress={() => removeHouse(h)} style={styles.deleteHouseBtn}>
+                      <Text style={styles.deleteHouseText}>🗑  Delete this house</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -167,6 +171,8 @@ const styles = StyleSheet.create({
   houseRow: { flexDirection: 'row', alignItems: 'center' },
   code: { fontWeight: '800', letterSpacing: 1, color: colors.primaryDark },
   chev: { fontSize: 20, color: colors.textMuted, marginLeft: spacing.sm },
+  deleteHouseBtn: { marginTop: spacing.md, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.crisis },
+  deleteHouseText: { color: colors.crisis, fontWeight: '700', fontSize: 14 },
   assignArea: { marginTop: spacing.sm, paddingLeft: spacing.sm },
   mgrToggle: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   box: { width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
