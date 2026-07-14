@@ -800,6 +800,14 @@ export async function updateClientTags(individualId: string, tags: string[]) {
   return clean;
 }
 
+/** Facilitator: set the medications a client is taking (staff-managed list). */
+export async function updateClientMedications(individualId: string, medications: string[]) {
+  const clean = Array.from(new Set(medications.map((m) => m.trim()).filter(Boolean)));
+  const { error } = await db().from('individuals').update({ medications: clean }).eq('id', individualId);
+  if (error) throw error;
+  return clean;
+}
+
 // ── Staff-only attachments (notes + UA results) ──────────────────────────────
 
 /** Upload a STAFF-ONLY attachment (note/UA). Residents can never read this bucket. */

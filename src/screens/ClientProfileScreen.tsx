@@ -11,7 +11,7 @@ import {
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
-  uploadStaffFile, getStaffFileUrl, updateClientTags, getAvatarUrl, uploadAvatarFile, promoteToManager,
+  uploadStaffFile, getStaffFileUrl, updateClientTags, updateClientMedications, getAvatarUrl, uploadAvatarFile, promoteToManager,
 } from '../services/db';
 import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
 import { PickedFile, readFileBytes, attachmentIcon, pickPhoto, isWeb } from '../utils/attachments';
@@ -82,6 +82,8 @@ export function ClientProfileScreen() {
   const [noteFile, setNoteFile] = useState<PickedFile | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [meds, setMeds] = useState<string[]>([]);
+  const [medInput, setMedInput] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [photoMsg, setPhotoMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -150,6 +152,7 @@ export function ClientProfileScreen() {
     setMoveInDate(r.move_in_date ?? '');
     setDischargeDate(r.discharge_date ?? undefined);
     setTags(Array.isArray(r.tags) ? r.tags : []);
+    setMeds(Array.isArray(r.medications) ? r.medications : []);
     getAvatarUrl(r.avatar_path).then(setAvatarUrl).catch(() => {});
   }).catch(() => {});
 
@@ -191,6 +194,18 @@ export function ClientProfileScreen() {
     commitTags([...tags, t]); setTagInput('');
   };
   const removeTag = (t: string) => commitTags(tags.filter((x) => x !== t));
+
+  // Medications the client is taking — staff-managed add/delete list.
+  const commitMeds = async (next: string[]) => {
+    setMeds(next);
+    try { await updateClientMedications(id, next); } catch (e: any) { Alert.alert('Could not save medication', e?.message ?? 'Try again.'); }
+  };
+  const addMed = () => {
+    const m = medInput.trim();
+    if (!m || meds.some((x) => x.toLowerCase() === m.toLowerCase())) { setMedInput(''); return; }
+    commitMeds([...meds, m]); setMedInput('');
+  };
+  const removeMed = (m: string) => commitMeds(meds.filter((x) => x !== m));
 
   // Open a STAFF-ONLY attachment (note/UA) — signed URL, staff bucket only.
   const openAttachment = async (path?: string) => {
@@ -738,6 +753,36 @@ export function ClientProfileScreen() {
         {tags.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>Tap a tag to remove it.</Text> : null}
       </Card>
 
+      {/* Medications the client is taking — staff-managed, compact add/delete list. */}
+      <SectionTitle>Medications</SectionTitle>
+      <Card>
+        {meds.length ? (
+          <View style={styles.tagWrap}>
+            {meds.map((m) => (
+              <TouchableOpacity key={m} style={styles.medChip} onPress={() => removeMed(m)}>
+                <Text style={styles.medChipText}>{m}</Text>
+                <Text style={styles.medChipX}>  ✕</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>No medications added.</Text>
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            value={medInput}
+            onChangeText={setMedInput}
+            placeholder="Add a medication (e.g. Suboxone 8mg)"
+            placeholderTextColor={colors.textMuted}
+            onSubmitEditing={addMed}
+            returnKeyType="done"
+          />
+          <Button title="Add" onPress={addMed} disabled={!medInput.trim()} />
+        </View>
+        {meds.length ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>Tap a medication to remove it.</Text> : null}
+      </Card>
+
       {/* Staff-only notes (owner/manager care coordination) — residents can't see these */}
       <SectionTitle>Notes (staff only)</SectionTitle>
       <Card>
@@ -1105,6 +1150,9 @@ const styles = StyleSheet.create({
   tagChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
   tagChipText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
   tagChipX: { color: colors.primaryDark, fontSize: 12 },
+  medChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.accentLight, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
+  medChipText: { color: '#9A5B2E', fontWeight: '700', fontSize: 13 },
+  medChipX: { color: '#9A5B2E', fontSize: 12 },
   submittedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider, gap: spacing.md },
   mergeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   payMethods: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
