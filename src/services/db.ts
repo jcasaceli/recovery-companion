@@ -183,11 +183,43 @@ export async function getMyProfile() {
 // Individuals
 // ---------------------------------------------------------------------------
 
-/** Facilitator: every individual in their org. */
+/** Facilitator: every individual in their org — EXCLUDING pending applicants.
+ *  Pending admissions (people who filled the public application but haven't been
+ *  admitted yet) are surfaced separately via listPendingAdmissions() and must
+ *  not appear in the Members roster, payments, forms, or dashboard counts. */
 export async function listFacilitatorIndividuals() {
   const { data, error } = await db().from('individuals').select('*').order('first_name');
   if (error) throw error;
-  return data;
+  return (data ?? []).filter((r: any) => (r.status ?? 'in_care') !== 'pending');
+}
+
+/** Owner/manager: applicants who submitted the public application and are
+ *  awaiting admission. Newest first. */
+export async function listPendingAdmissions() {
+  const { data, error } = await db()
+    .from('individuals').select('*').eq('status', 'pending')
+    .order('applied_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Owner/manager: admit a pending applicant into care — they become a full
+ *  resident (move-in date = today) and appear in the Members roster. */
+export async function admitPendingAdmission(id: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { error } = await db()
+    .from('individuals').update({ status: 'in_care', move_in_date: today })
+    .eq('id', id).eq('status', 'pending');
+  if (error) throw error;
+}
+
+/** Owner/manager: decline a pending applicant (never showed). Keeps the record
+ *  for history but removes them from the pending list. Reversible. */
+export async function declinePendingAdmission(id: string) {
+  const { error } = await db()
+    .from('individuals').update({ status: 'declined' })
+    .eq('id', id).eq('status', 'pending');
+  if (error) throw error;
 }
 
 /** Fetch one individual's full record (for the selected client). */

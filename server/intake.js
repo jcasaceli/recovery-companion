@@ -152,7 +152,7 @@ async function notifyOwner({ ownerEmail, orgName, applicantName }) {
   if (!RESEND_API_KEY || !ownerEmail) return;
   const html = `<div style="font-family:Inter,Arial,sans-serif;color:#2b2b2b">
     <p>📥 <strong>New application</strong> for ${orgName || 'your sober living'}.</p>
-    <p><strong>${applicantName || 'A new applicant'}</strong> just submitted an application. Open the app → Residents to review it (their full application is saved as a PDF on their profile).</p>
+    <p><strong>${applicantName || 'A new applicant'}</strong> just submitted an application. Open the app → <strong>Pending Admission</strong> to review it (their full application is saved as a PDF on their profile). Admit them once they check in, or leave them pending.</p>
     <p style="color:#9a9a9a;font-size:12px">Sober Living Companion</p></div>`;
   try {
     await fetch('https://api.resend.com/emails', {
@@ -190,7 +190,10 @@ intakeRouter.post('/:slug', async (req, res) => {
       phone: (b.phone || '').trim() || null,
       email: (b.email || '').trim() || null,
       sobriety_date: isoDateOrNull(b.soberDate),
-      status: 'in_care',
+      // Applicants start as a pending admission — NOT a full resident. The owner
+      // or manager admits them from the "Pending Admission" tab once they check
+      // in. Until then they stay out of the Members / clients roster.
+      status: 'pending',
       applied_at: new Date().toISOString(),
       intake_data: { pages: b.pages || [], dob: b.dob || null, address: b.address || null },
     }).select('id').single();

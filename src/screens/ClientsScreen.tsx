@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -44,6 +44,16 @@ export function ClientsScreen() {
     getMyHouseScope().then(setScope).catch(() => {});
   }, []);
   const houseLabel = (id?: string) => houses.find((h) => h.id === id)?.name;
+
+  // Pending admissions (people who filled the public application, not yet admitted).
+  const [pendingCount, setPendingCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (locked) return;
+      listPendingAdmissions().then((r) => setPendingCount((r ?? []).length)).catch(() => {});
+    }, [locked]),
+  );
+
   const [filter, setFilter] = useState<ClientStatus>('in_care');
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -227,6 +237,18 @@ export function ClientsScreen() {
         >
           <Text style={styles.codeText}>Master join code: <Text style={styles.codeStrong}>{org.join_code}</Text></Text>
           <Text style={styles.codeHint}>tap for details · one code for everyone</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {!locked ? (
+        <TouchableOpacity style={styles.pendingBar} activeOpacity={0.8} onPress={() => nav.navigate('PendingAdmissions')}>
+          <Text style={styles.pendingEmoji}>🕓</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.pendingTitle}>Pending Admission</Text>
+            <Text style={styles.pendingSub}>{pendingCount > 0 ? `${pendingCount} applicant${pendingCount === 1 ? '' : 's'} waiting to be admitted` : 'Applications from your public form appear here'}</Text>
+          </View>
+          {pendingCount > 0 ? <View style={styles.pendingBadge}><Text style={styles.pendingBadgeText}>{pendingCount}</Text></View> : null}
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -438,6 +460,12 @@ const styles = StyleSheet.create({
   codeText: { ...typography.body, color: colors.textPrimary },
   codeStrong: { fontWeight: '800', letterSpacing: 1 },
   codeHint: { ...typography.caption },
+  pendingBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, marginHorizontal: spacing.md, marginBottom: spacing.sm, padding: spacing.md, borderWidth: 1, borderColor: colors.accent, ...shadow.card },
+  pendingEmoji: { fontSize: 22, marginRight: spacing.md },
+  pendingTitle: { ...typography.h3, fontSize: 16 },
+  pendingSub: { ...typography.caption, marginTop: 1 },
+  pendingBadge: { backgroundColor: colors.accent, borderRadius: radius.pill, minWidth: 24, height: 24, paddingHorizontal: 7, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
+  pendingBadgeText: { color: colors.textInverse, fontWeight: '800', fontSize: 13 },
   filters: { flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.sm },
   filter: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.pill, backgroundColor: colors.surface, marginRight: spacing.sm, borderWidth: 1, borderColor: colors.border },
   filterActive: { backgroundColor: colors.primary, borderColor: colors.primary },

@@ -19,6 +19,7 @@ import { ResourcesScreen } from '../screens/ResourcesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { ClientsScreen } from '../screens/ClientsScreen';
+import { PendingAdmissionsScreen } from '../screens/PendingAdmissionsScreen';
 import { ClientProfileScreen } from '../screens/ClientProfileScreen';
 import { LinkMemberScreen } from '../screens/LinkMemberScreen';
 import { TasksScreen } from '../screens/TasksScreen';
@@ -53,6 +54,7 @@ function ClientsStack() {
       }}
     >
       <ClientsStackNav.Screen name="ClientsList" component={ClientsScreen} options={{ headerShown: false, title: 'Members' }} />
+      <ClientsStackNav.Screen name="PendingAdmissions" component={PendingAdmissionsScreen} options={{ title: 'Pending Admission', headerBackTitle: 'Members' }} />
       <ClientsStackNav.Screen name="ClientProfile" component={ClientProfileScreen} options={{ title: 'Member', headerBackTitle: 'Members' }} />
       <ClientsStackNav.Screen name="AgreementView" component={AgreementViewScreen} options={{ title: 'Agreement', headerBackTitle: 'Member' }} />
       <ClientsStackNav.Screen name="FormFill" component={FormFillScreen} options={{ title: 'Form', headerBackTitle: 'Member' }} />
