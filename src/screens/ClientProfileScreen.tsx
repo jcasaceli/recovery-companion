@@ -472,16 +472,24 @@ export function ClientProfileScreen() {
     try { await Share.share({ message: text }); } catch { Alert.alert(label, text); }
   };
   const textInvite = () => {
-    // On web there's no Messages app — copy the invite so they can paste it into
-    // their own texting (works even if we don't have the resident's number).
+    const msg = inviteMsg();
     if (Platform.OS === 'web') {
-      copyText(inviteMsg(), 'Invite message');
+      // A phone browser (iOS/Android) can open the Messages app from an sms:
+      // link; a desktop browser can't, so there we copy the invite to paste.
+      const ua = String(g.navigator?.userAgent || '');
+      const isPhone = /iphone|ipad|ipod|android/i.test(ua);
+      if (isPhone) {
+        const sep = /iphone|ipad|ipod/i.test(ua) ? '&' : '?';
+        g.location.href = `sms:${client.phone || ''}${sep}body=${encodeURIComponent(msg)}`;
+        return;
+      }
+      copyText(msg, 'Invite message');
       return;
     }
-    // On a phone with a number, open Messages pre-filled; without one, share it.
-    if (!client.phone) { Share.share({ message: inviteMsg() }).catch(() => {}); return; }
+    // Native: open Messages pre-filled; without a number, share it.
+    if (!client.phone) { Share.share({ message: msg }).catch(() => {}); return; }
     const sep = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open Messages'));
+    Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(msg)}`).catch(() => Alert.alert('Could not open Messages'));
   };
   const callPerson = () => { if (client.phone) Linking.openURL(`tel:${client.phone}`).catch(() => {}); };
   const emailPerson = () => { if (client.email) Linking.openURL(`mailto:${client.email}`).catch(() => Alert.alert('Could not open email')); };
