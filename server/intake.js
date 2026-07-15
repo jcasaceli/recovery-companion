@@ -165,6 +165,25 @@ async function notifyOwner({ ownerEmail, orgName, applicantName }) {
 
 export const intakeRouter = express.Router();
 
+// Public: look up an intake form by slug — returns the org name + form title so
+// the generic hosted application page can brand itself. 404 if the slug is not
+// an active intake link.
+intakeRouter.get('/:slug', async (req, res) => {
+  if (!admin) return res.status(500).json({ error: 'Server not configured.' });
+  const slug = String(req.params.slug || '').toLowerCase();
+  try {
+    const { data: form, error } = await admin
+      .from('intake_forms').select('slug, org_id, title').eq('slug', slug).maybeSingle();
+    if (error) throw error;
+    if (!form) return res.status(404).json({ error: 'This application link is not active.' });
+    const { data: org } = await admin
+      .from('organizations').select('name').eq('id', form.org_id).maybeSingle();
+    return res.json({ ok: true, slug: form.slug, title: form.title || 'Application', orgName: org?.name || null });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Could not load this application.' });
+  }
+});
+
 // Public: submit an application.
 intakeRouter.post('/:slug', async (req, res) => {
   if (!admin) return res.status(500).json({ error: 'Server not configured.' });

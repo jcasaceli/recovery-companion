@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking, Share, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -32,7 +32,7 @@ export function DashboardScreen() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [flags, setFlags] = useState<string[]>([]);
   const [checkins, setCheckins] = useState<{ individualId: string; createdAt: string }[]>([]);
-  const [org, setOrg] = useState<{ id?: string; name?: string; passesEnabled?: boolean } | null>(null);
+  const [org, setOrg] = useState<{ id?: string; name?: string; passesEnabled?: boolean; intakeUrl?: string } | null>(null);
   const [houses, setHouses] = useState<House[]>([]);
   const [events, setEvents] = useState<HouseEvent[]>([]);
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -78,7 +78,7 @@ export function DashboardScreen() {
       setAgreements(ags ?? []);
       setFlags(fl ?? []);
       setCheckins(ci ?? []);
-      setOrg(o ? { id: o.id, name: o.name, passesEnabled: !!o.passes_enabled } : null);
+      setOrg(o ? { id: o.id, name: o.name, passesEnabled: !!o.passes_enabled, intakeUrl: o.intake_url ?? undefined } : null);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [subscriptionActive]);
@@ -198,11 +198,47 @@ export function DashboardScreen() {
   for (const c of curfewToday) { if (!lastCurfewById[c.individualId]) lastCurfewById[c.individualId] = c; }
   const curfewMissing = curfews.filter((c) => !lastCurfewById[c.individualId]).length;
 
+  // Intake link — the home's public application page. Owners/managers open it to
+  // preview, or copy/share it with prospective residents.
+  const intakeUrl = org?.intakeUrl ? `https://soberlivingcompanion.com${org.intakeUrl}` : null;
+  const openIntake = () => { if (intakeUrl) Linking.openURL(intakeUrl).catch(() => Alert.alert('Intake link', intakeUrl)); };
+  const shareIntake = async () => {
+    if (!intakeUrl) return;
+    const g = globalThis as any;
+    if (Platform.OS === 'web' && g.navigator?.clipboard) {
+      try { await g.navigator.clipboard.writeText(intakeUrl); Alert.alert('Copied', 'Application link copied to the clipboard.'); return; } catch {}
+    }
+    try { await Share.share({ message: `Apply to ${org?.name || 'our sober living'}: ${intakeUrl}` }); }
+    catch { Alert.alert('Intake link', intakeUrl); }
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={typography.h1}>Dashboard</Text>
         <Text style={[typography.bodySecondary, { marginBottom: spacing.md }]}>{org?.name || 'Your sober living'}</Text>
+
+        {/* Intake link — share the home's application with prospective residents */}
+        {intakeUrl ? (
+          <View style={styles.intakeCard}>
+            <View style={styles.intakeTop}>
+              <Text style={styles.intakeEmoji}>📝</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.intakeTitle}>Intake link</Text>
+                <Text style={styles.intakeSub}>Share your application with new residents. Completed applications appear under Pending Admission.</Text>
+              </View>
+            </View>
+            <Text style={styles.intakeUrl} numberOfLines={1}>{intakeUrl.replace('https://', '')}</Text>
+            <View style={styles.intakeBtns}>
+              <TouchableOpacity style={[styles.intakeBtn, styles.intakeBtnPrimary]} onPress={openIntake}>
+                <Text style={styles.intakeBtnPrimaryText}>Open</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.intakeBtn, styles.intakeBtnGhost]} onPress={shareIntake}>
+                <Text style={styles.intakeBtnGhostText}>{Platform.OS === 'web' ? 'Copy link' : 'Copy / Share'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {/* KPI tiles */}
         <View style={styles.kpiGrid}>
@@ -476,6 +512,18 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  intakeCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.accent, ...shadow.card },
+  intakeTop: { flexDirection: 'row', alignItems: 'flex-start' },
+  intakeEmoji: { fontSize: 20, marginRight: spacing.sm },
+  intakeTitle: { ...typography.h3, fontSize: 16 },
+  intakeSub: { ...typography.caption, marginTop: 1 },
+  intakeUrl: { ...typography.caption, color: colors.primaryDark, fontWeight: '700', marginTop: spacing.sm, backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, overflow: 'hidden' },
+  intakeBtns: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  intakeBtn: { flex: 1, borderRadius: radius.md, paddingVertical: spacing.sm + 2, alignItems: 'center' },
+  intakeBtnPrimary: { backgroundColor: colors.primary },
+  intakeBtnPrimaryText: { color: colors.textInverse, fontWeight: '800', fontSize: 14 },
+  intakeBtnGhost: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  intakeBtnGhostText: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
   siteLink: { ...typography.body, color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -spacing.xs, marginBottom: spacing.sm },
   kpi: { width: '33.33%', padding: spacing.xs },
