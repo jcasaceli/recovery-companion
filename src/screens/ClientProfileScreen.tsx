@@ -473,14 +473,14 @@ export function ClientProfileScreen() {
     try { await Share.share({ message: text }); } catch { Alert.alert(label, text); }
   };
   const textInvite = () => {
-    if (!client.phone) return;
-    // On web, an sms: link shows the raw %-encoded text in the composer, so we
-    // copy the message instead. On phones we open Messages pre-filled.
+    // On web there's no Messages app — copy the invite so they can paste it into
+    // their own texting (works even if we don't have the resident's number).
     if (Platform.OS === 'web') {
       copyText(inviteMsg(), 'Invite message');
-      Alert.alert('Invite copied', `Paste it into a text to ${client.firstName}. (On a phone, the Text button opens Messages for you.)`);
       return;
     }
+    // On a phone with a number, open Messages pre-filled; without one, share it.
+    if (!client.phone) { Share.share({ message: inviteMsg() }).catch(() => {}); return; }
     const sep = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${client.phone}${sep}body=${encodeURIComponent(inviteMsg())}`).catch(() => Alert.alert('Could not open Messages'));
   };

@@ -1,3 +1,4 @@
+import './src/utils/webAlert'; // patch Alert.alert to work on web (must be first)
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
