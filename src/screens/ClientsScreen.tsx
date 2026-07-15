@@ -503,11 +503,11 @@ const styles = StyleSheet.create({
   filterChip: { marginBottom: 0 },
   pickerLabel: { ...typography.caption, marginBottom: 4 },
   houseChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
-  houseChip: { paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm + 3, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border, minHeight: 42, justifyContent: 'center' },
+  houseChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 6, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border, minHeight: 48, justifyContent: 'center' },
   houseChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   // Same font weight in both states so the chip doesn't change size when selected
   // (the green fill already signals selection). Bigger text = easier to tap.
-  houseChipText: { fontSize: 15, color: colors.textSecondary, fontWeight: '700' },
+  houseChipText: { fontSize: 16, color: colors.textSecondary, fontWeight: '700' },
   houseChipTextOn: { color: '#FFFFFF', fontWeight: '700' },
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { color: colors.textSecondary },
