@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, ActivityIndicator, Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { listMyDocuments, getDocumentUrl, Document } from '../services/db';
@@ -22,12 +23,17 @@ export function MemberDocumentsScreen() {
 
   useEffect(() => { listMyDocuments().then(setDocs).catch(() => setDocs([])); }, []);
 
-  const open = async (d: Document) => {
+  const open = (d: Document) => {
     if (d.storagePath) {
-      const url = await getDocumentUrl(d.storagePath);
-      if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
-      if ((d.mimeType || '').startsWith('image/')) { setViewing({ ...d, fileData: url }); return; }
-      await WebBrowser.openBrowserAsync(url);
+      // Images preview in-app (no popup); PDFs/Word open in a tab (web-safe).
+      if ((d.mimeType || '').startsWith('image/')) {
+        getDocumentUrl(d.storagePath).then((url) => {
+          if (url) setViewing({ ...d, fileData: url });
+          else Alert.alert('Could not open', 'Please try again.');
+        });
+        return;
+      }
+      openResolvedUrl(() => getDocumentUrl(d.storagePath!), () => Alert.alert('Could not open', 'Please try again.'));
     } else if (d.fileData) {
       setViewing(d);
     }

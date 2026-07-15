@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Platform } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as WebBrowser from 'expo-web-browser';
+import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card, SectionTitle, Pill } from '../components/ui';
 import { colors, spacing, typography } from '../theme';
 import { listMyAgreements, listMyFormResponses, listMyDocuments, getDocumentUrl, Agreement, FormResponse, Document } from '../services/db';
@@ -33,14 +34,9 @@ export function MemberDocsScreen() {
   const doneAgr = agr.filter((a) => a.status === 'signed');
   const doneForms = forms.filter((f) => f.status === 'completed');
 
-  const openDoc = async (d: Document) => {
-    try {
-      if (!d.storagePath) return;
-      const url = await getDocumentUrl(d.storagePath);
-      if (!url) return;
-      if (Platform.OS === 'web') Linking.openURL(url);
-      else await WebBrowser.openBrowserAsync(url);
-    } catch {}
+  const openDoc = (d: Document) => {
+    if (!d.storagePath) return;
+    openResolvedUrl(() => getDocumentUrl(d.storagePath!));
   };
 
   const Row = ({ title, sub, tag, tagColor, onPress }: { title: string; sub?: string; tag?: string; tagColor?: string; onPress?: () => void }) => (

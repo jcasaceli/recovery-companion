@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableO
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
+import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
@@ -208,11 +209,9 @@ export function ClientProfileScreen() {
   const removeMed = (m: string) => commitMeds(meds.filter((x) => x !== m));
 
   // Open a STAFF-ONLY attachment (note/UA) — signed URL, staff bucket only.
-  const openAttachment = async (path?: string) => {
+  const openAttachment = (path?: string) => {
     if (!path) return;
-    const url = await getStaffFileUrl(path);
-    if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
-    await WebBrowser.openBrowserAsync(url);
+    openResolvedUrl(() => getStaffFileUrl(path), () => Alert.alert('Could not open', 'Please try again.'));
   };
 
   const loadPayments = () => listMyPayments(id).then((pays: any[]) => {
