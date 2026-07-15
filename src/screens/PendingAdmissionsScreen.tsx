@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import {
@@ -9,6 +9,8 @@ import {
   admitPendingAdmission,
   declinePendingAdmission,
   getAvatarUrls,
+  listDocuments,
+  getDocumentUrl,
 } from '../services/db';
 
 type Applicant = {
@@ -35,12 +37,35 @@ function appliedLabel(iso?: string) {
 }
 
 export function PendingAdmissionsScreen() {
-  const nav = useNavigation<any>();
   const { reloadCloud } = useAppState();
   const [rows, setRows] = useState<Applicant[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  // Open the applicant's full application. The backend saves it as a formatted
+  // PDF on their profile when they submit — so we can show it here without
+  // admitting them (they aren't in the Members roster yet).
+  const viewApplication = async (a: Applicant) => {
+    setViewingId(a.id);
+    try {
+      const docs = await listDocuments(a.id);
+      const doc = docs.find((d) => /application/i.test(d.title || '') && d.storagePath) || docs.find((d) => d.storagePath);
+      if (!doc?.storagePath) {
+        Alert.alert('Application', "Their application file isn't ready yet. It's generated moments after they submit — please try again shortly.");
+        return;
+      }
+      const url = await getDocumentUrl(doc.storagePath);
+      if (!url) { Alert.alert('Application', 'Could not open the application. Please try again.'); return; }
+      if (Platform.OS === 'web') { (globalThis as any).open(url, '_blank'); }
+      else { await Linking.openURL(url); }
+    } catch (e: any) {
+      Alert.alert('Application', e?.message ?? 'Could not open the application.');
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -137,7 +162,8 @@ export function PendingAdmissionsScreen() {
                 <TouchableOpacity
                   style={styles.cardTop}
                   activeOpacity={0.7}
-                  onPress={() => nav.navigate('ClientProfile', { id: a.id })}
+                  disabled={viewingId === a.id}
+                  onPress={() => viewApplication(a)}
                 >
                   {a.avatar_path && avatars[a.avatar_path] ? (
                     <Image source={{ uri: avatars[a.avatar_path] }} style={styles.avatar} />
@@ -148,7 +174,7 @@ export function PendingAdmissionsScreen() {
                     <Text style={typography.h3}>{name}</Text>
                     <Text style={styles.applied}>{appliedLabel(a.applied_at)}</Text>
                     {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
-                    <Text style={styles.viewLink}>View full application →</Text>
+                    <Text style={styles.viewLink}>{viewingId === a.id ? 'Opening application…' : '📄 View full application →'}</Text>
                   </View>
                 </TouchableOpacity>
 
