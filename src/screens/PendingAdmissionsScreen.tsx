@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform, Linking, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -15,6 +15,8 @@ import {
   getDocumentUrl,
 } from '../services/db';
 
+type AppField = { label?: string; type?: string; value?: any };
+type AppPage = { title?: string; fields?: AppField[] };
 type Applicant = {
   id: string;
   first_name?: string;
@@ -23,7 +25,56 @@ type Applicant = {
   email?: string;
   applied_at?: string;
   avatar_path?: string;
+  intake_data?: { pages?: AppPage[] } | null;
 };
+
+const fullName = (a: Applicant) => `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim();
+
+// Alert.alert is a no-op on react-native-web, so use the browser dialogs there.
+function confirmThen(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    const g: any = globalThis;
+    if (!g.confirm || g.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmLabel, onPress: onConfirm },
+    ]);
+  }
+}
+function notify(title: string, message?: string) {
+  if (Platform.OS === 'web') { const g: any = globalThis; if (g.alert) g.alert(message ? `${title}\n\n${message}` : title); }
+  else Alert.alert(title, message ?? '');
+}
+
+// Renders one submitted field inside the in-app application viewer.
+function renderAppField(f: AppField, i: number) {
+  const label = (f.label || '').trim();
+  const type = f.type || 'text';
+  const isImg = typeof f.value === 'string' && f.value.startsWith('data:');
+  if (type === 'signature' || (type === 'image')) {
+    return (
+      <View key={i} style={styles.appField}>
+        {label ? <Text style={styles.appLabel}>{label}</Text> : null}
+        {isImg ? (
+          <Image source={{ uri: f.value }} style={styles.appSig} resizeMode="contain" />
+        ) : (
+          <Text style={styles.appValue}>{type === 'signature' ? '(not signed)' : '(no file uploaded)'}</Text>
+        )}
+      </View>
+    );
+  }
+  let shown = f.value;
+  if (shown === true || shown === 'true') shown = 'Yes';
+  else if (shown === false || shown === 'false' || shown === '' || shown == null) shown = '—';
+  if (!label && shown === '—') return null; // skip empty content blocks
+  return (
+    <View key={i} style={styles.appField}>
+      {label ? <Text style={styles.appLabel}>{label}</Text> : null}
+      <Text style={styles.appValue}>{String(shown)}</Text>
+    </View>
+  );
+}
 
 function appliedLabel(iso?: string) {
   if (!iso) return 'Applied recently';
@@ -45,39 +96,30 @@ export function PendingAdmissionsScreen() {
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Applicant | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   // Open the applicant's full application. The backend saves it as a formatted
   // PDF on their profile when they submit — so we can show it here without
   // admitting them (they aren't in the Members roster yet).
-  const viewApplication = async (a: Applicant) => {
-    setViewingId(a.id);
-    // On web, open the tab synchronously inside the click — if we wait until
-    // after the awaits below, the browser treats window.open as a popup and
-    // silently blocks it. We point the already-open tab at the PDF once ready.
-    const g = globalThis as any;
-    const win = Platform.OS === 'web' && typeof g.open === 'function' ? g.open('', '_blank') : null;
-    const fail = (msg: string) => { if (win) win.close(); Alert.alert('Application', msg); };
-    try {
-      const docs = await listDocuments(a.id);
-      const doc = docs.find((d) => /application/i.test(d.title || '') && d.storagePath) || docs.find((d) => d.storagePath);
-      if (!doc?.storagePath) {
-        fail("Their application file isn't ready yet. It's generated moments after they submit — please try again shortly.");
-        return;
-      }
-      const url = await getDocumentUrl(doc.storagePath);
-      if (!url) { fail('Could not open the application. Please try again.'); return; }
-      if (Platform.OS === 'web') {
-        if (win) win.location.href = url;
-        else g.open(url, '_blank');
-      } else {
-        await Linking.openURL(url);
-      }
-    } catch (e: any) {
-      fail(e?.message ?? 'Could not open the application.');
-    } finally {
-      setViewingId(null);
-    }
+  // Show the full application right inside the app (from the data they submitted)
+  // — reliable on web + native, no popups. Fetch the printable PDF in the
+  // background as an optional extra.
+  const openApplication = (a: Applicant) => {
+    setViewing(a);
+    setPdfUrl(null);
+    (async () => {
+      try {
+        const docs = await listDocuments(a.id);
+        const doc = docs.find((d) => /application/i.test(d.title || '') && d.storagePath) || docs.find((d) => d.storagePath);
+        if (doc?.storagePath) { const u = await getDocumentUrl(doc.storagePath); if (u) setPdfUrl(u); }
+      } catch { /* PDF is optional — the in-app view already has everything */ }
+    })();
+  };
+  const openPdf = () => {
+    if (!pdfUrl) return;
+    if (Platform.OS === 'web') { const g: any = globalThis; g.open(pdfUrl, '_blank'); }
+    else Linking.openURL(pdfUrl).catch(() => {});
   };
 
   const load = useCallback(async () => {
@@ -91,7 +133,7 @@ export function PendingAdmissionsScreen() {
       const paths = [...pending, ...dec].map((r) => r.avatar_path).filter(Boolean) as string[];
       if (paths.length) getAvatarUrls(paths).then(setAvatars).catch(() => {});
     } catch (e: any) {
-      Alert.alert('Pending admissions', e?.message ?? 'Could not load applicants.');
+      notify('Pending admissions', e?.message ?? 'Could not load applicants.');
     } finally {
       setLoading(false);
     }
@@ -100,54 +142,45 @@ export function PendingAdmissionsScreen() {
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
 
   const admit = (a: Applicant) => {
-    const name = `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim() || 'this applicant';
-    Alert.alert(
+    const name = fullName(a) || 'this applicant';
+    confirmThen(
       'Admit into care?',
       `${name} will become a resident and appear in your Members list. Their move-in date is set to today.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Admit',
-          onPress: async () => {
-            setBusyId(a.id);
-            try {
-              await admitPendingAdmission(a.id);
-              await reloadCloud();
-              await load();
-            } catch (e: any) {
-              Alert.alert('Could not admit', e?.message ?? 'Please try again.');
-            } finally {
-              setBusyId(null);
-            }
-          },
-        },
-      ],
+      'Admit',
+      async () => {
+        setBusyId(a.id);
+        try {
+          await admitPendingAdmission(a.id);
+          setViewing(null);
+          await reloadCloud();
+          await load();
+        } catch (e: any) {
+          notify('Could not admit', e?.message ?? 'Please try again.');
+        } finally {
+          setBusyId(null);
+        }
+      },
     );
   };
 
   const decline = (a: Applicant) => {
-    const name = `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim() || 'this applicant';
-    Alert.alert(
+    const name = fullName(a) || 'this applicant';
+    confirmThen(
       'Decline application?',
-      `${name} will be removed from Pending Admission. They won't appear in your Members list. You can re-add them later if needed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline',
-          style: 'destructive',
-          onPress: async () => {
-            setBusyId(a.id);
-            try {
-              await declinePendingAdmission(a.id);
-              await load();
-            } catch (e: any) {
-              Alert.alert('Could not decline', e?.message ?? 'Please try again.');
-            } finally {
-              setBusyId(null);
-            }
-          },
-        },
-      ],
+      `${name} will move to Declined. Their info and full application are saved — you can view or restore them anytime. They won't appear in your Members list.`,
+      'Decline',
+      async () => {
+        setBusyId(a.id);
+        try {
+          await declinePendingAdmission(a.id);
+          setViewing(null);
+          await load();
+        } catch (e: any) {
+          notify('Could not decline', e?.message ?? 'Please try again.');
+        } finally {
+          setBusyId(null);
+        }
+      },
     );
   };
 
@@ -157,7 +190,7 @@ export function PendingAdmissionsScreen() {
       await restorePendingAdmission(a.id);
       await load();
     } catch (e: any) {
-      Alert.alert('Could not restore', e?.message ?? 'Please try again.');
+      notify('Could not restore', e?.message ?? 'Please try again.');
     } finally {
       setBusyId(null);
     }
@@ -170,7 +203,7 @@ export function PendingAdmissionsScreen() {
     const isDeclined = kind === 'declined';
     return (
       <View key={a.id} style={[styles.card, isDeclined ? styles.cardDeclined : null]}>
-        <TouchableOpacity style={styles.cardTop} activeOpacity={0.7} disabled={viewingId === a.id} onPress={() => viewApplication(a)}>
+        <TouchableOpacity style={styles.cardTop} activeOpacity={0.7} onPress={() => openApplication(a)}>
           {a.avatar_path && avatars[a.avatar_path] ? (
             <Image source={{ uri: avatars[a.avatar_path] }} style={styles.avatar} />
           ) : (
@@ -180,7 +213,7 @@ export function PendingAdmissionsScreen() {
             <Text style={typography.h3}>{name}</Text>
             <Text style={styles.applied}>{appliedLabel(a.applied_at)}</Text>
             {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
-            <Text style={styles.viewLink}>{viewingId === a.id ? 'Opening application…' : '📄 View full application →'}</Text>
+            <Text style={styles.viewLink}>📄 View full application →</Text>
           </View>
         </TouchableOpacity>
 
@@ -236,6 +269,38 @@ export function PendingAdmissionsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Full application viewer — renders what they submitted, right in the app */}
+      <Modal visible={!!viewing} animationType="slide" onRequestClose={() => setViewing(null)}>
+        <SafeAreaView style={styles.screen} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{viewing ? (fullName(viewing) || 'Application') : 'Application'}</Text>
+              <Text style={styles.headerSub}>Full application</Text>
+            </View>
+            <TouchableOpacity onPress={() => setViewing(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.closeX}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            {(viewing?.intake_data?.pages && viewing.intake_data.pages.length > 0) ? (
+              viewing.intake_data.pages.map((p, pi) => (
+                <View key={pi} style={styles.appPage}>
+                  {p.title ? <Text style={styles.appSection}>{p.title}</Text> : null}
+                  {(p.fields || []).map((f, fi) => renderAppField(f, fi))}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No application details were captured for this applicant.</Text>
+            )}
+            {pdfUrl ? (
+              <TouchableOpacity style={[styles.btn, styles.admitBtn, { marginTop: spacing.md }]} onPress={openPdf}>
+                <Text style={styles.admitText}>📄 Open printable PDF</Text>
+              </TouchableOpacity>
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -270,4 +335,13 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 44, marginBottom: spacing.sm },
   emptyTitle: { ...typography.h3, marginBottom: 6 },
   emptyText: { ...typography.bodySecondary, textAlign: 'center' },
+  // Application viewer modal
+  modalHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryDark, padding: spacing.md, margin: spacing.md, marginBottom: spacing.sm, borderRadius: radius.md },
+  closeX: { color: colors.textInverse, fontWeight: '800', fontSize: 14, marginLeft: spacing.md },
+  appPage: { marginBottom: spacing.md },
+  appSection: { ...typography.h3, fontSize: 16, color: colors.primaryDark, marginTop: spacing.sm, marginBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider, paddingBottom: 4 },
+  appField: { marginBottom: spacing.sm },
+  appLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '700' },
+  appValue: { ...typography.body },
+  appSig: { width: 220, height: 90, backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, marginTop: 4 },
 });
