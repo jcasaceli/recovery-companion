@@ -87,10 +87,20 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
 
   const open = async (d: Document) => {
     if (d.storagePath) {
+      const isImage = (d.mimeType || '').startsWith('image/');
+      // On web, a PDF/Word opens in a new tab — but window.open AFTER the async
+      // signed-URL fetch gets popup-blocked. So open a blank tab synchronously
+      // now (inside the click) and point it at the file once the URL is ready.
+      const g: any = globalThis;
+      const win = !isImage && Platform.OS === 'web' && typeof g.open === 'function' ? g.open('', '_blank') : null;
       const url = await getDocumentUrl(d.storagePath);
-      if (!url) { Alert.alert('Could not open', 'Please try again.'); return; }
-      if ((d.mimeType || '').startsWith('image/')) { setViewing({ ...d, fileData: url }); return; }
-      await WebBrowser.openBrowserAsync(url); // PDF / Word open in a viewer
+      if (!url) { if (win) win.close(); Alert.alert('Could not open', 'Please try again.'); return; }
+      if (isImage) { setViewing({ ...d, fileData: url }); return; } // in-app image viewer (web + native)
+      if (Platform.OS === 'web') {
+        if (win) win.location.href = url; else g.open(url, '_blank');
+      } else {
+        await WebBrowser.openBrowserAsync(url); // PDF / Word open in a viewer
+      }
     } else if (d.fileData) {
       setViewing(d); // legacy inline image
     }
