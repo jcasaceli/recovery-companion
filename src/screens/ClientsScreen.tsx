@@ -270,7 +270,7 @@ export function ClientsScreen() {
         <FilterTab label={`Completed (${counts.completed})`} active={filter === 'completed'} onPress={() => setFilter('completed')} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {locked ? <Paywall onChanged={reloadCloud} /> : null}
         {!locked && !selectMode && !adding ? (
           <>
@@ -472,6 +472,10 @@ const styles = StyleSheet.create({
   filterText: { color: colors.textSecondary, fontWeight: '600', fontSize: 13 },
   filterTextActive: { color: colors.textInverse },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  // Let the member list take the remaining space and scroll inside itself, so it
+  // never flex-compresses the rows above it (that was shrinking the house chips
+  // once a house had members). flexShrink:0 on the chip row is a second guard.
+  scrollFlex: { flex: 1 },
   ioRow: { flexDirection: 'row', marginTop: spacing.sm },
   empty: { ...typography.bodySecondary, textAlign: 'center', marginTop: spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.card },
@@ -498,7 +502,7 @@ const styles = StyleSheet.create({
   bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
-  houseFilterRow: { marginBottom: spacing.sm, flexGrow: 0 },
+  houseFilterRow: { marginBottom: spacing.sm, flexGrow: 0, flexShrink: 0, minHeight: 56 },
   houseFilterContent: { paddingHorizontal: spacing.md, alignItems: 'center' },
   filterChip: { marginBottom: 0 },
   pickerLabel: { ...typography.caption, marginBottom: 4 },
