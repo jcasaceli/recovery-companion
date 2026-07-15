@@ -45,7 +45,10 @@ export function SettingsScreen() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [cashapp, setCashapp] = useState('');
   const [zelle, setZelle] = useState('');
+  const [venmo, setVenmo] = useState('');
+  const [paymentLink, setPaymentLink] = useState('');
   const [handlesSaved, setHandlesSaved] = useState(false);
+  const [linkSaved, setLinkSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // Owner vs house manager: the owner is the profile that created the org.
@@ -121,7 +124,7 @@ export function SettingsScreen() {
       getNotifyMemberActivity().then(setNotifyActivity).catch(() => {});
       getMyOrg().then((o: any) => {
         if (o) {
-          setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setOrgName(o.name ?? '');
+          setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setVenmo(o.venmo_tag ?? ''); setPaymentLink(o.payment_link ?? ''); setOrgName(o.name ?? '');
           const owner = !!o.created_by && o.created_by === auth.session?.user?.id;
           setIsOwner(owner);
           // Load the manager roster for ALL staff (owner + house managers) so
@@ -197,10 +200,38 @@ export function SettingsScreen() {
       return;
     }
     try {
-      await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim());
+      await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim(), venmo.trim(), normalizeLink(paymentLink));
       setHandlesSaved(true);
       setTimeout(() => setHandlesSaved(false), 2500);
-      Alert.alert('Saved ✅', 'Your CashApp and Zelle details were saved. Members will see them on the Pay membership fee screen.');
+      Alert.alert('Saved ✅', 'Your CashApp, Zelle, and Venmo details were saved. Members will see them on the Pay membership fee screen.');
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    }
+  };
+
+  // Normalize a pasted payment link to a real https URL (owners often paste
+  // "mysite.com/pay" without the scheme).
+  const normalizeLink = (raw: string) => {
+    const v = (raw || '').trim();
+    if (!v) return '';
+    return /^https?:\/\//i.test(v) ? v : `https://${v.replace(/^\/+/, '')}`;
+  };
+
+  const saveLink = async () => {
+    const id = orgId;
+    if (!id) { Alert.alert('One sec', 'Still loading your organization — try again in a moment.'); return; }
+    const normalized = normalizeLink(paymentLink);
+    try {
+      await setOrgPaymentHandles(id, cashapp.trim(), zelle.trim(), venmo.trim(), normalized);
+      setPaymentLink(normalized);
+      setLinkSaved(true);
+      setTimeout(() => setLinkSaved(false), 3000);
+      Alert.alert(
+        normalized ? 'Payment link saved ✅' : 'Payment link removed',
+        normalized
+          ? 'Residents will see this link in their app when they choose to make a payment — tapping it takes them straight to your payment page.'
+          : 'Your custom payment link was removed.',
+      );
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
@@ -387,14 +418,28 @@ export function SettingsScreen() {
           </Card>
           ) : null}
           <Card>
-            <Text style={[typography.body, { fontWeight: '600' }]}>CashApp & Zelle</Text>
+            <Text style={[typography.body, { fontWeight: '600' }]}>CashApp, Zelle & Venmo</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               Members can pay you directly with these. Shown to them on the Pay membership fee screen.
             </Text>
             <TextInput style={styles.input} value={cashapp} onChangeText={setCashapp} placeholder="CashApp tag (e.g. $YourTag)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
             <TextInput style={styles.input} value={zelle} onChangeText={setZelle} placeholder="Zelle email or phone" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
-            <Button title={handlesSaved ? 'Saved ✓' : 'Save CashApp / Zelle'} variant="secondary" onPress={saveHandles} />
+            <TextInput style={styles.input} value={venmo} onChangeText={setVenmo} placeholder="Venmo username (e.g. @YourName)" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
+            <Button title={handlesSaved ? 'Saved ✓' : 'Save CashApp / Zelle / Venmo'} variant="secondary" onPress={saveHandles} />
             {handlesSaved ? <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ Saved — members will see these on the Pay screen.</Text> : null}
+          </Card>
+
+          <Card>
+            <Text style={[typography.body, { fontWeight: '600' }]}>Your own payment link</Text>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              Already collect payments on another platform? Paste your payment page link and residents can pay there. Works alongside everything above.
+            </Text>
+            <TextInput style={styles.input} value={paymentLink} onChangeText={setPaymentLink} placeholder="https://your-payment-page.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="url" autoCorrect={false} />
+            <Button title={linkSaved ? 'Saved ✓' : 'Save payment link'} variant="secondary" onPress={saveLink} />
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6 }]}>
+              Residents will see this link in their app if they choose to make a payment.
+            </Text>
+            {linkSaved ? <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ Saved — residents will see your payment link on the Pay screen.</Text> : null}
           </Card>
           {isOwner ? (
           <Card>

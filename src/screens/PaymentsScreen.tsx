@@ -100,8 +100,9 @@ export function PaymentsScreen() {
         periodMonth: currentPeriod(),
         status: 'reported', // facilitator confirms it was received
       });
-      notifyCare(ctx.individualId, 'Payment reported', `A ${method} payment was reported for confirmation.`);
-      Alert.alert('Reported', `Your ${method === 'cashapp' ? 'CashApp' : 'Zelle'} payment was reported to your facilitator. They'll confirm once it's received.`);
+      const label = method === 'cashapp' ? 'CashApp' : method === 'zelle' ? 'Zelle' : method === 'venmo' ? 'Venmo' : 'payment';
+      notifyCare(ctx.individualId, 'Payment reported', `A ${label} payment was reported for confirmation.`);
+      Alert.alert('Reported', `Your ${label} payment was reported to your facilitator. They'll confirm once it's received.`);
     } catch (e: any) {
       Alert.alert('Could not record', e?.message ?? 'Try again.');
     }
@@ -189,9 +190,31 @@ export function PaymentsScreen() {
         </Card>
       ) : null}
 
+      {/* Venmo */}
+      {ctx.venmo ? (
+        <Card>
+          <Text style={styles.method}>🅥 Venmo</Text>
+          <Text style={[typography.bodySecondary, { marginBottom: spacing.sm }]}>Send to {ctx.venmo}</Text>
+          <Button title="Open Venmo & notify facilitator" onPress={() => reportManual('venmo', `https://venmo.com/${encodeURIComponent(ctx.venmo!.replace(/^@/, ''))}`)} />
+        </Card>
+      ) : null}
+
+      {/* Owner's own payment link (external platform) */}
+      {ctx.paymentLink ? (
+        <Card>
+          <Text style={styles.method}>🔗 Pay online</Text>
+          <Text style={[typography.bodySecondary, { marginBottom: spacing.sm }]}>
+            Pay on {ctx.orgName || 'your sober living'}'s payment page. After you pay, tap “I paid” so your facilitator knows.
+          </Text>
+          <Button title="Open payment page" onPress={() => Linking.openURL(ctx.paymentLink!).catch(() => Alert.alert('Could not open', ctx.paymentLink!))} />
+          <View style={{ height: spacing.sm }} />
+          <Button title="I paid — notify my facilitator" variant="secondary" onPress={() => reportManual('other')} />
+        </Card>
+      ) : null}
+
       <Text style={styles.note}>
-        Card payments process instantly via Stripe. CashApp/Zelle are logged for
-        your facilitator to confirm.
+        Card payments process instantly via Stripe. CashApp, Zelle, Venmo, and
+        online-link payments are logged for your facilitator to confirm.
       </Text>
     </Screen>
   );

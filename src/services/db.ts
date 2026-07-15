@@ -203,22 +203,41 @@ export async function listPendingAdmissions() {
   return data ?? [];
 }
 
-/** Owner/manager: admit a pending applicant into care — they become a full
- *  resident (move-in date = today) and appear in the Members roster. */
+/** Owner/manager: applicants they previously declined. Their full record +
+ *  application PDF are kept — this just surfaces them again. Newest first. */
+export async function listDeclinedAdmissions() {
+  const { data, error } = await db()
+    .from('individuals').select('*').eq('status', 'declined')
+    .order('applied_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Owner/manager: admit an applicant into care — they become a full resident
+ *  (move-in date = today) and appear in the Members roster. Works whether they
+ *  were pending or previously declined. */
 export async function admitPendingAdmission(id: string) {
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await db()
     .from('individuals').update({ status: 'in_care', move_in_date: today })
-    .eq('id', id).eq('status', 'pending');
+    .eq('id', id).in('status', ['pending', 'declined']);
   if (error) throw error;
 }
 
-/** Owner/manager: decline a pending applicant (never showed). Keeps the record
- *  for history but removes them from the pending list. Reversible. */
+/** Owner/manager: decline a pending applicant (never showed). Keeps the full
+ *  record + application for history under Declined. Reversible via restore. */
 export async function declinePendingAdmission(id: string) {
   const { error } = await db()
     .from('individuals').update({ status: 'declined' })
     .eq('id', id).eq('status', 'pending');
+  if (error) throw error;
+}
+
+/** Owner/manager: move a declined applicant back to Pending Admission. */
+export async function restorePendingAdmission(id: string) {
+  const { error } = await db()
+    .from('individuals').update({ status: 'pending' })
+    .eq('id', id).eq('status', 'declined');
   if (error) throw error;
 }
 
@@ -1927,11 +1946,23 @@ export async function getMyOrg() {
   return active || orgs[0];
 }
 
-export async function setOrgPaymentHandles(orgId: string, cashapp: string, zelle: string) {
+export async function setOrgPaymentHandles(
+  orgId: string,
+  cashapp: string,
+  zelle: string,
+  venmo = '',
+  paymentLink = '',
+) {
   // RPC so house managers (not just the owner) can set handles, without being
   // able to change billing/join-code. Pass the explicit org so it lands on the
   // org the owner is viewing (not an arbitrary membership).
-  const { error } = await db().rpc('set_org_payment_handles', { p_org_id: orgId, p_cashapp: cashapp || '', p_zelle: zelle || '' });
+  const { error } = await db().rpc('set_org_payment_handles', {
+    p_org_id: orgId,
+    p_cashapp: cashapp || '',
+    p_zelle: zelle || '',
+    p_venmo: venmo || '',
+    p_payment_link: paymentLink || '',
+  });
   if (error) throw error;
 }
 
@@ -2059,15 +2090,18 @@ export async function getResidentContext() {
   if (!ind) return null;
   const { data: org } = await db()
     .from('organizations')
-    .select('cashapp_tag, zelle_tag, stripe_account_id')
+    .select('name, cashapp_tag, zelle_tag, venmo_tag, payment_link, stripe_account_id')
     .eq('id', ind.org_id)
     .maybeSingle();
   return {
     individualId: ind.id,
+    orgName: org?.name ?? undefined,
     rentCents: ind.monthly_rent_cents ?? undefined,
     dueDay: ind.rent_due_day ?? undefined,
     cashapp: org?.cashapp_tag ?? undefined,
     zelle: org?.zelle_tag ?? undefined,
+    venmo: org?.venmo_tag ?? undefined,
+    paymentLink: org?.payment_link ?? undefined,
     stripeConnected: !!org?.stripe_account_id,
   };
 }

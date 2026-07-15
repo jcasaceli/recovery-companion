@@ -6,8 +6,10 @@ import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import {
   listPendingAdmissions,
+  listDeclinedAdmissions,
   admitPendingAdmission,
   declinePendingAdmission,
+  restorePendingAdmission,
   getAvatarUrls,
   listDocuments,
   getDocumentUrl,
@@ -39,6 +41,7 @@ function appliedLabel(iso?: string) {
 export function PendingAdmissionsScreen() {
   const { reloadCloud } = useAppState();
   const [rows, setRows] = useState<Applicant[]>([]);
+  const [declined, setDeclined] = useState<Applicant[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -49,19 +52,29 @@ export function PendingAdmissionsScreen() {
   // admitting them (they aren't in the Members roster yet).
   const viewApplication = async (a: Applicant) => {
     setViewingId(a.id);
+    // On web, open the tab synchronously inside the click — if we wait until
+    // after the awaits below, the browser treats window.open as a popup and
+    // silently blocks it. We point the already-open tab at the PDF once ready.
+    const g = globalThis as any;
+    const win = Platform.OS === 'web' && typeof g.open === 'function' ? g.open('', '_blank') : null;
+    const fail = (msg: string) => { if (win) win.close(); Alert.alert('Application', msg); };
     try {
       const docs = await listDocuments(a.id);
       const doc = docs.find((d) => /application/i.test(d.title || '') && d.storagePath) || docs.find((d) => d.storagePath);
       if (!doc?.storagePath) {
-        Alert.alert('Application', "Their application file isn't ready yet. It's generated moments after they submit — please try again shortly.");
+        fail("Their application file isn't ready yet. It's generated moments after they submit — please try again shortly.");
         return;
       }
       const url = await getDocumentUrl(doc.storagePath);
-      if (!url) { Alert.alert('Application', 'Could not open the application. Please try again.'); return; }
-      if (Platform.OS === 'web') { (globalThis as any).open(url, '_blank'); }
-      else { await Linking.openURL(url); }
+      if (!url) { fail('Could not open the application. Please try again.'); return; }
+      if (Platform.OS === 'web') {
+        if (win) win.location.href = url;
+        else g.open(url, '_blank');
+      } else {
+        await Linking.openURL(url);
+      }
     } catch (e: any) {
-      Alert.alert('Application', e?.message ?? 'Could not open the application.');
+      fail(e?.message ?? 'Could not open the application.');
     } finally {
       setViewingId(null);
     }
@@ -69,9 +82,13 @@ export function PendingAdmissionsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = (await listPendingAdmissions()) as Applicant[];
-      setRows(data);
-      const paths = data.map((r) => r.avatar_path).filter(Boolean) as string[];
+      const [pending, dec] = await Promise.all([
+        listPendingAdmissions() as Promise<Applicant[]>,
+        listDeclinedAdmissions() as Promise<Applicant[]>,
+      ]);
+      setRows(pending);
+      setDeclined(dec);
+      const paths = [...pending, ...dec].map((r) => r.avatar_path).filter(Boolean) as string[];
       if (paths.length) getAvatarUrls(paths).then(setAvatars).catch(() => {});
     } catch (e: any) {
       Alert.alert('Pending admissions', e?.message ?? 'Could not load applicants.');
@@ -134,6 +151,57 @@ export function PendingAdmissionsScreen() {
     );
   };
 
+  const restore = async (a: Applicant) => {
+    setBusyId(a.id);
+    try {
+      await restorePendingAdmission(a.id);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Could not restore', e?.message ?? 'Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const renderCard = (a: Applicant, kind: 'pending' | 'declined') => {
+    const name = `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim() || 'Applicant';
+    const contact = [a.phone, a.email].filter(Boolean).join(' · ');
+    const busy = busyId === a.id;
+    const isDeclined = kind === 'declined';
+    return (
+      <View key={a.id} style={[styles.card, isDeclined ? styles.cardDeclined : null]}>
+        <TouchableOpacity style={styles.cardTop} activeOpacity={0.7} disabled={viewingId === a.id} onPress={() => viewApplication(a)}>
+          {a.avatar_path && avatars[a.avatar_path] ? (
+            <Image source={{ uri: avatars[a.avatar_path] }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, isDeclined ? styles.avatarMuted : null]}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={typography.h3}>{name}</Text>
+            <Text style={styles.applied}>{appliedLabel(a.applied_at)}</Text>
+            {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
+            <Text style={styles.viewLink}>{viewingId === a.id ? 'Opening application…' : '📄 View full application →'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.actions}>
+          <TouchableOpacity style={[styles.btn, styles.admitBtn, busy ? styles.btnDisabled : null]} disabled={busy} onPress={() => admit(a)}>
+            {busy ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.admitText}>✓ Admit into care</Text>}
+          </TouchableOpacity>
+          {isDeclined ? (
+            <TouchableOpacity style={[styles.btn, styles.declineBtn, busy ? styles.btnDisabled : null]} disabled={busy} onPress={() => restore(a)}>
+              <Text style={styles.restoreText}>↩ Restore</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[styles.btn, styles.declineBtn, busy ? styles.btnDisabled : null]} disabled={busy} onPress={() => decline(a)}>
+              <Text style={styles.declineText}>Decline</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.headerBar}>
@@ -144,7 +212,7 @@ export function PendingAdmissionsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && declined.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyEmoji}>📥</Text>
             <Text style={styles.emptyTitle}>No pending applications</Text>
@@ -153,50 +221,19 @@ export function PendingAdmissionsScreen() {
             </Text>
           </View>
         ) : (
-          rows.map((a) => {
-            const name = `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim() || 'Applicant';
-            const contact = [a.phone, a.email].filter(Boolean).join(' · ');
-            const busy = busyId === a.id;
-            return (
-              <View key={a.id} style={styles.card}>
-                <TouchableOpacity
-                  style={styles.cardTop}
-                  activeOpacity={0.7}
-                  disabled={viewingId === a.id}
-                  onPress={() => viewApplication(a)}
-                >
-                  {a.avatar_path && avatars[a.avatar_path] ? (
-                    <Image source={{ uri: avatars[a.avatar_path] }} style={styles.avatar} />
-                  ) : (
-                    <View style={styles.avatar}><Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text></View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={typography.h3}>{name}</Text>
-                    <Text style={styles.applied}>{appliedLabel(a.applied_at)}</Text>
-                    {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
-                    <Text style={styles.viewLink}>{viewingId === a.id ? 'Opening application…' : '📄 View full application →'}</Text>
-                  </View>
-                </TouchableOpacity>
+          <>
+            {rows.length > 0
+              ? rows.map((a) => renderCard(a, 'pending'))
+              : <Text style={styles.noneNote}>No pending applications right now.</Text>}
 
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.btn, styles.admitBtn, busy ? styles.btnDisabled : null]}
-                    disabled={busy}
-                    onPress={() => admit(a)}
-                  >
-                    {busy ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.admitText}>✓ Admit into care</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.btn, styles.declineBtn, busy ? styles.btnDisabled : null]}
-                    disabled={busy}
-                    onPress={() => decline(a)}
-                  >
-                    <Text style={styles.declineText}>Decline</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
+            {declined.length > 0 ? (
+              <>
+                <Text style={styles.sectionLabel}>DECLINED · {declined.length}</Text>
+                <Text style={styles.sectionHint}>Their info and full application are saved. Restore them to pending, or admit them, anytime.</Text>
+                {declined.map((a) => renderCard(a, 'declined'))}
+              </>
+            ) : null}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -210,8 +247,14 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, color: colors.primaryLight, marginTop: 2 },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
   card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, ...shadow.card },
+  cardDeclined: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, shadowOpacity: 0, elevation: 0 },
   cardTop: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  avatarMuted: { backgroundColor: colors.textMuted },
+  noneNote: { ...typography.bodySecondary, marginBottom: spacing.md },
+  sectionLabel: { fontSize: 12, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.6, marginTop: spacing.md, marginBottom: 2 },
+  sectionHint: { ...typography.caption, marginBottom: spacing.md },
+  restoreText: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
   avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 20 },
   applied: { ...typography.caption, marginTop: 1 },
   contact: { ...typography.caption, color: colors.textSecondary, marginTop: 1 },
