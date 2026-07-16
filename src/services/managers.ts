@@ -25,13 +25,24 @@ async function call(path: string, method: 'GET' | 'POST' | 'DELETE', body?: unkn
   return res.json();
 }
 
-export async function listManagers(): Promise<{ managers: Manager[]; priceConfigured: boolean }> {
+export async function listManagers(): Promise<{
+  managers: Manager[];
+  owners: Manager[];
+  maxOwners: number;
+  ownerSlotsLeft: number;
+  isOwner: boolean;
+  priceConfigured: boolean;
+}> {
   return call('/api/managers', 'GET');
 }
 
-/** Returns the new manager's id + the temp password to share with them. */
-export async function addManager(name: string, email: string, phone: string): Promise<{ id: string; email: string; password: string; billed: boolean; aliased?: boolean; sharedWith?: string }> {
-  return call('/api/managers', 'POST', { name, email, phone });
+/** Create a house manager, or (owner = true) a co-owner with identical access.
+ *  Co-owners are free; an org is capped at 3 owners total. Returns the login to
+ *  hand over — which may be a +alias if the email was already taken. */
+export async function addManager(
+  name: string, email: string, phone: string, owner = false,
+): Promise<{ id: string; email: string; password: string; billed: boolean; owner?: boolean; aliased?: boolean; sharedWith?: string }> {
+  return call('/api/managers', 'POST', { name, email, phone, owner });
 }
 
 export async function removeManager(id: string): Promise<void> {

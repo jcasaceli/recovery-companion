@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName } from '../services/db';
+import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName, getMyMedications, setMyMedications } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -38,7 +38,24 @@ export function HomeScreen() {
   // A real cloud individual id is a UUID; a solo (unconnected) resident's id is
   // a local placeholder like "self". Only connected residents hit the cloud.
   const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne.id || '');
+  const [meds, setMeds] = useState<string[]>([]);
+  const [medInput, setMedInput] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Residents maintain their own medication list; staff see the same list on the
+  // client profile. set_my_medications only ever writes this one column.
+  const commitMeds = async (next: string[]) => {
+    const prev = meds;
+    setMeds(next);
+    try { setMeds(await setMyMedications(next)); }
+    catch (e: any) { setMeds(prev); Alert.alert('Could not save medication', e?.message ?? 'Try again.'); }
+  };
+  const addMed = () => {
+    const m = medInput.trim();
+    if (!m || meds.some((x) => x.toLowerCase() === m.toLowerCase())) { setMedInput(''); return; }
+    commitMeds([...meds, m]); setMedInput('');
+  };
+  const removeMed = (m: string) => commitMeds(meds.filter((x) => x !== m));
+
   const [dateModal, setDateModal] = useState(false);
   const [dateText, setDateText] = useState('');
   // iOS: the date currently spinning in the all-in-one picker modal (null = closed).
@@ -82,6 +99,10 @@ export function HomeScreen() {
       } else { setCurfewToday([]); }
     }).catch(() => {});
   }, []);
+  useFocusEffect(useCallback(() => {
+    getMyMedications().then(setMeds).catch(() => {});
+  }, []));
+
   useFocusEffect(useCallback(() => {
     loadCheckins();
     if (!isFacilitator) {
@@ -492,6 +513,37 @@ export function HomeScreen() {
       <Button title="🌙 Do tonight's review" onPress={() => nav.navigate('NightlyReview')} />
 
       {/* Sobriety date — tap to set/change via a calendar */}
+      <SectionTitle>My medications</SectionTitle>
+      <Card>
+        {meds.length ? (
+          <View style={styles.tagWrap}>
+            {meds.map((m) => (
+              <TouchableOpacity key={m} style={styles.medChip} onPress={() => removeMed(m)}>
+                <Text style={styles.medChipText}>{m}</Text>
+                <Text style={styles.medChipX}>  ✕</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>No medications added.</Text>
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <TextInput
+            style={styles.medInput}
+            value={medInput}
+            onChangeText={setMedInput}
+            placeholder="Add a medication (e.g. Suboxone 8mg)"
+            placeholderTextColor={colors.textMuted}
+            onSubmitEditing={addMed}
+            returnKeyType="done"
+          />
+          <Button title="Add" onPress={addMed} disabled={!medInput.trim()} />
+        </View>
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
+          {meds.length ? 'Tap a medication to remove it. ' : ''}Your house staff can see this list.
+        </Text>
+      </Card>
+
       <SectionTitle>Sobriety date</SectionTitle>
       <Card onPress={openSobriety}>
         <View style={styles.sobrietyRow}>
@@ -636,6 +688,14 @@ const styles = StyleSheet.create({
   modalInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: 'top', fontSize: 15, color: colors.textPrimary, marginBottom: spacing.md },
   dateInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.md },
   checkinRow: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  medChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.accentLight, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
+  medChipText: { color: '#9A5B2E', fontWeight: '700', fontSize: 13 },
+  medChipX: { color: '#9A5B2E', fontSize: 12 },
+  medInput: {
+    flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.textPrimary,
+  },
   sobrietyRow: { flexDirection: 'row', alignItems: 'center' },
   hero: {
     backgroundColor: colors.primary,

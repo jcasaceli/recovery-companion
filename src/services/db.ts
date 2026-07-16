@@ -819,6 +819,25 @@ export async function updateClientTags(individualId: string, tags: string[]) {
   return clean;
 }
 
+/** Member: the medications on their own record. */
+export async function getMyMedications(): Promise<string[]> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return [];
+  const { data } = await db()
+    .from('individuals').select('medications').eq('profile_id', u.user.id).maybeSingle();
+  return Array.isArray((data as any)?.medications) ? (data as any).medications : [];
+}
+
+/** Member: update their OWN medication list. Goes through an RPC because their
+ *  row is read-only to them under RLS — a blanket UPDATE policy would also let
+ *  them change status, rent, or discharge date. The RPC only writes medications. */
+export async function setMyMedications(medications: string[]): Promise<string[]> {
+  const clean = Array.from(new Set(medications.map((m) => m.trim()).filter(Boolean)));
+  const { data, error } = await db().rpc('set_my_medications', { p_meds: clean });
+  if (error) throw error;
+  return Array.isArray(data) ? (data as string[]) : clean;
+}
+
 /** Facilitator: set the medications a client is taking (staff-managed list). */
 export async function updateClientMedications(individualId: string, medications: string[]) {
   const clean = Array.from(new Set(medications.map((m) => m.trim()).filter(Boolean)));

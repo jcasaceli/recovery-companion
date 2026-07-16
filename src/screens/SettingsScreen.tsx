@@ -55,6 +55,9 @@ export function SettingsScreen() {
   const [isOwner, setIsOwner] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [owners, setOwners] = useState<Manager[]>([]);
+  const [ownerSlotsLeft, setOwnerSlotsLeft] = useState(0);
+  const [mgrAsOwner, setMgrAsOwner] = useState(false);
   const [mgrOpen, setMgrOpen] = useState(false);
   const [mgrName, setMgrName] = useState('');
   const [mgrEmail, setMgrEmail] = useState('');
@@ -114,7 +117,12 @@ export function SettingsScreen() {
   };
 
   const loadManagers = () => listManagers()
-    .then((r) => { setManagers(r.managers); })
+    .then((r) => {
+      setManagers(r.managers);
+      setOwners(r.owners ?? []);
+      setOwnerSlotsLeft(r.ownerSlotsLeft ?? 0);
+      setIsOwner(!!r.isOwner);
+    })
     .catch(() => {});
 
   useEffect(() => {
@@ -125,8 +133,9 @@ export function SettingsScreen() {
       getMyOrg().then((o: any) => {
         if (o) {
           setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setVenmo(o.venmo_tag ?? ''); setPaymentLink(o.payment_link ?? ''); setOrgName(o.name ?? '');
-          const owner = !!o.created_by && o.created_by === auth.session?.user?.id;
-          setIsOwner(owner);
+          // Ownership comes from org_members.is_owner (see loadManagers) — NOT
+          // organizations.created_by, which only ever matches the founder and
+          // would make co-owners look like plain managers.
           // Load the manager roster for ALL staff (owner + house managers) so
           // house managers can assign managers to houses too — not just owners.
           loadManagers();
@@ -167,12 +176,12 @@ export function SettingsScreen() {
     if (!mgrName.trim() || !mgrEmail.trim()) return;
     setMgrBusy(true);
     try {
-      const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim());
+      const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim(), mgrAsOwner);
       setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith });
       setNewMgr({ id: r.id, name: mgrName.trim() });
       setAssignedHouses(new Set());
       listHouses().then(setHouses).catch(() => {});
-      setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone('');
+      setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone(''); setMgrAsOwner(false);
       loadManagers();
     } catch (e: any) {
       Alert.alert('Could not add manager', e?.message ?? 'Try again.');
@@ -479,6 +488,36 @@ export function SettingsScreen() {
           <>
           {isOwner ? (
           <>
+          <SectionTitle>Owners</SectionTitle>
+          <Card>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+              Owners have full access to everything — every house, resident, payment, and billing.
+              Co-owners are free. You can have up to {owners.length + ownerSlotsLeft} owners in total.
+            </Text>
+            {owners.map((o) => (
+              <View key={o.id} style={styles.mgrRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.body}>
+                    {o.name || o.email}
+                    {o.id === auth.session?.user?.id ? '  (you)' : ''}
+                  </Text>
+                  {o.name ? <Text style={typography.caption}>{o.email}</Text> : null}
+                </View>
+              </View>
+            ))}
+            {ownerSlotsLeft > 0 ? (
+              <Button
+                title="Add co-owner"
+                variant="secondary"
+                onPress={() => { setMgrAsOwner(true); setMgrOpen(true); }}
+              />
+            ) : (
+              <Text style={typography.caption}>
+                All owner seats are used. Remove an owner in Supabase to free one up.
+              </Text>
+            )}
+          </Card>
+
           <SectionTitle>House managers</SectionTitle>
           <Card>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
@@ -496,7 +535,7 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => setMgrOpen(true)} />
+            <Button title="➕ Add house manager (free)" variant="secondary" onPress={() => { setMgrAsOwner(false); setMgrOpen(true); }} />
           </Card>
           </>
           ) : null}
@@ -564,14 +603,34 @@ export function SettingsScreen() {
       <Modal visible={mgrOpen} transparent animationType="fade" onRequestClose={() => setMgrOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.modal}>
-            <Text style={typography.h3}>Add house manager</Text>
+            <Text style={typography.h3}>{mgrAsOwner ? 'Add co-owner' : 'Add house manager'}</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              We'll create their login and show you a temporary password to share. House managers are free.
+              {mgrAsOwner
+                ? 'A co-owner has the same access you do — every house, every resident, billing and settings. Co-owners are free.'
+                : "We'll create their login and show you a temporary password to share. House managers are free."}
             </Text>
             <TextInput style={styles.input} value={mgrName} onChangeText={setMgrName} placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={mgrEmail} onChangeText={setMgrEmail} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
             <TextInput style={styles.input} value={mgrPhone} onChangeText={setMgrPhone} placeholder="Phone number (optional)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
+            {isOwner && (ownerSlotsLeft > 0 || mgrAsOwner) && (
+              <TouchableOpacity
+                onPress={() => setMgrAsOwner((v) => !v)}
+                style={styles.ownerToggle}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: mgrAsOwner }}
+              >
+                <View style={[styles.checkbox, mgrAsOwner && styles.checkboxOn]}>
+                  {mgrAsOwner ? <Text style={styles.checkboxTick}>✓</Text> : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary }}>Make them a co-owner</Text>
+                  <Text style={typography.caption}>
+                    Full owner access, free. {ownerSlotsLeft} co-owner slot{ownerSlotsLeft === 1 ? '' : 's'} left.
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            <Button title={mgrBusy ? 'Creating…' : mgrAsOwner ? 'Create co-owner' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
@@ -631,6 +690,13 @@ const styles = StyleSheet.create({
   signupLink: { ...typography.body, color: colors.primary, fontWeight: '800', textDecorationLine: 'underline' },
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceAlt },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  ownerToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5,
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxTick: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 16 },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,

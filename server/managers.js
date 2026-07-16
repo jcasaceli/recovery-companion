@@ -87,6 +87,24 @@ function tempPassword() {
   return `Sober${n}`;
 }
 
+/** Owners are org_members with is_owner=true. There can be up to MAX_OWNERS in
+ *  total (the founder + co-owners); co-owners are FREE and get identical access. */
+const MAX_OWNERS = 3;
+
+async function isOwnerOf(orgId, userId) {
+  const { data } = await supabaseAdmin
+    .from('org_members').select('is_owner')
+    .eq('org_id', orgId).eq('profile_id', userId).maybeSingle();
+  return !!data?.is_owner;
+}
+
+async function ownerCount(orgId) {
+  const { count } = await supabaseAdmin
+    .from('org_members').select('profile_id', { count: 'exact', head: true })
+    .eq('org_id', orgId).eq('is_owner', true);
+  return count || 0;
+}
+
 export const managersRouter = Router();
 
 // List the owner's house managers.
@@ -98,14 +116,26 @@ managersRouter.get('/', async (req, res) => {
   if (!org) return res.status(403).json({ error: 'Only the owner can manage house managers.' });
 
   const { data: members } = await supabaseAdmin
-    .from('org_members').select('profile_id').eq('org_id', org.id).eq('is_owner', false);
+    .from('org_members').select('profile_id,is_owner').eq('org_id', org.id);
   const ids = (members || []).map((m) => m.profile_id);
+  const ownerIds = new Set((members || []).filter((m) => m.is_owner).map((m) => m.profile_id));
   let managers = [];
+  let owners = [];
   if (ids.length) {
     const { data: profs } = await supabaseAdmin.from('profiles').select('id,full_name,email').in('id', ids);
-    managers = (profs || []).map((p) => ({ id: p.id, name: p.full_name, email: p.email }));
+    for (const p of profs || []) {
+      const row = { id: p.id, name: p.full_name, email: p.email };
+      if (ownerIds.has(p.id)) owners.push(row); else managers.push(row);
+    }
   }
-  res.json({ managers, priceConfigured: false });
+  res.json({
+    managers,
+    owners,
+    maxOwners: MAX_OWNERS,
+    ownerSlotsLeft: Math.max(0, MAX_OWNERS - ownerIds.size),
+    isOwner: ownerIds.has(user.id),
+    priceConfigured: false,
+  });
 });
 
 // Create a new house manager (returns a one-time temp password to share).
@@ -133,7 +163,20 @@ managersRouter.post('/', async (req, res) => {
   const name = (req.body?.name || '').trim();
   const email = (req.body?.email || '').trim().toLowerCase();
   const phone = (req.body?.phone || '').trim();
+  const asOwner = req.body?.owner === true;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required.' });
+
+  // Co-owners are peers of the founder, so only an owner may create one, and
+  // the org is capped at MAX_OWNERS total.
+  if (asOwner) {
+    if (!(await isOwnerOf(org.id, user.id))) {
+      return res.status(403).json({ error: 'Only an owner can add another owner.' });
+    }
+    const owners = await ownerCount(org.id);
+    if (owners >= MAX_OWNERS) {
+      return res.status(409).json({ error: `You can have at most ${MAX_OWNERS} owners (you already have ${owners}).` });
+    }
+  }
 
   try {
     const password = tempPassword();
@@ -186,7 +229,7 @@ managersRouter.post('/', async (req, res) => {
     // migration 0047; ignored if the column isn't there yet).
     await supabaseAdmin.from('profiles').update({ must_change_password: true }).eq('id', uid);
     await supabaseAdmin.from('org_members').upsert(
-      { org_id: org.id, profile_id: uid, is_owner: false },
+      { org_id: org.id, profile_id: uid, is_owner: asOwner },
       { onConflict: 'org_id,profile_id' },
     );
 
@@ -207,7 +250,7 @@ managersRouter.post('/', async (req, res) => {
     }
 
     const billing = await syncManagerSeats(org);
-    res.json({ id: uid, email: loginEmail, password, aliased, sharedWith: aliased ? email : undefined, billed: billing.billed, seats: billing.seats });
+    res.json({ id: uid, email: loginEmail, password, aliased, owner: asOwner, sharedWith: aliased ? email : undefined, billed: billing.billed, seats: billing.seats });
   } catch (e) {
     console.error('[managers] create', e);
     res.status(500).json({ error: e.message });
