@@ -109,6 +109,20 @@ managersRouter.get('/', async (req, res) => {
 });
 
 // Create a new house manager (returns a one-time temp password to share).
+/** Build a plus-addressed alias so several managers can share one inbox while
+ *  each having their own login: house@gmail.com -> house+john@gmail.com.
+ *  `n` disambiguates if that alias is taken too (john2, john3...). Returns null
+ *  if the address can't be aliased. */
+function plusAlias(email, name, n = 0) {
+  const at = email.lastIndexOf('@');
+  if (at < 1) return null;
+  const domain = email.slice(at + 1);
+  const base = email.slice(0, at).split('+')[0]; // never stack +tags
+  const first = (String(name).trim().split(/\s+/)[0] || 'user')
+    .toLowerCase().replace(/[^a-z0-9]/g, '') || 'user';
+  return `${base}+${first}${n ? n + 1 : ''}@${domain}`;
+}
+
 managersRouter.post('/', async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Server missing SUPABASE_SERVICE_ROLE_KEY.' });
   const user = await getUser(req);
@@ -119,16 +133,38 @@ managersRouter.post('/', async (req, res) => {
   const name = (req.body?.name || '').trim();
   const email = (req.body?.email || '').trim().toLowerCase();
   const phone = (req.body?.phone || '').trim();
-  if (!name || !email || !phone) return res.status(400).json({ error: 'Name, email, and phone are required.' });
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required.' });
 
   try {
     const password = tempPassword();
-    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email, password, email_confirm: true,
+    let loginEmail = email;
+    let aliased = false;
+    let { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: loginEmail, password, email_confirm: true,
       user_metadata: { role: 'facilitator', full_name: name, phone },
     });
+
+    // Auth allows exactly ONE account per email address. When a house shares an
+    // inbox, give this manager their own login via plus-addressing
+    // (house+john@gmail.com) — Gmail-style providers deliver it to the SAME
+    // inbox, but it's a distinct account, so every action stays attributable.
+    if (createErr && /already/i.test(createErr.message)) {
+      for (let i = 0; i < 6; i++) {
+        const candidate = plusAlias(email, name, i);
+        if (!candidate) break;
+        loginEmail = candidate;
+        ({ data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+          email: loginEmail, password, email_confirm: true,
+          user_metadata: { role: 'facilitator', full_name: name, phone },
+        }));
+        if (!createErr) { aliased = true; break; }
+        if (!/already/i.test(createErr.message)) break; // a real error — stop retrying
+      }
+    }
     if (createErr) {
-      if (/already/i.test(createErr.message)) return res.status(409).json({ error: 'That email already has an account.' });
+      if (/already/i.test(createErr.message)) {
+        return res.status(409).json({ error: 'That email already has several accounts. Try a different name or email.' });
+      }
       throw createErr;
     }
     const uid = created.user.id;
@@ -143,7 +179,7 @@ managersRouter.post('/', async (req, res) => {
     }
 
     await supabaseAdmin.from('profiles').upsert(
-      { id: uid, role: 'facilitator', full_name: name, email, phone, email_verified: true },
+      { id: uid, role: 'facilitator', full_name: name, email: loginEmail, phone, email_verified: true },
       { onConflict: 'id' },
     );
     // Force them to set their own password on first login (best-effort — needs
@@ -161,17 +197,17 @@ managersRouter.post('/', async (req, res) => {
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: WELCOME_FROM,
-          to: email,
+          to: loginEmail,
           reply_to: 'joseph@soberlivingdirectory.com',
           subject: `You're a house manager on ${org.name || 'Sober Living Companion'}`,
-          html: managerHtml({ name, orgName: org.name, email, password }),
+          html: managerHtml({ name, orgName: org.name, email: loginEmail, password }),
         }),
       }).then((r) => { if (!r.ok) r.text().then((t) => console.error('[managers] email failed', r.status, t)); })
         .catch((e) => console.error('[managers] email error', e));
     }
 
     const billing = await syncManagerSeats(org);
-    res.json({ id: uid, email, password, billed: billing.billed, seats: billing.seats });
+    res.json({ id: uid, email: loginEmail, password, aliased, sharedWith: aliased ? email : undefined, billed: billing.billed, seats: billing.seats });
   } catch (e) {
     console.error('[managers] create', e);
     res.status(500).json({ error: e.message });

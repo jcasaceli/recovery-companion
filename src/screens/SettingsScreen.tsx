@@ -60,7 +60,7 @@ export function SettingsScreen() {
   const [mgrEmail, setMgrEmail] = useState('');
   const [mgrPhone, setMgrPhone] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
-  const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
+  const [newCreds, setNewCreds] = useState<{ email: string; password: string; aliased?: boolean; sharedWith?: string } | null>(null);
   const [newMgr, setNewMgr] = useState<{ id: string; name: string } | null>(null);
   const [houses, setHouses] = useState<House[]>([]);
   const [assignedHouses, setAssignedHouses] = useState<Set<string>>(new Set());
@@ -164,11 +164,11 @@ export function SettingsScreen() {
   };
 
   const addMgr = async () => {
-    if (!mgrName.trim() || !mgrEmail.trim() || !mgrPhone.trim()) return;
+    if (!mgrName.trim() || !mgrEmail.trim()) return;
     setMgrBusy(true);
     try {
       const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim());
-      setNewCreds({ email: r.email, password: r.password });
+      setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith });
       setNewMgr({ id: r.id, name: mgrName.trim() });
       setAssignedHouses(new Set());
       listHouses().then(setHouses).catch(() => {});
@@ -570,8 +570,8 @@ export function SettingsScreen() {
             </Text>
             <TextInput style={styles.input} value={mgrName} onChangeText={setMgrName} placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" />
             <TextInput style={styles.input} value={mgrEmail} onChangeText={setMgrEmail} placeholder="Email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
-            <TextInput style={styles.input} value={mgrPhone} onChangeText={setMgrPhone} placeholder="Phone number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim() || !mgrPhone.trim()} />
+            <TextInput style={styles.input} value={mgrPhone} onChangeText={setMgrPhone} placeholder="Phone number (optional)" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+            <Button title={mgrBusy ? 'Creating…' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
@@ -592,6 +592,11 @@ export function SettingsScreen() {
               <Text selectable style={styles.credValue}>{newCreds?.email}</Text>
               <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
               <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
+              {newCreds?.aliased ? (
+                <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17 }]}>
+                  ℹ️ {newCreds.sharedWith} already has an account, so this manager got their own login above. Emails to it still arrive in the {newCreds.sharedWith} inbox — they just sign in with this address.
+                </Text>
+              ) : null}
             </View>
 
             <Text style={[typography.body, { fontWeight: '700', marginBottom: 4 }]}>Which house{houses.length === 1 ? '' : 's'} should {newMgr?.name || 'this manager'} manage?</Text>

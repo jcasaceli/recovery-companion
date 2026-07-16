@@ -13,8 +13,7 @@ interface Mtg {
   dayOfWeek: number; // 0 Sun .. 6 Sat
   startTime: string; // "19:00"
   isOnline: boolean;
-  address?: string;
-  zoomUrl?: string;
+  address?: string; // only for real, verified in-person meetings
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -40,10 +39,15 @@ function to12h(hhmm: string): string {
   return `${hr}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-// A packed weekly schedule of common online meeting formats (a guide). "Join
-// online" opens each fellowship's official, always-current meeting finder — for
-// AA that's the Online Intergroup (OIAA) at aa-intergroup.org, which runs live
-// Zoom meetings 24/7 — so the button never lands on a stale/dead link.
+// A weekly guide to common online meeting formats — NOT a directory of specific
+// meetings. "Join online" opens each fellowship's official, always-current finder
+// (for AA that's the Online Intergroup at aa-intergroup.org, running 24/7), so the
+// button never lands on a stale or dead link.
+//
+// Every entry here must be either a real, verified meeting or a generic format
+// name. Never add placeholder entries with invented addresses: "Add to calendar"
+// writes the address straight into a resident's calendar with an alarm, so a fake
+// one can send someone in early recovery to a meeting that does not exist.
 const MEETINGS: Mtg[] = [
   // ---- AA online (opens the live OIAA Zoom directory) — meetings run 24/7 ----
   // Sunday
@@ -82,19 +86,15 @@ const MEETINGS: Mtg[] = [
   { id: 'aa-sa-3', fellowship: 'AA', name: 'LGBTQ+ Meeting', region: 'Online', dayOfWeek: 6, startTime: '15:00', isOnline: true },
   { id: 'aa-sa-4', fellowship: 'AA', name: 'Speaker Meeting', region: 'Online', dayOfWeek: 6, startTime: '18:00', isOnline: true },
 
-  { id: 'n1', fellowship: 'NA', name: 'Just For Today (Online)', region: 'Online', dayOfWeek: 1, startTime: '19:00', isOnline: true, zoomUrl: 'https://zoom.us/j/2000001' },
-  { id: 'n2', fellowship: 'NA', name: 'Hillside Group', region: 'Austin, TX', dayOfWeek: 2, startTime: '19:30', isOnline: false, address: '123 Hill St' },
-  { id: 'n3', fellowship: 'NA', name: 'Living Clean (Online)', region: 'Online', dayOfWeek: 3, startTime: '20:00', isOnline: true, zoomUrl: 'https://zoom.us/j/2000003' },
-  { id: 'n4', fellowship: 'NA', name: 'We Do Recover', region: 'Austin, TX', dayOfWeek: 5, startTime: '18:30', isOnline: false, address: '900 Recovery Rd' },
-  { id: 'n5', fellowship: 'NA', name: 'Saturday Steps (Online)', region: 'Online', dayOfWeek: 6, startTime: '11:00', isOnline: true, zoomUrl: 'https://zoom.us/j/2000005' },
+  { id: 'n1', fellowship: 'NA', name: 'Just For Today', region: 'Online', dayOfWeek: 1, startTime: '19:00', isOnline: true },
+  { id: 'n3', fellowship: 'NA', name: 'Living Clean', region: 'Online', dayOfWeek: 3, startTime: '20:00', isOnline: true },
+  { id: 'n5', fellowship: 'NA', name: 'Saturday Steps', region: 'Online', dayOfWeek: 6, startTime: '11:00', isOnline: true },
 
-  { id: 's1', fellowship: 'SMART', name: 'SMART Recovery (Online)', region: 'Online', dayOfWeek: 1, startTime: '17:30', isOnline: true, zoomUrl: 'https://zoom.us/j/3000001' },
-  { id: 's2', fellowship: 'SMART', name: 'SMART Tools & Techniques', region: 'Austin, TX', dayOfWeek: 3, startTime: '18:00', isOnline: false, address: '55 Wellness Ave' },
-  { id: 's3', fellowship: 'SMART', name: 'SMART Weekend (Online)', region: 'Online', dayOfWeek: 6, startTime: '09:00', isOnline: true, zoomUrl: 'https://zoom.us/j/3000003' },
+  { id: 's1', fellowship: 'SMART', name: 'SMART Recovery', region: 'Online', dayOfWeek: 1, startTime: '17:30', isOnline: true },
+  { id: 's3', fellowship: 'SMART', name: 'SMART Weekend', region: 'Online', dayOfWeek: 6, startTime: '09:00', isOnline: true },
 
-  { id: 'd1', fellowship: 'Dharma', name: 'Recovery Dharma (Online)', region: 'Online', dayOfWeek: 2, startTime: '18:30', isOnline: true, zoomUrl: 'https://zoom.us/j/4000001' },
-  { id: 'd2', fellowship: 'Dharma', name: 'Dharma Meditation & Recovery', region: 'Austin, TX', dayOfWeek: 4, startTime: '19:00', isOnline: false, address: '12 Lotus Ln' },
-  { id: 'd3', fellowship: 'Dharma', name: 'Sunday Sangha (Online)', region: 'Online', dayOfWeek: 0, startTime: '17:00', isOnline: true, zoomUrl: 'https://zoom.us/j/4000003' },
+  { id: 'd1', fellowship: 'Dharma', name: 'Recovery Dharma', region: 'Online', dayOfWeek: 2, startTime: '18:30', isOnline: true },
+  { id: 'd3', fellowship: 'Dharma', name: 'Sunday Sangha', region: 'Online', dayOfWeek: 0, startTime: '17:00', isOnline: true },
 ];
 
 function nextOccurrence(weekday: number, hhmm: string): Date {
@@ -141,7 +141,7 @@ export function MeetingsScreen() {
 
   return (
     <Screen edges={[]}>
-      <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma — online & local" />
+      <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma — online, 24/7" />
 
       <View style={styles.filters}>
         {(['ALL', ...FELLOWSHIPS] as const).map((f) => (
