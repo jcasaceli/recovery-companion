@@ -51,6 +51,33 @@ function isoDateOrNull(v) {
   return m ? m[0] : null;
 }
 
+/** Pull the medication rows out of a submitted application into the flat list
+ *  we keep on individuals.medications — so they show on the resident's profile
+ *  from day one, editable later by the resident and by staff.
+ *  Accepts either an explicit body.medications array, or med<N>_name /
+ *  med<N>_dose fields collected from the form's pages. */
+export function medicationsFrom(body) {
+  if (Array.isArray(body?.medications)) {
+    return Array.from(new Set(body.medications.map((m) => String(m).trim()).filter(Boolean)));
+  }
+  const byRow = new Map();
+  for (const page of body?.pages || []) {
+    for (const f of page?.fields || []) {
+      const m = /^med(\d+)_(name|dose)$/.exec(f.key || '');
+      if (!m || !f.value) continue;
+      const row = byRow.get(m[1]) || {};
+      row[m[2]] = String(f.value).trim();
+      byRow.set(m[1], row);
+    }
+  }
+  const out = [];
+  for (const [, row] of [...byRow.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+    if (!row.name) continue; // a dose with no drug name is not a medication
+    out.push(row.dose ? `${row.name} — ${row.dose}` : row.name);
+  }
+  return Array.from(new Set(out));
+}
+
 /** Build a PDF Buffer of the whole application (text answers + embedded signatures/photos). */
 export function renderPdf({ title, applicantName, submittedAt, pages }) {
   return new Promise((resolve, reject) => {
@@ -214,6 +241,9 @@ intakeRouter.post('/:slug', async (req, res) => {
       // in. Until then they stay out of the Members / clients roster.
       status: 'pending',
       applied_at: new Date().toISOString(),
+      // Medications land on the profile itself (not just the PDF) so the
+      // resident and their house can both keep them current from day one.
+      medications: medicationsFrom(b),
       intake_data: { pages: b.pages || [], dob: b.dob || null, address: b.address || null },
     }).select('id').single();
     if (iErr) throw iErr;
