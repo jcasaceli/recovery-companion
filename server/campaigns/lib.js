@@ -107,6 +107,28 @@ export async function loadSent(campaigns) {
   return new Set((data || []).map((r) => r.email.toLowerCase()));
 }
 
+/** How many emails already went out TODAY for a campaign, where "today" is the
+ *  America/Los_Angeles day (the same day the 8am cron fires on). Used so the
+ *  daily cap means "per day", not "per run" — which lets a run that died
+ *  partway (e.g. a redeploy killed the process) be topped up later without
+ *  double-sending. */
+export async function sentTodayCount(campaign) {
+  if (!admin) return 0;
+  const now = new Date();
+  // Same instant expressed on the LA wall clock, then rewound to its midnight.
+  const la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const offsetMs = now.getTime() - la.getTime();
+  const laMidnight = new Date(la.getFullYear(), la.getMonth(), la.getDate(), 0, 0, 0, 0);
+  const startUtc = new Date(laMidnight.getTime() + offsetMs);
+  const { count, error } = await admin
+    .from('campaign_sends')
+    .select('*', { count: 'exact', head: true })
+    .eq('campaign', campaign)
+    .gte('sent_at', startUtc.toISOString());
+  if (error) { console.warn('[campaigns] sentTodayCount failed:', error.message); return 0; }
+  return count || 0;
+}
+
 /** Record a send (idempotent on campaign+email+stage). */
 export async function logSend({ campaign, email, stage = 0, subject, resendId, homes }) {
   if (!admin) return;

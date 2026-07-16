@@ -16,6 +16,7 @@ import { managersRouter } from './managers.js';
 import { intakeRouter } from './intake.js';
 import { runRentReminders } from './reminders.js';
 import { initCampaigns, guardedRun } from './campaigns/index.js';
+import { sentTodayCount } from './campaigns/lib.js';
 import { sendTestDirectory } from './campaigns/directory.js';
 import { sendTestApp } from './campaigns/app.js';
 
@@ -78,13 +79,22 @@ app.get('/api/campaigns/run', async (req, res) => {
   const token = process.env.CAMPAIGN_ADMIN_TOKEN;
   if (!token || req.query.token !== token) return res.status(403).json({ error: 'forbidden' });
 
-  // Config/armed status.
+  // Config/armed status + how far today's send has actually got.
   if (req.query.status === '1') {
+    const CAPS = { directory: 50, app: 30, app_followup: 35 };
+    const today = {};
+    for (const [campaign, cap] of Object.entries(CAPS)) {
+      const already = await sentTodayCount(campaign).catch(() => null);
+      today[campaign] = already == null
+        ? { error: 'count failed' }
+        : { sent: already, cap, remaining: Math.max(0, cap - already), complete: already >= cap };
+    }
     return res.json({
       cronArmed: process.env.CAMPAIGNS_ENABLED === 'true',
       unsubSecretSet: !!process.env.UNSUB_SECRET,
       resendKeySet: !!process.env.RESEND_API_KEY,
-      schedule: '0 8 * * * (America/Los_Angeles)',
+      schedule: '0 8 * * * + catch-up 11:00 & 14:00 (America/Los_Angeles)',
+      today,
     });
   }
 
