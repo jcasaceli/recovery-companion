@@ -154,7 +154,7 @@ export function AgreementViewScreen() {
             <TouchableOpacity onPress={() => setPage((p) => Math.min(pages.length - 1, p + 1))} disabled={curPage === pages.length - 1}><Text style={[styles.viewerClose, curPage === pages.length - 1 && { opacity: 0.4 }]}>Next ›</Text></TouchableOpacity>
           </View>
         ) : null}
-        <ScrollView
+        <ScrollView keyboardShouldPersistTaps="handled"
           style={{ flex: 1 }}
           contentContainerStyle={styles.viewerContent}
           maximumZoomScale={5}
@@ -272,7 +272,7 @@ export function AgreementViewScreen() {
     };
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Card>
             <Text style={[typography.h3, { marginBottom: spacing.sm }]}>{agreement.title}</Text>
             <SignableAgreement
@@ -314,7 +314,7 @@ export function AgreementViewScreen() {
     const readOnly = agreement.status === 'signed' || !canSign;
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {DocWithFields(!readOnly)}
           {readOnly ? (
             agreement.status === 'signed' ? (
@@ -352,7 +352,7 @@ export function AgreementViewScreen() {
   if (agreement.status === 'signed' || !canSign) {
     return (
       <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {Document}
           {agreement.status === 'signed' ? (
             <>
@@ -379,7 +379,7 @@ export function AgreementViewScreen() {
   // ── Sign mode (member, pending) ──────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {Document}
         <Text style={[typography.caption, { paddingHorizontal: spacing.md }]}>
           Please read the full agreement above (tap to open it full screen). When you’re ready, sign below.

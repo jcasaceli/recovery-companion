@@ -45,7 +45,7 @@ export function MemberAgreementsScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={typography.h1}>Agreements</Text>
         {loading ? (
           <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />

@@ -252,7 +252,7 @@ export function FacilitatorFormsScreen() {
   const RecipientPicker = () => (
     <View style={{ maxHeight: 240, marginVertical: spacing.sm }}>
       <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Send to</Text>
-      <ScrollView style={styles.pickerBox}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.pickerBox}>
         {activeResidents.length === 0 ? (
           <Text style={[typography.caption, { padding: spacing.sm }]}>No current residents.</Text>
         ) : activeResidents.map((r) => {
@@ -360,7 +360,7 @@ export function FacilitatorFormsScreen() {
       <Modal visible={builderOpen} transparent animationType="slide" onRequestClose={() => setBuilderOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.modal}>
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingId ? 'Edit form' : 'New form'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Name your form, then add fields and signature spaces.</Text>
               <Text style={styles.lbl}>Form title</Text>
@@ -376,7 +376,7 @@ export function FacilitatorFormsScreen() {
 
               <View style={styles.addField}>
                 <TextInput style={[styles.input, { marginBottom: spacing.sm }]} value={fLabel} onChangeText={setFLabel} placeholder="Field label (e.g. Resident signature)" placeholderTextColor={colors.textMuted} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
                   {BUILDER_TYPES.map((t) => (
                     <TouchableOpacity key={t} onPress={() => setFType(t)} style={[styles.typeChip, fType === t && styles.typeChipOn]}>
                       <Text style={[styles.typeChipText, fType === t && { color: colors.textInverse }]}>{FIELD_TYPE_LABELS[t]}</Text>
@@ -410,7 +410,7 @@ export function FacilitatorFormsScreen() {
       <Modal visible={uploadOpen} transparent animationType="slide" onRequestClose={() => setUploadOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.modal}>
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingDocId ? 'Edit document' : 'Upload a document'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, place signature fields on it, then save it as a reusable template or send it to residents to sign.</Text>
               <Text style={styles.lbl}>Document name</Text>
@@ -449,7 +449,7 @@ export function FacilitatorFormsScreen() {
       <Modal visible={writeOpen} transparent animationType="slide" onRequestClose={() => setWriteOpen(false)}>
         <View style={styles.backdrop}>
           <View style={[styles.modal, { maxWidth: 760, alignSelf: 'center', width: '100%' }]}>
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingId ? 'Edit agreement' : 'Write an agreement'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Format the text, or paste from Word. Save it as a reusable template, or send it to residents to read and sign.</Text>
               <Text style={styles.lbl}>Title</Text>

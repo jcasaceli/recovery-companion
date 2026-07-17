@@ -253,7 +253,7 @@ export function ClientsScreen() {
       ) : null}
 
       {!locked && houses.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.houseFilterRow} contentContainerStyle={styles.houseFilterContent}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={styles.houseFilterRow} contentContainerStyle={styles.houseFilterContent}>
           <TouchableOpacity onPress={() => setHouseFilter('ALL')} style={[styles.houseChip, styles.filterChip, houseFilter === 'ALL' ? styles.houseChipOn : null]}>
             <Text style={[styles.houseChipText, houseFilter === 'ALL' ? styles.houseChipTextOn : null]}>All houses</Text>
           </TouchableOpacity>
@@ -270,7 +270,7 @@ export function ClientsScreen() {
         <FilterTab label={`Completed (${counts.completed})`} active={filter === 'completed'} onPress={() => setFilter('completed')} />
       </View>
 
-      <ScrollView style={styles.scrollFlex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scrollFlex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {locked ? <Paywall onChanged={reloadCloud} /> : null}
         {!locked && !selectMode && !adding ? (
           <>

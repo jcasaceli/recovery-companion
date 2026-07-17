@@ -35,7 +35,7 @@ export function FacilitatorSidebar({ state, navigation }: BottomTabBarProps) {
         <Text style={styles.brandText}>Sober Living{'\n'}Companion</Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: spacing.sm }}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: spacing.sm }}>
         {state.routes.map((route, index) => {
           const cfg = NAV[route.name] ?? { label: route.name, icon: 'ellipse-outline' as IconName };
           const focused = state.index === index;

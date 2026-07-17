@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Card, SectionTitle, Button, Pill } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
 import {
-  listFormResponses, assignForm, deleteFormResponse, listFormTemplates, createFormTemplate,
+  listFormResponses, assignForm, deleteFormResponse, setFormHidden, listFormTemplates, createFormTemplate,
   listArchivedTemplateKeys, archiveTemplate, unarchiveTemplate,
   FormResponse, FormField, FormFieldType, FormTemplate,
 } from '../services/db';
@@ -98,13 +98,38 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
     ]);
   };
 
+  // Show/hide this form in the resident's own Forms tab. RLS enforces it, so a
+  // hidden form never reaches their device and can't be signed — the record and
+  // anything already filled in are kept either way.
+  const toggleHidden = async (r: FormResponse) => {
+    const next = !r.hiddenFromMember;
+    setResponses((cur) => cur.map((x) => (x.id === r.id ? { ...x, hiddenFromMember: next } : x)));
+    try { await setFormHidden(r.id, next); } catch (e: any) {
+      setResponses((cur) => cur.map((x) => (x.id === r.id ? { ...x, hiddenFromMember: !next } : x)));
+      Alert.alert('Could not update the form', e?.message ?? 'Try again.');
+    }
+  };
+
   const renderFormRow = (r: FormResponse) => (
     <TouchableOpacity key={r.id} style={styles.row} onPress={() => nav.navigate('FormFill', { id: r.id })} onLongPress={() => remove(r)}>
       <Text style={styles.icon}>📋</Text>
       <View style={{ flex: 1 }}>
         <Text style={typography.body}>{r.title}</Text>
-        <Text style={typography.caption}>{r.status === 'completed' ? `Signed ${r.signedAt ? formatDate(r.signedAt) : ''}` : `Sent ${formatDate(r.createdAt)}`}</Text>
+        <Text style={typography.caption}>
+          {r.status === 'completed' ? `Signed ${r.signedAt ? formatDate(r.signedAt) : ''}` : `Sent ${formatDate(r.createdAt)}`}
+          {r.hiddenFromMember ? ` · hidden from ${memberName || 'resident'}` : ''}
+        </Text>
       </View>
+      <TouchableOpacity
+        onPress={() => toggleHidden(r)}
+        hitSlop={10}
+        style={[styles.eye, r.hiddenFromMember && styles.eyeOff]}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: !r.hiddenFromMember }}
+        accessibilityLabel={r.hiddenFromMember ? 'Show this form to the resident' : 'Hide this form from the resident'}
+      >
+        <Text style={styles.eyeText}>{r.hiddenFromMember ? '🙈' : '👁️'}</Text>
+      </TouchableOpacity>
       <Pill label={r.status === 'completed' ? 'Signed' : 'Pending'} color={r.status === 'completed' ? colors.success : colors.warning} />
     </TouchableOpacity>
   );
@@ -153,7 +178,7 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
         <View style={styles.backdrop}>
           <View style={styles.sheet}>
             <Text style={typography.h3}>Choose a form</Text>
-            <ScrollView style={{ maxHeight: 400, marginVertical: spacing.sm }}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 400, marginVertical: spacing.sm }}>
               <Text style={styles.group}>Ready-made</Text>
               {BUILT_IN_TEMPLATES.filter((t) => !archivedKeys.has(biKey(t.key))).map((t) => (
                 <View key={t.key} style={styles.tmpl}>
@@ -229,7 +254,7 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
         <View style={styles.backdrop}>
           <View style={styles.sheet}>
             <Text style={typography.h3}>Build a form</Text>
-            <ScrollView style={{ maxHeight: 440 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 440 }}>
               <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Form title (e.g. House Lease Agreement)" placeholderTextColor={colors.textMuted} />
 
               {fields.map((f, i) => (
@@ -274,6 +299,12 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  eye: {
+    paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm,
+  },
+  eyeOff: { backgroundColor: colors.border },
+  eyeText: { fontSize: 14 },
   icon: { fontSize: 20, marginRight: spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.lg, paddingBottom: spacing.xl },

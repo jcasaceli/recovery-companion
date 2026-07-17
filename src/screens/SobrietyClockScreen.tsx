@@ -62,7 +62,7 @@ export function SobrietyClockScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your Sobriety Clock</Text>
         <Text style={styles.cakeLine}>🎂 To the future Cake-Getters</Text>
 

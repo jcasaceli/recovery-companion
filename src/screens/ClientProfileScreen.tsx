@@ -1094,7 +1094,7 @@ export function ClientProfileScreen() {
               Pick the duplicate record to merge into {client.firstName}. Their data moves here and the duplicate is deleted.
             </Text>
             {merging ? <ActivityIndicator color={colors.primary} /> : null}
-            <ScrollView style={{ maxHeight: 320 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 320 }}>
               {roster.length === 0 ? (
                 <Text style={[typography.caption, { padding: spacing.sm }]}>No other members to merge.</Text>
               ) : roster.map((m) => (

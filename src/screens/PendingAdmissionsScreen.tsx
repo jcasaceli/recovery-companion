@@ -242,7 +242,7 @@ export function PendingAdmissionsScreen() {
         <Text style={styles.headerSub}>Applicants who submitted an application but haven't been admitted yet</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
         ) : rows.length === 0 && declined.length === 0 ? (
@@ -282,7 +282,7 @@ export function PendingAdmissionsScreen() {
               <Text style={styles.closeX}>Close</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {(viewing?.intake_data?.pages && viewing.intake_data.pages.length > 0) ? (
               viewing.intake_data.pages.map((p, pi) => (
                 <View key={pi} style={styles.appPage}>

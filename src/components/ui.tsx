@@ -53,6 +53,14 @@ export function Screen({
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          // Without these two, a focused field traps you: the default
+          // ("never") swallows your first tap to dismiss the keyboard, so
+          // Save/back never fire. Worse on number-pad/phone-pad fields, which
+          // have no return key on iOS — tapping away was the only exit and it
+          // was being eaten. "handled" lets the tap through; on-drag lets you
+          // swipe the keyboard away.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {children}
         </ScrollView>

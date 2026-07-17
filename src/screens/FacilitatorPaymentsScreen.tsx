@@ -56,7 +56,7 @@ export function FacilitatorPaymentsScreen() {
     const statusClr: Record<string, string> = { paid: colors.success, partial: colors.warning, none: colors.crisis, norent: colors.textMuted };
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={typography.h1}>Payments</Text>
           <Paywall onChanged={reloadCloud} />
           <Card style={{ alignItems: 'center' }}>
@@ -128,7 +128,7 @@ export function FacilitatorPaymentsScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={typography.h1}>Payments</Text>
 
         <Card style={{ alignItems: 'center' }}>

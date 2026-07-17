@@ -160,7 +160,7 @@ export function DashboardScreen() {
     // full sample profile (with the agreement-upload feature).
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={typography.h1}>Dashboard</Text>
           <Text style={[typography.bodySecondary, { marginBottom: spacing.md }]}>Preview · sample data</Text>
           <Paywall onChanged={reloadCloud} />
@@ -223,7 +223,7 @@ export function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={typography.h1}>Dashboard</Text>
         <Text style={[typography.bodySecondary, { marginBottom: spacing.md }]}>{org?.name || 'Your sober living'}</Text>
 

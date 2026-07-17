@@ -117,7 +117,7 @@ export function TimeField({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
           <TouchableOpacity activeOpacity={1} style={styles.timeCard}>
             <Text style={[styles.calTitle, { marginBottom: spacing.sm }]}>Select a time</Text>
-            <ScrollView style={{ maxHeight: 300 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 300 }}>
               {value ? (
                 <TouchableOpacity style={styles.timeRow} onPress={() => { onChange(''); setOpen(false); }}>
                   <Text style={[styles.timeText, { color: colors.textMuted }]}>Clear time</Text>

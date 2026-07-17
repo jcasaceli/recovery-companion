@@ -63,7 +63,7 @@ export function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {step === 'welcome' && (
           <View>
             <Text style={styles.emoji}>🌱</Text>

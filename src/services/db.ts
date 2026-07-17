@@ -948,6 +948,7 @@ export interface FormResponse {
   signerName?: string;
   signedAt?: string;
   signedIp?: string;
+  hiddenFromMember?: boolean;
   createdAt: string;
 }
 
@@ -965,6 +966,7 @@ function mapFormResponse(r: any): FormResponse {
     title: r.title, fields: r.fields ?? [], answers: r.answers ?? {}, status: r.status,
     signaturePaths: r.signature_paths ?? undefined, signerName: r.signer_name ?? undefined,
     signedAt: r.signed_at ?? undefined, signedIp: r.signed_ip ?? undefined, createdAt: r.created_at,
+    hiddenFromMember: r.hidden_from_member ?? false,
   };
 }
 
@@ -1077,6 +1079,14 @@ export async function listFormResponses(individualId: string): Promise<FormRespo
   const { data, error } = await db().from('form_responses').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapFormResponse);
+}
+
+/** Staff: show/hide an assigned form in the resident's Forms tab. RLS enforces
+ *  this too — a hidden form never reaches the resident's device, and they can't
+ *  fill or sign it (see migration 0065). */
+export async function setFormHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await db().from('form_responses').update({ hidden_from_member: hidden }).eq('id', id);
+  if (error) throw error;
 }
 
 /** Member: their own assigned forms. */

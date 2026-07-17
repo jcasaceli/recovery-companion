@@ -87,7 +87,7 @@ export function HouseFormsScreen() {
         <View style={styles.backdrop}>
           <View style={styles.sheet}>
             <Text style={typography.h3}>Choose a form</Text>
-            <ScrollView style={{ maxHeight: 420, marginVertical: spacing.sm }}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420, marginVertical: spacing.sm }}>
               <Text style={styles.group}>House-level</Text>
               {suggested.map((t) => (
                 <TouchableOpacity key={t.key} style={styles.tmpl} disabled={busy} onPress={() => add({ title: t.title, fields: t.fields })}>
