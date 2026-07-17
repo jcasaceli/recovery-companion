@@ -5,6 +5,7 @@ import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../compon
 import { colors, spacing, radius, typography } from '../theme';
 import {
   listFormTemplates, createFormTemplate, updateFormTemplate, deleteFormTemplate, assignForm, listOrgFormResponses,
+  listArchivedTemplateKeys, archiveTemplate, unarchiveTemplate,
   listFacilitatorIndividuals, getMyOrg, createAgreement, listOrgAgreements,
   FormField, FormFieldType, FormTemplate, FormResponse, PlacedField,
 } from '../services/db';
@@ -89,11 +90,25 @@ export function FacilitatorFormsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   // shared recipient selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Archived templates are hidden from this list. The client-profile picker has
+  // always honoured these keys; this tab did not, so archiving there left the
+  // starter forms still cluttering the Forms tab.
+  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Hide a form from this org's list without deleting it (org-wide, same keys
+  // the client-profile picker uses).
+  const setArchived = async (key: string, on: boolean) => {
+    setArchivedKeys((cur) => { const n = new Set(cur); on ? n.add(key) : n.delete(key); return n; });
+    try { on ? await archiveTemplate(key, orgId) : await unarchiveTemplate(key, orgId); }
+    catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); load(); }
+  };
 
   const load = () => {
     setLoading(true);
     Promise.all([
       listFormTemplates().then(setTemplates).catch(() => {}),
+      listArchivedTemplateKeys().then((k) => setArchivedKeys(new Set(k))).catch(() => {}),
       listOrgFormResponses().then(setResponses).catch(() => {}),
       listOrgAgreements().then((a: any) => setAgrs(a ?? [])).catch(() => {}),
       listFacilitatorIndividuals().then((r: any) => setResidents(r ?? [])).catch(() => {}),
@@ -110,12 +125,12 @@ export function FacilitatorFormsScreen() {
   // Built-in starter forms (operator + intake), de-duplicated by title.
   const starters = useMemo(() => {
     const seen = new Set<string>();
-    const out: { title: string; fields: FormField[] }[] = [];
+    const out: { title: string; fields: FormField[]; builtInKey: string }[] = [];
     for (const f of [...HOUSE_FORMS, ...BUILT_IN_TEMPLATES]) {
       const k = f.title.trim().toLowerCase();
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push({ title: f.title, fields: f.fields });
+      out.push({ title: f.title, fields: f.fields, builtInKey: f.key });
     }
     return out;
   }, []);
@@ -338,18 +353,20 @@ export function FacilitatorFormsScreen() {
   // shown, so nothing appears twice across saved + starter lists.
   const formsList = (() => {
     const seen = new Set<string>();
-    const out: { key: string; title: string; fields: FormField[]; templateId?: string; bodyHtml?: string; documentData?: string; documentPages?: string[]; saved: boolean }[] = [];
+    const out: { key: string; title: string; fields: FormField[]; templateId?: string; bodyHtml?: string; documentData?: string; documentPages?: string[]; saved: boolean; archiveKey: string }[] = [];
     for (const t of templates) {
       const k = t.title.trim().toLowerCase();
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, bodyHtml: t.bodyHtml, documentData: t.documentData, documentPages: t.documentPages, saved: true });
+      if (archivedKeys.has(`cs:${t.id}`) !== showArchived) continue;
+      out.push({ key: t.id, title: t.title, fields: t.fields, templateId: t.id, bodyHtml: t.bodyHtml, documentData: t.documentData, documentPages: t.documentPages, saved: true, archiveKey: `cs:${t.id}` });
     }
     starters.forEach((s, i) => {
       const k = s.title.trim().toLowerCase();
       if (seen.has(k)) return;
       seen.add(k);
-      out.push({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined, bodyHtml: undefined, saved: false });
+      if (archivedKeys.has(`bi:${s.builtInKey}`) !== showArchived) return;
+      out.push({ key: `st_${i}`, title: s.title, fields: s.fields, templateId: undefined, bodyHtml: undefined, saved: false, archiveKey: `bi:${s.builtInKey}` });
     });
     return out.sort((a, b) => (sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
   })();
@@ -497,6 +514,9 @@ export function FacilitatorFormsScreen() {
             </View>
             <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openEdit(f))} style={{ marginRight: spacing.sm }}><Text style={styles.link}>Edit</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => (f.documentData ? openDocTemplate(f) : openSend(f))}><Pill label="Send" color={colors.primary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setArchived(f.archiveKey, !showArchived)} style={{ marginLeft: spacing.sm }}>
+              <Text style={styles.link}>{showArchived ? 'Restore' : 'Archive'}</Text>
+            </TouchableOpacity>
             {f.saved ? (
               <TouchableOpacity onPress={() => del(f.templateId!, f.title)} style={{ marginLeft: spacing.sm }}>
                 <Text style={{ color: colors.textMuted, fontSize: 18 }}>🗑</Text>
@@ -504,6 +524,16 @@ export function FacilitatorFormsScreen() {
             ) : null}
           </Card>
         ))}
+        {formsList.length === 0 ? (
+          <Card><Text style={typography.caption}>
+            {showArchived ? 'Nothing archived.' : 'No forms yet — build one, or restore an archived form below.'}
+          </Text></Card>
+        ) : null}
+        <TouchableOpacity onPress={() => setShowArchived((v) => !v)} style={{ paddingVertical: spacing.sm }}>
+          <Text style={styles.link}>
+            {showArchived ? '▾ Back to active forms' : `▸ View archived forms (${archivedKeys.size})`}
+          </Text>
+        </TouchableOpacity>
 
         <SectionTitle>Submissions</SectionTitle>
         {submissions.length === 0 ? (
