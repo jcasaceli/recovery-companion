@@ -187,8 +187,14 @@ export async function getMyProfile() {
  *  Pending admissions (people who filled the public application but haven't been
  *  admitted yet) are surfaced separately via listPendingAdmissions() and must
  *  not appear in the Members roster, payments, forms, or dashboard counts. */
+// Roster/list columns: everything EXCEPT intake_data (1.6-6.4 MB/row of
+// embedded signatures + photos). Pulling it into a list made an 8-resident
+// roster take 2.2s and time out to 0 residents under load. The full
+// application is fetched on demand when a profile is opened.
+const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+
 export async function listFacilitatorIndividuals() {
-  const { data, error } = await db().from('individuals').select('*').order('first_name');
+  const { data, error } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
   if (error) throw error;
   return (data ?? []).filter((r: any) => (r.status ?? 'in_care') !== 'pending');
 }
@@ -197,7 +203,7 @@ export async function listFacilitatorIndividuals() {
  *  awaiting admission. Newest first. */
 export async function listPendingAdmissions() {
   const { data, error } = await db()
-    .from('individuals').select('*').eq('status', 'pending')
+    .from('individuals').select(INDIVIDUAL_LIST_COLS).eq('status', 'pending')
     .order('applied_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -207,7 +213,7 @@ export async function listPendingAdmissions() {
  *  application PDF are kept — this just surfaces them again. Newest first. */
 export async function listDeclinedAdmissions() {
   const { data, error } = await db()
-    .from('individuals').select('*').eq('status', 'declined')
+    .from('individuals').select(INDIVIDUAL_LIST_COLS).eq('status', 'declined')
     .order('applied_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
