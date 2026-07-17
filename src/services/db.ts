@@ -1964,10 +1964,15 @@ export async function toggleLike(postId: string, like: boolean) {
 
 /** Facilitator: their org row (for CashApp/Zelle + settings). */
 export async function getMyOrg() {
-  const { data: members } = await db().from('org_members').select('org_id');
+  // Surface DB errors instead of swallowing them: a transient timeout must be
+  // distinguishable from a genuine "no org", or the subscription gate would
+  // lock out paying operators during any database blip (see store.tsx).
+  const { data: members, error: mErr } = await db().from('org_members').select('org_id');
+  if (mErr) throw mErr;
   if (!members || !members.length) return null;
   const ids = members.map((m: any) => m.org_id);
-  const { data: orgs } = await db().from('organizations').select('*').in('id', ids);
+  const { data: orgs, error: oErr } = await db().from('organizations').select('*').in('id', ids);
+  if (oErr) throw oErr;
   if (!orgs || !orgs.length) return null;
   // A house manager may also have a stray auto-created demo org — always prefer a
   // subscribed org so they get the same access as the owner (no extra cost).

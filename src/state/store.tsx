@@ -356,8 +356,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           tags: Array.isArray(c.tags) ? c.tags : undefined,
         }));
         // Subscription gate: only an active/trialing org can manage real clients.
-        const org: any = await dbApi.getMyOrg().catch(() => null);
-        setSubscriptionActive(!!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing'));
+        // A transient DB timeout must NOT flip a paying operator into preview
+        // mode, so we retry, and only change the flag on a DEFINITIVE read.
+        // If every attempt errors, we leave the last-known state untouched.
+        let orgRead = false;
+        let org: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try { org = await dbApi.getMyOrg(); orgRead = true; break; }
+          catch { await new Promise((r) => setTimeout(r, 500 * (attempt + 1))); }
+        }
+        if (orgRead) {
+          setSubscriptionActive(!!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing'));
+        }
         // Always start facilitators/managers on their Dashboard — clear any
         // resident that was open in a previous session so login never drops them
         // back into a member's view.
