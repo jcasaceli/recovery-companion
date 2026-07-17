@@ -6,6 +6,7 @@ import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import {
   listPendingAdmissions,
+  getIntakeData,
   listDeclinedAdmissions,
   admitPendingAdmission,
   declinePendingAdmission,
@@ -108,6 +109,13 @@ export function PendingAdmissionsScreen() {
   const openApplication = (a: Applicant) => {
     setViewing(a);
     setPdfUrl(null);
+    // The list omits the multi-MB intake_data blob for speed, so fetch the
+    // submitted application on demand and merge it into the open record.
+    if (!a.intake_data?.pages) {
+      getIntakeData(a.id)
+        .then((d) => { if (d) setViewing((cur) => (cur && cur.id === a.id ? { ...cur, intake_data: d } : cur)); })
+        .catch(() => {});
+    }
     (async () => {
       try {
         const docs = await listDocuments(a.id);

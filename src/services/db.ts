@@ -247,9 +247,20 @@ export async function restorePendingAdmission(id: string) {
   if (error) throw error;
 }
 
+/** Fetch just the submitted application (intake_data) for one applicant — the
+ *  list queries omit this multi-MB blob, so we load it on demand when a staffer
+ *  opens the full application. */
+export async function getIntakeData(id: string): Promise<{ pages?: any[] } | null> {
+  const { data, error } = await db().from('individuals').select('intake_data').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return (data as any)?.intake_data ?? null;
+}
+
 /** Fetch one individual's full record (for the selected client). */
 export async function getIndividual(id: string) {
-  const { data, error } = await db().from('individuals').select('*').eq('id', id).maybeSingle();
+  // Excludes intake_data (multi-MB): the profile screen never reads it, and the
+  // full application is fetched via getIntakeData / getSubmittedInfo on demand.
+  const { data, error } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).eq('id', id).maybeSingle();
   if (error) throw error;
   return data;
 }
