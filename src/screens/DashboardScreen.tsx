@@ -51,7 +51,16 @@ export function DashboardScreen() {
   const [evtRecurring, setEvtRecurring] = useState(false);
   const [evtBusy, setEvtBusy] = useState(false);
 
-  const loadEvents = () => { listHouses().then(setHouses).catch(() => {}); listHouseEvents().then(setEvents).catch(() => {}); };
+  const loadEvents = () => {
+    // With a single house the chips below are hidden, so nothing would ever set
+    // evtHouseId and saveEvent would reject with "Pick a house" and no picker to
+    // pick from. Default to the only house.
+    listHouses().then((hs) => {
+      setHouses(hs);
+      setEvtHouseId((cur) => (hs.length === 1 ? hs[0].id : cur && hs.some((h) => h.id === cur) ? cur : undefined));
+    }).catch(() => {});
+    listHouseEvents().then(setEvents).catch(() => {});
+  };
   const loadPasses = () => { listOrgPasses('pending').then(setPasses).catch(() => {}); };
   const loadCurfews = () => {
     listOrgCurfews().then(setCurfews).catch(() => {});

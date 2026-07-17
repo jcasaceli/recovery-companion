@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, Linking, Platform, TouchableOpacity, Modal, Image, ActivityIndicator, Share, ScrollView } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { openResolvedUrl } from '../utils/openFile';
@@ -283,7 +283,6 @@ export function ClientProfileScreen() {
   useEffect(() => {
     listMeetingCheckins(id).then(setCheckins).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
-    listHouses().then((hs) => { setHouseList(hs); const h = hs.find((x) => x.id === client?.houseId); if (h?.joinCode) setHouseCode(h.joinCode); }).catch(() => {});
     loadAgreements();
     loadUA();
     loadCrm();
@@ -353,6 +352,21 @@ export function ClientProfileScreen() {
       try { await deleteNote(noteId); } catch { /* will reappear on next load if it failed */ }
     });
   };
+
+  // Houses are reloaded every time this screen is focused, not just on mount:
+  // React Navigation keeps the screen mounted, so an owner who creates a house
+  // and comes back here would otherwise still see the stale list.
+  const loadHouses = useCallback(() => {
+    listHouses()
+      .then((hs) => {
+        setHouseList(hs);
+        const h = hs.find((x) => x.id === client?.houseId);
+        if (h?.joinCode) setHouseCode(h.joinCode);
+      })
+      .catch(() => {});
+  }, [client?.houseId]);
+
+  useFocusEffect(useCallback(() => { loadHouses(); }, [loadHouses]));
 
   const changeHouse = async (newHouseId: string) => {
     const prev = houseId;
@@ -1015,7 +1029,7 @@ export function ClientProfileScreen() {
       {/* Bed & intake */}
       <SectionTitle>Bed &amp; intake</SectionTitle>
       <Card>
-        {houseList.length > 1 ? (
+        {houseList.length > 0 ? (
           <>
             <Text style={styles.label}>House</Text>
             <View style={styles.houseChips}>
