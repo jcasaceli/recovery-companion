@@ -17,7 +17,7 @@ import {
 import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
 import { PickedFile, readFileBytes, attachmentIcon, pickPhoto, isWeb } from '../utils/attachments';
 import { sendMemberInvite } from '../services/payments';
-import { formatDateTime, formatDate, parseMoneyCents } from '../utils/format';
+import { formatDateTime, formatDate, parseMoneyCents, daysSince } from '../utils/format';
 import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
@@ -84,6 +84,7 @@ export function ClientProfileScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [meds, setMeds] = useState<string[]>([]);
+  const [sobrietyDate, setSobrietyDate] = useState<string | undefined>(undefined);
   const [medInput, setMedInput] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -154,6 +155,7 @@ export function ClientProfileScreen() {
     setDischargeDate(r.discharge_date ?? undefined);
     setTags(Array.isArray(r.tags) ? r.tags : []);
     setMeds(Array.isArray(r.medications) ? r.medications : []);
+    setSobrietyDate(r.sobriety_date ?? undefined);
     getAvatarUrl(r.avatar_path).then(setAvatarUrl).catch(() => {});
   }).catch(() => {});
 
@@ -1024,6 +1026,21 @@ export function ClientProfileScreen() {
               </View>
             ))
           : null}
+      </Card>
+
+      {/* Sobriety — the resident sets this in their app; staff see it read-only. */}
+      <SectionTitle>Sobriety</SectionTitle>
+      <Card>
+        {sobrietyDate ? (
+          <>
+            <Text style={typography.h3}>{daysSince(sobrietyDate)} days sober</Text>
+            <Text style={typography.caption}>Sober since {formatDate(sobrietyDate)}</Text>
+          </>
+        ) : (
+          <Text style={typography.bodySecondary}>
+            No sobriety date set yet. {client.firstName} can set it on their Home screen.
+          </Text>
+        )}
       </Card>
 
       {/* Bed & intake */}
