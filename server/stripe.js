@@ -27,6 +27,7 @@
 import express from 'express';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { qualifyReferralFor } from './referrals.js';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
@@ -441,6 +442,8 @@ export async function stripeWebhook(req, res) {
             .from('organizations')
             .update({ subscription_status: 'active', stripe_subscription_id: s.subscription })
             .eq('id', s.metadata.org_id);
+          // If someone referred them, the credit is now earned (pending approval).
+          qualifyReferralFor(s.metadata.org_id).catch((e) => console.warn('[stripe] referral qualify failed', e?.message));
           // Look up the org name for a personalized welcome, then email directions.
           let orgName = s.customer_details?.name;
           try {

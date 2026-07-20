@@ -15,6 +15,7 @@ import { inviteRouter } from './invite.js';
 import { managersRouter } from './managers.js';
 import { intakeRouter } from './intake.js';
 import { formsRouter } from './forms.js';
+import { referralsRouter } from './referrals.js';
 import { runRentReminders } from './reminders.js';
 import { initCampaigns, guardedRun } from './campaigns/index.js';
 import { sentTodayCount } from './campaigns/lib.js';
@@ -53,6 +54,7 @@ app.use('/api/notify', notifyRouter);
 app.use('/api/account', accountRouter);
 app.use('/api/invite', inviteRouter);
 app.use('/api/managers', managersRouter);
+app.use('/api/referrals', referralsRouter);
 
 // Manual trigger for rent reminders (handy for testing the cron logic).
 app.get('/api/reminders/run', async (_req, res) => {

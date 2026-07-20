@@ -1637,6 +1637,34 @@ export async function listMeetingCheckins(individualId: string, sinceISO?: strin
   }));
 }
 
+export interface ReferralSummary {
+  code?: string;
+  link?: string;
+  referrals: { id: string; status: 'pending' | 'qualified' | 'approved' | 'rejected'; createdAt: string; orgName?: string }[];
+}
+
+/** Operator: their own referral link + how their referrals are doing. */
+export async function getMyReferrals(): Promise<ReferralSummary> {
+  const org = await getMyOrg();
+  if (!org?.id) return { referrals: [] };
+  const code = (org as any).referral_code as string | undefined;
+  const { data } = await db()
+    .from('referrals')
+    .select('id,status,created_at,organizations!referrals_referred_org_id_fkey(name)')
+    .eq('referrer_org_id', org.id)
+    .order('created_at', { ascending: false });
+  return {
+    code,
+    link: code ? `https://soberlivingcompanion.com/?ref=${code}` : undefined,
+    referrals: (data ?? []).map((r: any) => ({
+      id: r.id,
+      status: r.status,
+      createdAt: r.created_at,
+      orgName: r.organizations?.name ?? undefined,
+    })),
+  };
+}
+
 /** Facilitator onboarding: ensure the facilitator has an org (create if none). */
 export async function ensureFacilitatorOrg(name: string): Promise<string> {
   const { data: u } = await db().auth.getUser();
