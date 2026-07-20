@@ -1097,21 +1097,27 @@ export async function assignHouseForm(input: { orgId: string; templateId?: strin
 
 /** Staff: house-level forms for the org (individual_id is null). */
 export async function listHouseForms(orgId: string): Promise<FormResponse[]> {
-  const { data, error } = await db().from('form_responses').select('*').is('individual_id', null).eq('org_id', orgId).order('created_at', { ascending: false });
+  const { data, error } = await db().from('form_responses').select(FORM_LIST_COLS).is('individual_id', null).eq('org_id', orgId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapFormResponse);
 }
 
 /** Staff: every form response across the org (the Forms hub "submissions" list). */
+// Lists never need `fields`/`answers` — answers carry signature dataURLs, so
+// pulling them org-wide grows with every signed form. Opening a form still
+// fetches the full row via getFormResponse.
+const FORM_LIST_COLS =
+  'id,individual_id,template_id,title,status,signer_name,signed_at,signed_ip,created_at,hidden_from_member';
+
 export async function listOrgFormResponses(): Promise<FormResponse[]> {
-  const { data, error } = await db().from('form_responses').select('*').order('created_at', { ascending: false });
+  const { data, error } = await db().from('form_responses').select(FORM_LIST_COLS).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapFormResponse);
 }
 
 /** Form responses on a resident's file (staff or the resident). */
 export async function listFormResponses(individualId: string): Promise<FormResponse[]> {
-  const { data, error } = await db().from('form_responses').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
+  const { data, error } = await db().from('form_responses').select(FORM_LIST_COLS).eq('individual_id', individualId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapFormResponse);
 }
