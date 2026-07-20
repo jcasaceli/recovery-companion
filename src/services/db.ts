@@ -764,8 +764,20 @@ export async function getDocumentUrl(storagePath: string): Promise<string | null
 }
 
 /** Documents on a member's file (RLS: staff or the member themselves). */
+// Excludes file_data — a legacy base64 blob that can be hundreds of KB per row.
+// Only old documents without a storage_path still use it, and those load it on
+// demand via getDocumentFileData when opened.
+const DOCUMENT_LIST_COLS =
+  'id,individual_id,org_id,title,storage_path,file_name,mime_type,size_bytes,created_at';
+
+/** Legacy inline image data for one old document (no storage_path). */
+export async function getDocumentFileData(id: string): Promise<string | undefined> {
+  const { data } = await db().from('documents').select('file_data').eq('id', id).maybeSingle();
+  return (data as any)?.file_data ?? undefined;
+}
+
 export async function listDocuments(individualId: string): Promise<Document[]> {
-  const { data, error } = await db().from('documents').select('*').eq('individual_id', individualId).order('created_at', { ascending: false });
+  const { data, error } = await db().from('documents').select(DOCUMENT_LIST_COLS).eq('individual_id', individualId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapDocument);
 }

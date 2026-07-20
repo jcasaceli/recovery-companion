@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { listMyDocuments, getDocumentUrl, Document } from '../services/db';
+import { listMyDocuments, getDocumentUrl, getDocumentFileData, Document } from '../services/db';
 import { formatDate } from '../utils/format';
 
 function iconFor(mime?: string, name?: string) {
@@ -34,8 +34,10 @@ export function MemberDocumentsScreen() {
         return;
       }
       openResolvedUrl(() => getDocumentUrl(d.storagePath!), () => Alert.alert('Could not open', 'Please try again.'));
-    } else if (d.fileData) {
-      setViewing(d);
+    } else {
+      getDocumentFileData(d.id)
+        .then((data) => { if (data) setViewing({ ...d, fileData: data }); else Alert.alert('Could not open', 'This document has no file attached.'); })
+        .catch(() => Alert.alert('Could not open', 'Please try again.'));
     }
   };
 

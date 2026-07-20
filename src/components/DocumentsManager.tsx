@@ -7,7 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { decode } from 'base64-arraybuffer';
 import { Card, SectionTitle, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { listDocuments, createDocument, deleteDocument, uploadDocumentFile, getDocumentUrl, Document } from '../services/db';
+import { listDocuments, createDocument, deleteDocument, uploadDocumentFile, getDocumentUrl, getDocumentFileData, Document } from '../services/db';
 import { formatDate } from '../utils/format';
 
 type Pending = { uri: string; fileName: string; mimeType: string; size?: number; isImage: boolean };
@@ -101,8 +101,11 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
       } else {
         await WebBrowser.openBrowserAsync(url); // PDF / Word open in a viewer
       }
-    } else if (d.fileData) {
-      setViewing(d); // legacy inline image
+    } else {
+      // Legacy inline image: the list no longer carries the blob, so fetch it now.
+      const data = await getDocumentFileData(d.id).catch(() => undefined);
+      if (data) setViewing({ ...d, fileData: data });
+      else Alert.alert('Could not open', 'This document has no file attached.');
     }
   };
 
