@@ -312,7 +312,11 @@ export async function resolveMyIndividual(): Promise<{ individualId: string; rec
   // A member is linked to their record via individuals.profile_id.
   const { data: u } = await db().auth.getUser();
   if (u.user) {
-    const { data: own } = await db().from('individuals').select('*').eq('profile_id', u.user.id).maybeSingle();
+    // Excludes intake_data. This runs on nearly every resident action, and an
+    // applicant who submitted a full intake packet carries megabytes there —
+    // it would be re-downloaded constantly. Callers only read org_id, house_id,
+    // first_name and avatar_path.
+    const { data: own } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).eq('profile_id', u.user.id).maybeSingle();
     if (own) return { individualId: own.id, record: own };
   }
   const links = await listMyIndividuals();
