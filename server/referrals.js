@@ -63,13 +63,40 @@ referralsRouter.post('/claim', async (req, res) => {
   if (!referrer) return res.status(404).json({ error: "That referral code doesn't exist." });
   if (referrer.id === orgId) return res.status(400).json({ error: "You can't refer yourself." });
 
+  // An org can only ever be referred once. If one already exists, report the
+  // ACTUAL referrer — returning the newly-claimed name would tell the operator
+  // they were credited to someone who won't get the free month.
+  const { data: existing } = await admin
+    .from('referrals')
+    .select('referrer_org_id')
+    .eq('referred_org_id', orgId)
+    .maybeSingle();
+  if (existing) {
+    const { data: firstRef } = await admin
+      .from('organizations').select('name').eq('id', existing.referrer_org_id).maybeSingle();
+    return res.json({
+      ok: true,
+      alreadyReferred: true,
+      referrer: firstRef?.name ?? null,
+      message: 'This organization was already referred.',
+    });
+  }
+
   const { error } = await admin.from('referrals').insert({
     referrer_org_id: referrer.id,
     referred_org_id: orgId,
     referred_email: user.email || null,
   });
-  // Unique violation = this org was already referred; treat as a no-op.
-  if (error && !String(error.message || '').includes('duplicate')) {
+  if (error) {
+    // Lost a race to another claim — resolve who actually holds it.
+    if (String(error.message || '').toLowerCase().includes('duplicate')) {
+      const { data: raced } = await admin
+        .from('referrals').select('referrer_org_id').eq('referred_org_id', orgId).maybeSingle();
+      const { data: rOrg } = raced
+        ? await admin.from('organizations').select('name').eq('id', raced.referrer_org_id).maybeSingle()
+        : { data: null };
+      return res.json({ ok: true, alreadyReferred: true, referrer: rOrg?.name ?? null });
+    }
     return res.status(500).json({ error: 'Could not record that referral.' });
   }
   res.json({ ok: true, referrer: referrer.name });
