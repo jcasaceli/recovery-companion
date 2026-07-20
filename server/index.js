@@ -14,6 +14,7 @@ import { accountRouter } from './account.js';
 import { inviteRouter } from './invite.js';
 import { managersRouter } from './managers.js';
 import { intakeRouter } from './intake.js';
+import { formsRouter } from './forms.js';
 import { runRentReminders } from './reminders.js';
 import { initCampaigns, guardedRun } from './campaigns/index.js';
 import { sentTodayCount } from './campaigns/lib.js';
@@ -39,6 +40,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), strip
 // Public intake submissions carry a profile photo + signatures, so they need a
 // bigger body limit. Mount BEFORE the global 1mb parser so this parser wins.
 app.use('/api/intake', express.json({ limit: '12mb' }), intakeRouter);
+// Same reason: a resident signing from an emailed link posts signature data.
+app.use('/api/forms', express.json({ limit: '8mb' }), formsRouter);
 
 app.use(express.json({ limit: '1mb' }));
 

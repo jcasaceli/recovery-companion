@@ -10,6 +10,7 @@ import {
 } from '../services/db';
 import { BUILT_IN_TEMPLATES, FIELD_TYPE_LABELS } from '../content/formTemplates';
 import { formatDate } from '../utils/format';
+import { sendFormToResident } from '../services/formLinks';
 
 const TYPE_ORDER: FormFieldType[] = ['text', 'longtext', 'phone', 'address', 'date', 'yesno', 'number', 'ssn_last4', 'initial', 'heading', 'paragraph'];
 function slugify(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `field_${Math.floor(Date.now() % 100000)}`; }
@@ -110,6 +111,22 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
     }
   };
 
+  // Email this form to the resident so they can sign it in a browser — no app
+  // download. Most residents never create a login, so this is how they actually
+  // get their paperwork.
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const emailToResident = async (r: FormResponse) => {
+    setSendingId(r.id);
+    try {
+      const res = await sendFormToResident(r.id);
+      if (res.emailed) Alert.alert('Sent ✅', `${memberName || 'The resident'} was emailed a link to sign “${r.title}”.`);
+      else Alert.alert('No email on file', `Copy this link and text it to ${memberName || 'them'}:\n\n${res.link}`);
+      load();
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message ?? 'Try again.');
+    } finally { setSendingId(null); }
+  };
+
   const renderFormRow = (r: FormResponse) => (
     <TouchableOpacity key={r.id} style={styles.row} onPress={() => nav.navigate('FormFill', { id: r.id })} onLongPress={() => remove(r)}>
       <Text style={styles.icon}>📋</Text>
@@ -120,6 +137,11 @@ export function FormsManager({ individualId, orgId, memberName, hideHeader, hide
           {r.hiddenFromMember ? ` · hidden from ${memberName || 'resident'}` : ''}
         </Text>
       </View>
+      {r.status !== 'completed' ? (
+        <TouchableOpacity onPress={() => emailToResident(r)} hitSlop={8} style={{ marginRight: spacing.sm }} disabled={sendingId === r.id}>
+          <Text style={styles.sendLink}>{sendingId === r.id ? 'Sending…' : '✉️ Send'}</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity
         onPress={() => toggleHidden(r)}
         hitSlop={10}
@@ -304,6 +326,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm,
   },
   eyeOff: { backgroundColor: colors.border },
+  sendLink: { color: colors.primary, fontWeight: '700', fontSize: 13 },
   eyeText: { fontSize: 14 },
   icon: { fontSize: 20, marginRight: spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
