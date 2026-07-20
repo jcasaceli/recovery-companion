@@ -406,14 +406,32 @@ export async function recordMeetingCheckin(
   latitude?: number,
   longitude?: number,
   address?: string,
-) {
-  const { error } = await db().from('meeting_checkins').insert({
+  kind: 'in_person' | 'online' = 'in_person',
+  onlineMinutes?: number,
+): Promise<string | undefined> {
+  const { data, error } = await db().from('meeting_checkins').insert({
     individual_id: individualId,
     latitude: latitude ?? null,
     longitude: longitude ?? null,
     address: address ?? null,
+    kind,
+    online_minutes: onlineMinutes ?? null,
+  }).select('id').maybeSingle();
+  if (error) throw error;
+  return (data as any)?.id;
+}
+
+/** Resident: confirm they're still at the meeting ~45 min after checking in.
+ *  The distance is computed in the database from the original check-in, so the
+ *  client can't claim it matched. Within 300m earns the confirmed badge. */
+export async function verifyMeetingCheckin(
+  checkinId: string, latitude: number, longitude: number,
+): Promise<{ confirmed: boolean; distance_m: number; minutes: number }> {
+  const { data, error } = await db().rpc('verify_meeting_checkin', {
+    p_id: checkinId, p_lat: latitude, p_lng: longitude,
   });
   if (error) throw error;
+  return data as any;
 }
 
 // ── Notification preferences (facilitator/manager) ───────────────────────────
@@ -1612,6 +1630,10 @@ export async function listMeetingCheckins(individualId: string, sinceISO?: strin
     longitude: r.longitude ?? undefined,
     address: r.address ?? undefined,
     createdAt: r.created_at,
+    kind: (r.kind ?? 'in_person') as 'in_person' | 'online',
+    onlineMinutes: r.online_minutes ?? undefined,
+    verifiedAt: r.verified_at ?? undefined,
+    verifyDistanceM: r.verify_distance_m ?? undefined,
   }));
 }
 

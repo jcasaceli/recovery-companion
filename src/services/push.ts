@@ -144,6 +144,37 @@ export function describeAudience(audiences: NotifyAudience[]): string {
   return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
 }
 
+// ── Meeting confirmation nudge (local, one-shot 45 minutes after check-in) ───
+const MEETING_VERIFY_PREFIX = 'meeting-verify-';
+
+/** Ask the resident to confirm they're still at the meeting, 45 minutes after
+ *  they checked in. Local (not push) so it works without a server round-trip;
+ *  the Home screen also shows a prompt card in case notifications are off. */
+export async function scheduleMeetingVerify(checkinId: string, minutes = 45): Promise<boolean> {
+  if (Platform.OS === 'web') return false;   // no local scheduling on web
+  try {
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let status = existing;
+    if (existing !== 'granted') status = (await Notifications.requestPermissionsAsync()).status;
+    if (status !== 'granted') return false;
+    await Notifications.scheduleNotificationAsync({
+      identifier: MEETING_VERIFY_PREFIX + checkinId,
+      content: {
+        title: 'Still at your meeting?',
+        body: 'Tap to confirm you\'re still there — it adds a confirmed badge to your attendance.',
+        data: { checkinId },
+      },
+      trigger: { seconds: Math.max(60, minutes * 60) } as any,
+    });
+    return true;
+  } catch { return false; }
+}
+
+export async function cancelMeetingVerify(checkinId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try { await Notifications.cancelScheduledNotificationAsync(MEETING_VERIFY_PREFIX + checkinId); } catch {}
+}
+
 // ── Nightly review reminder (local, repeating daily notification) ────────────
 const NIGHTLY_ID = 'nightly-review-reminder';
 

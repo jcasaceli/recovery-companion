@@ -1021,8 +1021,22 @@ export function ClientProfileScreen() {
         {showMeetings
           ? checkins.map((c) => (
               <View key={c.id} style={styles.checkinRow}>
-                <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
-                <Text style={typography.caption}>{formatDateTime(c.createdAt)}</Text>
+                <Text style={typography.body}>
+                  {c.kind === 'online' ? '💻 ' : '📍 '}
+                  {c.kind === 'online'
+                    ? `Online meeting${c.onlineMinutes ? ` · ${c.onlineMinutes} min` : ''}`
+                    : (c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared'))}
+                </Text>
+                <Text style={typography.caption}>
+                  {formatDateTime(c.createdAt)}
+                  {/* Only in-person double check-ins are evidence. Online is app-open
+                      time, which proves nothing about attendance — say so plainly. */}
+                  {c.kind === 'online'
+                    ? ' · self-reported (not verified)'
+                    : c.verifiedAt
+                      ? ` · ✅ location confirmed${c.verifyDistanceM != null ? ` (${c.verifyDistanceM}m)` : ''}`
+                      : ' · not confirmed'}
+                </Text>
               </View>
             ))
           : null}

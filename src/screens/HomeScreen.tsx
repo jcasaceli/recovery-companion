@@ -5,8 +5,8 @@ import { DateField } from '../components/PickerFields';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
-import { notifyCareTeam, notifyCare } from '../services/push';
-import { recordMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName, getMyMedications, setMyMedications } from '../services/db';
+import { notifyCareTeam, notifyCare, scheduleMeetingVerify, cancelMeetingVerify } from '../services/push';
+import { recordMeetingCheckin, verifyMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName, getMyMedications, setMyMedications } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
 import { colors, spacing, radius, typography, shadow } from '../theme';
@@ -40,6 +40,7 @@ export function HomeScreen() {
   const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne.id || '');
   const [meds, setMeds] = useState<string[]>([]);
   const [medInput, setMedInput] = useState('');
+  const [onlineUrl, setOnlineUrl] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   // Residents maintain their own medication list; staff see the same list on the
   // client profile. set_my_medications only ever writes this one column.
@@ -164,6 +165,13 @@ export function HomeScreen() {
   };
 
   const sober = lovedOne.sobrietyDate ? daysSince(lovedOne.sobrietyDate) : null;
+  // Check-ins ready to confirm: in person, with location, not yet confirmed,
+  // and inside the same 30–180 minute window the database enforces.
+  const pendingConfirm = myCheckins.filter((c: any) => {
+    if (c.kind === 'online' || c.verifiedAt || c.latitude == null) return false;
+    const mins = (Date.now() - new Date(c.createdAt).getTime()) / 60000;
+    return mins >= 30 && mins <= 180;
+  });
   // Re-render every second so the live recovery counter ticks.
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -198,6 +206,60 @@ export function HomeScreen() {
     );
   };
 
+  // Online meetings (Zoom etc.). We can only observe that the app stayed open,
+  // which is NOT proof of attendance — so these are logged as self-reported and
+  // never earn the confirmed badge. 10 minutes is the minimum to count.
+  const ONLINE_MIN_MINUTES = 10;
+  const [onlineStart, setOnlineStart] = useState<number | null>(null);
+
+  const startOnlineMeeting = async () => {
+    const url = (onlineUrl || '').trim();
+    if (!url) { Alert.alert('Add the meeting link', 'Paste the Zoom (or other) link first.'); return; }
+    setOnlineStart(Date.now());
+    const full = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    Linking.openURL(full).catch(() => Alert.alert('Could not open that link', 'Check the meeting link and try again.'));
+  };
+
+  const finishOnlineMeeting = async () => {
+    if (!onlineStart) return;
+    const mins = Math.floor((Date.now() - onlineStart) / 60000);
+    if (mins < ONLINE_MIN_MINUTES) {
+      Alert.alert(
+        'Not long enough yet',
+        `You've been in the meeting about ${mins} minute${mins === 1 ? '' : 's'}. It logs automatically once you reach ${ONLINE_MIN_MINUTES}.`,
+      );
+      return;
+    }
+    try {
+      if (connected) {
+        await recordMeetingCheckin(lovedOne.id, undefined, undefined, 'Online meeting', 'online', mins);
+        loadCheckins();
+        notifyCare(lovedOne.id, 'Online meeting', `${lovedOne.firstName} attended an online meeting (${mins} min, self-reported).`, 'activity');
+      }
+      setOnlineStart(null);
+      setOnlineUrl('');
+      Alert.alert('Logged ✅', `${mins} minutes recorded. Online meetings are logged as self-reported — your house staff can see it.`);
+    } catch (e: any) {
+      Alert.alert('Could not log it', e?.message ?? 'Try again.');
+    }
+  };
+
+  // The 45-minute confirmation: prove they're still at the same place.
+  const confirmStillThere = async (c: any) => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Location needed', 'Confirming needs location so we can check you\'re still at the meeting.'); return; }
+      const pos = await Location.getCurrentPositionAsync({});
+      const r = await verifyMeetingCheckin(c.id, pos.coords.latitude, pos.coords.longitude);
+      cancelMeetingVerify(c.id).catch(() => {});
+      loadCheckins();
+      if (r.confirmed) Alert.alert('Confirmed ✅', `You're still at the meeting (${r.distance_m}m away after ${r.minutes} min). Your attendance now shows a confirmed badge.`);
+      else Alert.alert('Too far away', `You appear to be ${r.distance_m}m from where you checked in, so this one stays unconfirmed.`);
+    } catch (e: any) {
+      Alert.alert('Could not confirm', e?.message ?? 'Try again.');
+    }
+  };
+
   const meetingCheckIn = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -213,7 +275,9 @@ export function HomeScreen() {
         } catch {}
       }
       if (connected) {
-        await recordMeetingCheckin(lovedOne.id, lat, lng, address);
+        const cid = await recordMeetingCheckin(lovedOne.id, lat, lng, address);
+        // Nudge them ~45 min in to confirm they're still there (earns the badge).
+        if (cid && lat != null && lng != null) scheduleMeetingVerify(cid).catch(() => {});
         loadCheckins();
         notifyCare(lovedOne.id, 'Meeting check-in', `${lovedOne.firstName} checked in at a meeting${address ? ` (${address})` : ''}.`, 'activity');
         Alert.alert("You're checked in ✅", address ? `Logged at ${address}. Your facilitator can see it.` : 'Your meeting check-in was logged for your facilitator.');
@@ -349,6 +413,52 @@ export function HomeScreen() {
         </TouchableOpacity>
       ) : null}
 
+      {/* Online meetings — honestly labelled: we can only see the app was open. */}
+      {!isFacilitator ? (
+        <Card>
+          <Text style={typography.h3}>Online meeting</Text>
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+            {onlineStart
+              ? 'Come back and tap “I finished” when the meeting ends.'
+              : `Paste a Zoom or other meeting link. It logs after ${ONLINE_MIN_MINUTES} minutes as self-reported attendance.`}
+          </Text>
+          {!onlineStart ? (
+            <>
+              <TextInput
+                style={styles.medInput}
+                value={onlineUrl}
+                onChangeText={setOnlineUrl}
+                placeholder="https://zoom.us/j/…"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+              <View style={{ height: spacing.sm }} />
+              <Button title="Join online meeting" onPress={startOnlineMeeting} disabled={!onlineUrl.trim()} />
+            </>
+          ) : (
+            <Button title="I finished the meeting" onPress={finishOnlineMeeting} />
+          )}
+        </Card>
+      ) : null}
+
+      {/* Anything waiting on the 45-minute confirmation */}
+      {!isFacilitator && pendingConfirm.length ? (
+        <Card>
+          <Text style={typography.h3}>Confirm you're still there</Text>
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+            Confirming from the same place adds a confirmed badge to your attendance.
+          </Text>
+          {pendingConfirm.map((c) => (
+            <View key={c.id} style={{ marginBottom: spacing.sm }}>
+              <Text style={typography.body}>📍 {c.address || 'Your meeting'}</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Checked in {formatDate(c.createdAt)}</Text>
+              <Button title="I'm still at the meeting" onPress={() => confirmStillThere(c)} />
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
       {/* Member's own meeting check-in history */}
       {!isFacilitator ? (
         <Card>
@@ -373,8 +483,16 @@ export function HomeScreen() {
                 {myCheckins.map((c) => (
                   <SwipeRow key={c.id} onDelete={() => confirmDeleteCheckin(c)}>
                     <View style={styles.checkinRow}>
-                      <Text style={typography.body}>📍 {c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared')}</Text>
-                      <Text style={typography.caption}>{formatDate(c.createdAt)}</Text>
+                      <Text style={typography.body}>
+                        {c.kind === 'online' ? '💻 ' : '📍 '}
+                        {c.kind === 'online'
+                          ? `Online meeting${c.onlineMinutes ? ` · ${c.onlineMinutes} min` : ''}`
+                          : (c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared'))}
+                      </Text>
+                      <Text style={typography.caption}>
+                        {formatDate(c.createdAt)}
+                        {c.kind === 'online' ? ' · self-reported' : c.verifiedAt ? ' · ✅ location confirmed' : ''}
+                      </Text>
                     </View>
                   </SwipeRow>
                 ))}
