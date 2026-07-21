@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { DateField } from '../components/PickerFields';
 import { SignaturePad, SignatureView } from '../components/SignaturePad';
-import { getFormResponse, submitFormResponse, getMyOrg, FormResponse, FormField } from '../services/db';
+import { getFormResponse, submitFormResponse, getMyOrg, getOrgBrandingById, OrgBranding, FormResponse, FormField } from '../services/db';
 import { printBrandedForm } from '../utils/printForm';
 import { Platform } from 'react-native';
 import { formatDateTime } from '../utils/format';
@@ -28,21 +28,22 @@ export function FormFillScreen() {
   const [name, setName] = useState('');
   const [paths, setPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [org, setOrg] = useState<any>(null);
+  const [branding, setBranding] = useState<OrgBranding | null>(null);
 
   useEffect(() => {
     getFormResponse(id).then((f) => {
-      if (f) { setForm(f); setAnswers(f.answers || {}); }
+      if (f) {
+        setForm(f); setAnswers(f.answers || {});
+        // The home's logo/contact — readable by this org's staff AND residents,
+        // so both see the branding on the form they're viewing.
+        if (f.orgId) getOrgBrandingById(f.orgId).then(setBranding).catch(() => {});
+      }
     }).catch(() => {});
-    getMyOrg().then(setOrg).catch(() => {});   // for branded printing (staff only)
   }, [id]);
 
   const printForm = () => {
     if (!form) return;
-    const ok = printBrandedForm(
-      { name: org?.name, logoUrl: org?.logo_url, address: org?.address, phone: org?.contact_phone, email: org?.contact_email },
-      form,
-    );
+    const ok = printBrandedForm(branding || {}, form);
     if (!ok) Alert.alert('Printing on the web', 'Open this resident on the web app (app.soberlivingcompanion.com) to print a branded copy. In-app printing on phones is coming in an update.');
   };
 
@@ -73,6 +74,18 @@ export function FormFillScreen() {
 
   return (
     <Screen edges={[]}>
+      {branding?.logoUrl ? (
+        <View style={styles.brandHeader}>
+          <Image source={{ uri: branding.logoUrl }} style={styles.brandLogo} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.brandName}>{branding.name}</Text>
+            {branding.address ? <Text style={styles.brandLine}>{branding.address}</Text> : null}
+            {(branding.phone || branding.email) ? (
+              <Text style={styles.brandLine}>{[branding.phone, branding.email].filter(Boolean).join('  ·  ')}</Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
       <ScreenTitle title={form.title} subtitle={done ? 'Completed' : 'Please complete and sign'} />
 
       <Card>
@@ -170,6 +183,10 @@ function FieldInput({ field, value, onChange, disabled }: { field: FormField; va
 }
 
 const styles = StyleSheet.create({
+  brandHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  brandLogo: { width: 56, height: 56, borderRadius: 10 },
+  brandName: { ...typography.h3 },
+  brandLine: { ...typography.caption },
   label: { ...typography.bodySecondary, fontWeight: '600', marginBottom: spacing.xs },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary },
   initial: { alignSelf: 'flex-start', minWidth: 96, letterSpacing: 4, fontWeight: '700' },

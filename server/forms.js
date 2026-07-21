@@ -146,7 +146,7 @@ formsRouter.get('/public/:token', async (req, res) => {
   if (!form) return res.status(404).json({ error: 'This link is no longer valid.' });
 
   const { data: org } = await admin
-    .from('organizations').select('name').eq('id', form.org_id).maybeSingle();
+    .from('organizations').select('name, logo_url, address, contact_phone, contact_email').eq('id', form.org_id).maybeSingle();
   const { data: person } = await admin
     .from('individuals').select('first_name').eq('id', form.individual_id).maybeSingle();
 
@@ -159,6 +159,10 @@ formsRouter.get('/public/:token', async (req, res) => {
     signedAt: form.signed_at,
     orgName: org?.name || 'Your sober living',
     firstName: person?.first_name || '',
+    logoUrl: org?.logo_url || '',
+    address: org?.address || '',
+    phone: org?.contact_phone || '',
+    email: org?.contact_email || '',
   });
 });
 

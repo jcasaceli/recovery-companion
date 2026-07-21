@@ -1000,6 +1000,7 @@ export interface FormResponse {
   signedAt?: string;
   signedIp?: string;
   hiddenFromMember?: boolean;
+  orgId?: string;
   createdAt: string;
 }
 
@@ -1018,6 +1019,7 @@ function mapFormResponse(r: any): FormResponse {
     signaturePaths: r.signature_paths ?? undefined, signerName: r.signer_name ?? undefined,
     signedAt: r.signed_at ?? undefined, signedIp: r.signed_ip ?? undefined, createdAt: r.created_at,
     hiddenFromMember: r.hidden_from_member ?? false,
+    orgId: r.org_id ?? undefined,
   };
 }
 
@@ -2071,6 +2073,27 @@ export async function getMyOrg() {
 
 /** Owner/manager: set the home's branding — logo (data URL), address, phone,
  *  and email — shown on printed forms like the Guest Agreement. */
+export interface OrgBranding { name?: string; logoUrl?: string; address?: string; phone?: string; email?: string }
+
+/** Branding for a given org — readable by that org's staff and residents.
+ *  Used to show the home's logo on a form the resident is viewing. */
+export async function getOrgBrandingById(orgId: string): Promise<OrgBranding | null> {
+  if (!orgId) return null;
+  const { data } = await db()
+    .from('organizations')
+    .select('name, logo_url, address, contact_phone, contact_email')
+    .eq('id', orgId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    name: (data as any).name ?? undefined,
+    logoUrl: (data as any).logo_url ?? undefined,
+    address: (data as any).address ?? undefined,
+    phone: (data as any).contact_phone ?? undefined,
+    email: (data as any).contact_email ?? undefined,
+  };
+}
+
 export async function setOrgBranding(
   orgId: string,
   input: { logoUrl?: string; address?: string; phone?: string; email?: string },
