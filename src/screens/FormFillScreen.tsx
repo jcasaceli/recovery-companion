@@ -5,7 +5,9 @@ import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { DateField } from '../components/PickerFields';
 import { SignaturePad, SignatureView } from '../components/SignaturePad';
-import { getFormResponse, submitFormResponse, FormResponse, FormField } from '../services/db';
+import { getFormResponse, submitFormResponse, getMyOrg, FormResponse, FormField } from '../services/db';
+import { printBrandedForm } from '../utils/printForm';
+import { Platform } from 'react-native';
 import { formatDateTime } from '../utils/format';
 
 async function fetchIp(): Promise<string | undefined> {
@@ -26,12 +28,23 @@ export function FormFillScreen() {
   const [name, setName] = useState('');
   const [paths, setPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [org, setOrg] = useState<any>(null);
 
   useEffect(() => {
     getFormResponse(id).then((f) => {
       if (f) { setForm(f); setAnswers(f.answers || {}); }
     }).catch(() => {});
+    getMyOrg().then(setOrg).catch(() => {});   // for branded printing (staff only)
   }, [id]);
+
+  const printForm = () => {
+    if (!form) return;
+    const ok = printBrandedForm(
+      { name: org?.name, logoUrl: org?.logo_url, address: org?.address, phone: org?.contact_phone, email: org?.contact_email },
+      form,
+    );
+    if (!ok) Alert.alert('Printing on the web', 'Open this resident on the web app (app.soberlivingcompanion.com) to print a branded copy. In-app printing on phones is coming in an update.');
+  };
 
   const set = (k: string, v: any) => setAnswers((a) => ({ ...a, [k]: v }));
 
@@ -83,6 +96,8 @@ export function FormFillScreen() {
           <Text style={[typography.caption, { marginTop: spacing.sm }]}>Signed by {form.signerName || 'resident'}</Text>
           {form.signedAt ? <Text style={typography.caption}>{formatDateTime(form.signedAt)}</Text> : null}
           {form.signedIp ? <Text style={typography.caption}>IP {form.signedIp}</Text> : null}
+          <View style={{ height: spacing.sm }} />
+          <Button title="🖨️  Print with our logo" variant="secondary" onPress={printForm} />
         </Card>
       ) : (
         <Card>

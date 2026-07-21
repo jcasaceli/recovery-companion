@@ -2069,6 +2069,22 @@ export async function getMyOrg() {
   return active || orgs[0];
 }
 
+/** Owner/manager: set the home's branding — logo (data URL), address, phone,
+ *  and email — shown on printed forms like the Guest Agreement. */
+export async function setOrgBranding(
+  orgId: string,
+  input: { logoUrl?: string; address?: string; phone?: string; email?: string },
+): Promise<void> {
+  const { error } = await db().rpc('set_org_branding', {
+    p_org_id: orgId,
+    p_logo_url: input.logoUrl ?? '',
+    p_address: input.address ?? '',
+    p_phone: input.phone ?? '',
+    p_email: input.email ?? '',
+  });
+  if (error) throw error;
+}
+
 export async function setOrgPaymentHandles(
   orgId: string,
   cashapp: string,

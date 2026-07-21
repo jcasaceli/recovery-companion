@@ -1,0 +1,100 @@
+/**
+ * Branded, printable copy of a completed form (e.g. a Guest Agreement an
+ * operator prints as proof of residence). Renders the home's logo, name,
+ * address, and contact info in a header, then the form's questions, answers,
+ * and signature — and opens the browser print dialog.
+ *
+ * Web only for now: it uses window.open + window.print. On native this returns
+ * false so callers can fall back (a native PDF/share path comes with a build).
+ */
+import { Platform } from 'react-native';
+import type { FormField, FormResponse } from '../services/db';
+
+export interface OrgBranding {
+  name?: string;
+  logoUrl?: string;      // data URL or public URL
+  address?: string;
+  phone?: string;
+  email?: string;
+}
+
+function esc(s: any): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fieldRowsHtml(fields: FormField[], answers: Record<string, any>): string {
+  const out: string[] = [];
+  for (const f of fields) {
+    if (f.type === 'heading') { out.push(`<h2>${esc(f.label)}</h2>`); continue; }
+    if (f.type === 'paragraph') { out.push(`<p class="para">${esc(f.label)}</p>`); continue; }
+    if (f.type === 'signature') continue; // rendered separately at the end
+    const v = answers?.[f.key];
+    if (f.type === 'initial') {
+      out.push(`<div class="row"><span class="lbl">${esc(f.label)}</span><span class="val ini">${esc(v || '')}</span></div>`);
+      continue;
+    }
+    const val = f.type === 'yesno' ? (v === true || v === 'Yes' ? 'Yes' : v === false || v === 'No' ? 'No' : '') : v;
+    out.push(`<div class="row"><span class="lbl">${esc(f.label)}</span><span class="val">${esc(val ?? '')}</span></div>`);
+  }
+  return out.join('\n');
+}
+
+/** Returns false if printing isn't available (native). */
+export function printBrandedForm(branding: OrgBranding, form: FormResponse): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  const g: any = globalThis;
+  const win = g.open('', '_blank');
+  if (!win) return false;
+
+  const sigPath = (form.signaturePaths && form.signaturePaths.length) ? form.signaturePaths[0] : '';
+  const signedLine = form.status === 'completed'
+    ? `Signed by <strong>${esc(form.signerName || '')}</strong>${form.signedAt ? ' on ' + esc(new Date(form.signedAt).toLocaleDateString()) : ''}`
+    : 'Not yet signed';
+
+  const contactBits = [branding.address, branding.phone, branding.email].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(form.title)} — ${esc(branding.name || '')}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #1f2430; margin: 0; padding: 32px 40px; font-size: 13.5px; line-height: 1.5; }
+  .hd { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #2F6B5F; padding-bottom: 16px; margin-bottom: 8px; }
+  .hd img { width: 68px; height: 68px; object-fit: contain; border-radius: 10px; }
+  .hd .org { font-size: 20px; font-weight: 800; color: #2F6B5F; }
+  .hd .contact { color: #555; font-size: 12px; margin-top: 3px; }
+  h1.title { font-size: 17px; margin: 18px 0 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 14px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; color: #2F6B5F; }
+  .para { color: #333; margin: 6px 0; }
+  .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #eee; }
+  .lbl { flex: 1; color: #555; }
+  .val { flex: 1.3; font-weight: 600; text-align: right; }
+  .val.ini { max-width: 90px; letter-spacing: 2px; }
+  .sig { margin-top: 26px; border-top: 1px solid #ddd; padding-top: 14px; }
+  .sig img { max-height: 90px; max-width: 320px; display: block; margin: 6px 0; }
+  .foot { margin-top: 24px; color: #999; font-size: 11px; text-align: center; }
+  @media print { body { padding: 0.5in; } .noprint { display: none; } }
+  .btn { background:#2F6B5F;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer; }
+</style></head>
+<body>
+  <div class="noprint" style="text-align:right;margin-bottom:10px"><button class="btn" onclick="window.print()">🖨️ Print</button></div>
+  <div class="hd">
+    ${branding.logoUrl ? `<img src="${esc(branding.logoUrl)}" alt="">` : ''}
+    <div><div class="org">${esc(branding.name || '')}</div>${contactBits ? `<div class="contact">${contactBits}</div>` : ''}</div>
+  </div>
+  <h1 class="title">${esc(form.title)}</h1>
+  <div class="meta">${signedLine}</div>
+  ${fieldRowsHtml(form.fields || [], form.answers || {})}
+  <div class="sig">
+    <div class="lbl">Signature</div>
+    ${sigPath ? `<img src="${esc(sigPath)}" alt="signature">` : '<div style="height:40px;border-bottom:1px solid #333;max-width:320px"></div>'}
+    <div class="meta">${esc(form.signerName || '')}${form.signedAt ? ' · ' + esc(new Date(form.signedAt).toLocaleDateString()) : ''}</div>
+  </div>
+  <div class="foot">Generated by Sober Living Companion</div>
+  <script>window.onload = function(){ setTimeout(function(){ try{ window.print(); }catch(e){} }, 350); };</script>
+</body></html>`;
+
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  return true;
+}

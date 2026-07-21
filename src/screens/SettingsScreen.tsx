@@ -6,7 +6,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, startConnectExisting, getConnectExistingUrl, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, setOrgBranding, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
 import { pickPhoto, readFileBytes } from '../utils/attachments';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
@@ -53,6 +53,11 @@ export function SettingsScreen() {
 
   // Owner vs house manager: the owner is the profile that created the org.
   const [isOwner, setIsOwner] = useState(false);
+  const [brandLogo, setBrandLogo] = useState('');
+  const [brandAddress, setBrandAddress] = useState('');
+  const [brandPhone, setBrandPhone] = useState('');
+  const [brandEmail, setBrandEmail] = useState('');
+  const [brandBusy, setBrandBusy] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [managers, setManagers] = useState<Manager[]>([]);
   const [owners, setOwners] = useState<Manager[]>([]);
@@ -91,6 +96,33 @@ export function SettingsScreen() {
       setAvatarUrl(url);
     } catch (e: any) { Alert.alert('Could not update photo', e?.message ?? 'Try again.'); }
     finally { setAvatarBusy(false); }
+  };
+  // Branding: logo is stored as a compact data URL so it prints reliably.
+  const pickLogo = async () => {
+    const f = await pickPhoto('library');
+    if (!f) return;
+    setBrandBusy(true);
+    try {
+      const bytes = await readFileBytes(f.uri);
+      const u8 = new Uint8Array(bytes);
+      // Chunked base64 — spreading a large byte array into fromCharCode overflows
+      // the call stack on real logos.
+      let bin = '';
+      for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, Array.from(u8.subarray(i, i + 0x8000)) as any);
+      const b64 = (globalThis as any).btoa ? (globalThis as any).btoa(bin) : Buffer.from(bytes).toString('base64');
+      if (b64.length > 700000) { Alert.alert('Logo too large', 'Please use a smaller image (under ~500 KB).'); return; }
+      setBrandLogo(`data:${f.mimeType || 'image/png'};base64,${b64}`);
+    } catch (e: any) { Alert.alert('Could not load logo', e?.message ?? 'Try again.'); }
+    finally { setBrandBusy(false); }
+  };
+  const saveBranding = async () => {
+    if (!orgId) return;
+    setBrandBusy(true);
+    try {
+      await setOrgBranding(orgId, { logoUrl: brandLogo, address: brandAddress.trim(), phone: brandPhone.trim(), email: brandEmail.trim() });
+      Alert.alert('Saved ✅', 'Your logo and contact info will appear on forms you print.');
+    } catch (e: any) { Alert.alert('Could not save branding', e?.message ?? 'Try again.'); }
+    finally { setBrandBusy(false); }
   };
   const saveName = async () => {
     if (!nameInput.trim()) return;
@@ -133,6 +165,7 @@ export function SettingsScreen() {
       getMyOrg().then((o: any) => {
         if (o) {
           setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setVenmo(o.venmo_tag ?? ''); setPaymentLink(o.payment_link ?? ''); setOrgName(o.name ?? '');
+          setBrandLogo(o.logo_url ?? ''); setBrandAddress(o.address ?? ''); setBrandPhone(o.contact_phone ?? ''); setBrandEmail(o.contact_email ?? '');
           // Ownership comes from org_members.is_owner (see loadManagers) — NOT
           // organizations.created_by, which only ever matches the founder and
           // would make co-owners look like plain managers.
@@ -397,6 +430,30 @@ export function SettingsScreen() {
 
       {isFacilitator ? (
         <>
+          <SectionTitle>Branding &amp; printed forms</SectionTitle>
+          <Card>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+              Add your logo and contact info. They appear at the top of forms you print (like the Guest Agreement) as proof of residence.
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm }}>
+              {brandLogo ? (
+                <Image source={{ uri: brandLogo }} style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: colors.surfaceAlt }} />
+              ) : (
+                <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 22 }}>🏠</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={pickLogo} disabled={brandBusy}>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>{brandBusy ? 'Loading…' : brandLogo ? 'Change logo' : 'Upload logo'}</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} value={brandAddress} onChangeText={setBrandAddress} placeholder="Address (street, city, state, ZIP)" placeholderTextColor={colors.textMuted} />
+            <TextInput style={styles.input} value={brandPhone} onChangeText={setBrandPhone} placeholder="Contact phone" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+            <TextInput style={styles.input} value={brandEmail} onChangeText={setBrandEmail} placeholder="Contact email" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+            <View style={{ height: spacing.xs }} />
+            <Button title={brandBusy ? 'Saving…' : 'Save branding'} onPress={saveBranding} disabled={brandBusy} />
+          </Card>
+
           <SectionTitle>Payments</SectionTitle>
           {/* Stripe setup is owner-only — managers can do everything else here. */}
           {isOwner ? (
