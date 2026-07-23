@@ -43,6 +43,7 @@ export interface SignUpInput {
   phone?: string;
   verifyChannel: 'email' | 'sms';
   orgName?: string;
+  houseName?: string;
 }
 
 interface AuthContextValue {

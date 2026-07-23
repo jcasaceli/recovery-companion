@@ -44,6 +44,7 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [channel] = useState<'email' | 'sms'>('email'); // verification is email-only
   const [orgName, setOrgName] = useState('');
+  const [houseName, setHouseName] = useState('');
 
   const run = async (fn: () => Promise<void>) => {
     setError('');
@@ -60,7 +61,7 @@ export function AuthScreen() {
 
   const doSignUp = () =>
     run(async () => {
-      const signedIn = await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined });
+      const signedIn = await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined, houseName: houseName || undefined });
       // With email confirmation off, signUp returns a session and
       // onAuthStateChange flips the app to signed-in automatically. If
       // confirmation is on, there's no session yet — send them to sign in.
@@ -122,7 +123,11 @@ export function AuthScreen() {
           <View>
             <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Your name" />
             {role === 'facilitator' ? (
-              <Field label="Sober living name (your first house)" value={orgName} onChange={setOrgName} placeholder="e.g. Brightwater Sober Living" />
+              <>
+                <Field label="Organization name" value={orgName} onChange={setOrgName} placeholder="e.g. All-In Recovery Homes" />
+                <Field label="House name" value={houseName} onChange={setHouseName} placeholder="e.g. Middletown House #1" />
+                <Text style={styles.hint}>Have more houses? Don’t worry — you can add more later in the app.</Text>
+              </>
             ) : null}
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
             <Field
@@ -230,6 +235,7 @@ const styles = StyleSheet.create({
   roleLabel: { ...typography.h3 },
   roleBlurb: { ...typography.caption, marginTop: 2 },
   fieldLabel: { ...typography.bodySecondary, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.xs },
+  hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
   input: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border },
   inputWrap: { position: 'relative', justifyContent: 'center' },
   inputWithIcon: { paddingRight: 48 },

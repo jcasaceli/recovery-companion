@@ -49,6 +49,8 @@ export interface SignUpInput {
   verifyChannel: 'email' | 'sms';
   /** Sober-living name (required for facilitators). */
   orgName?: string;
+  /** Name of the owner's first house, set at signup. Falls back to org name. */
+  houseName?: string;
 }
 
 /**
@@ -70,6 +72,7 @@ export async function signUp(input: SignUpInput) {
         phone: input.phone ?? null,
         verify_channel: input.verifyChannel,
         org_name: input.orgName ?? null,
+        house_name: input.houseName ?? null,
       },
     },
   });
