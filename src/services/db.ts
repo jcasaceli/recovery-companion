@@ -2213,6 +2213,15 @@ export async function recordPayment(p: {
   if (error) throw error;
 }
 
+/** Facilitator: change the date a recorded payment was made (and optionally
+ *  re-flag on-time). Handy when a cash payment is logged a few days later. */
+export async function updatePaymentDate(paymentId: string, paidAtISO: string, onTime?: boolean) {
+  const patch: any = { paid_at: paidAtISO };
+  if (onTime !== undefined) patch.on_time = onTime;
+  const { error } = await db().from('payments').update(patch).eq('id', paymentId);
+  if (error) throw error;
+}
+
 /** Facilitator: confirm a member-reported CashApp/Zelle payment. */
 export async function confirmPayment(paymentId: string) {
   const { error } = await db().from('payments').update({ status: 'paid' }).eq('id', paymentId);

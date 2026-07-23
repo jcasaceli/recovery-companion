@@ -8,6 +8,7 @@ import { colors, spacing, radius, typography, shadow } from '../theme';
 import * as dbApi from '../services/db';
 import { Payment, PaymentMethod } from '../types';
 import { formatDate } from '../utils/format';
+import { DateField } from '../components/PickerFields';
 import { useAppState } from '../state/store';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS, DEMO_PAY_STATUS, DEMO_PIE } from '../data/demo';
@@ -32,6 +33,7 @@ export function FacilitatorPaymentsScreen() {
   const [recordFor, setRecordFor] = useState<any | null>(null);
   const [rentFor, setRentFor] = useState<any | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editDatePay, setEditDatePay] = useState<Payment | null>(null);
   const { subscriptionActive, reloadCloud } = useAppState();
   const locked = !subscriptionActive;
 
@@ -192,11 +194,14 @@ export function FacilitatorPaymentsScreen() {
                         <View key={p.id} style={styles.histRow}>
                           <View style={{ flex: 1 }}>
                             <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
-                            <Text style={typography.caption}>
-                              {formatDate(p.paidAt)}
-                              {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                              {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
-                            </Text>
+                            <TouchableOpacity onPress={() => setEditDatePay(p)}>
+                              <Text style={typography.caption}>
+                                {formatDate(p.paidAt)}
+                                {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                                {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
+                                {'  ✎'}
+                              </Text>
+                            </TouchableOpacity>
                           </View>
                           {p.status === 'reported' ? (
                             <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
@@ -221,10 +226,13 @@ export function FacilitatorPaymentsScreen() {
             <Card key={p.id} style={styles.payRow}>
               <View style={{ flex: 1 }}>
                 <Text style={typography.body}>{p.memberName ?? 'Member'} · {money(p.amountCents)}</Text>
-                <Text style={typography.caption}>
-                  {METHOD_LABEL[p.method]} · {formatDate(p.paidAt)}
-                  {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                </Text>
+                <TouchableOpacity onPress={() => setEditDatePay(p)}>
+                  <Text style={typography.caption}>
+                    {METHOD_LABEL[p.method]} · {formatDate(p.paidAt)}
+                    {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                    {'  ✎'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </Card>
           ))
@@ -241,7 +249,46 @@ export function FacilitatorPaymentsScreen() {
         onClose={() => setRentFor(null)}
         onSaved={() => { setRentFor(null); load(); }}
       />
+      <EditDateModal
+        payment={editDatePay}
+        onClose={() => setEditDatePay(null)}
+        onSaved={() => { setEditDatePay(null); load(); }}
+      />
     </SafeAreaView>
+  );
+}
+
+function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null; onClose: () => void; onSaved: () => void }) {
+  const [date, setDate] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (payment) setDate((payment.paidAt || '').slice(0, 10)); }, [payment]);
+  if (!payment) return null;
+  const save = async () => {
+    if (!date) return;
+    setBusy(true);
+    try {
+      await dbApi.updatePaymentDate(payment.id, new Date(date + 'T12:00:00').toISOString());
+      onSaved();
+    } catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.modal}>
+          <Text style={typography.h3}>Change payment date</Text>
+          <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+            {money(payment.amountCents)} · {METHOD_LABEL[payment.method]}
+          </Text>
+          <DateField value={date} onChange={setDate} placeholder="Pick the date paid" />
+          <View style={{ height: spacing.sm }} />
+          <Button title={busy ? 'Saving…' : 'Save date'} onPress={save} disabled={busy} />
+          <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+            <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -298,10 +345,11 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
 function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [paidDate, setPaidDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (member) setAmount(member.monthly_rent_cents ? (member.monthly_rent_cents / 100).toFixed(2) : '');
+    if (member) { setAmount(member.monthly_rent_cents ? (member.monthly_rent_cents / 100).toFixed(2) : ''); setPaidDate(new Date().toISOString().slice(0, 10)); }
   }, [member]);
 
   if (!member) return null;
@@ -311,8 +359,8 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
     if (!cents) { Alert.alert('Enter an amount'); return; }
     setBusy(true);
     try {
-      const today = new Date().getDate();
-      const onTime = member.rent_due_day ? today <= member.rent_due_day : undefined;
+      const dayOfMonth = paidDate ? parseInt(paidDate.slice(8, 10), 10) : new Date().getDate();
+      const onTime = member.rent_due_day ? dayOfMonth <= member.rent_due_day : undefined;
       await dbApi.recordPayment({
         individualId: member.id,
         orgId: member.org_id,
@@ -320,6 +368,7 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
         method,
         onTime,
         periodMonth: currentPeriod(),
+        paidAt: paidDate ? new Date(paidDate + 'T12:00:00').toISOString() : undefined,
       });
       onSaved();
     } catch (e: any) {
@@ -345,6 +394,9 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.dateLbl}>Date paid</Text>
+          <DateField value={paidDate} onChange={setPaidDate} placeholder="Pick the date paid" />
+          <View style={{ height: spacing.sm }} />
           <Button title="Save payment" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
@@ -382,6 +434,7 @@ const styles = StyleSheet.create({
   dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },
   amtInput: { flex: 1, fontSize: 22, paddingVertical: spacing.sm, color: colors.textPrimary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
+  dateLbl: { fontWeight: '700', fontSize: 13, color: colors.textSecondary, marginTop: 6, marginBottom: 4 },
   chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginRight: spacing.sm, marginBottom: spacing.sm },
   chipActive: { backgroundColor: colors.primary },
   chipText: { fontSize: 13, color: colors.textSecondary },
