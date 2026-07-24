@@ -194,7 +194,15 @@ export async function getMyProfile() {
 // embedded signatures + photos). Pulling it into a list made an 8-resident
 // roster take 2.2s and time out to 0 residents under load. The full
 // application is fetched on demand when a profile is opened.
-const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,dues_enabled,ac_enabled,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+
+/** Fixed weekly add-on fees the owner/manager can toggle per resident. */
+export const WEEKLY_DUES_CENTS = 500;   // $5 house dues
+export const WEEKLY_AC_CENTS = 1000;    // $10 A/C fee
+/** A resident's effective weekly/period fee = base + whichever add-ons are on. */
+export function effectiveFeeCents(m: { monthly_rent_cents?: number | null; dues_enabled?: boolean; ac_enabled?: boolean }): number {
+  return (m.monthly_rent_cents || 0) + (m.dues_enabled ? WEEKLY_DUES_CENTS : 0) + (m.ac_enabled ? WEEKLY_AC_CENTS : 0);
+}
 
 export async function listFacilitatorIndividuals() {
   const { data, error } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
@@ -2159,19 +2167,21 @@ export async function updateClient(
 export async function setMemberRent(
   individualId: string,
   amountCents: number | null,
-  opts: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null } = null,
+  opts: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean } = null,
 ) {
-  const o = (typeof opts === 'object' && opts !== null) ? opts : { period: 'monthly' as const, dueDay: opts };
+  const o: any = (typeof opts === 'object' && opts !== null) ? opts : { period: 'monthly', dueDay: opts };
   const period = o.period ?? 'monthly';
-  const { error } = await db()
-    .from('individuals')
-    .update({
-      monthly_rent_cents: amountCents,
-      rent_period: period,
-      rent_due_day: period === 'monthly' ? (o.dueDay ?? null) : null,
-      rent_due_dow: period === 'weekly' ? (o.dueDow ?? null) : null,
-    })
-    .eq('id', individualId);
+  const patch: any = {
+    monthly_rent_cents: amountCents,
+    rent_period: period,
+    rent_due_day: period === 'monthly' ? (o.dueDay ?? null) : null,
+    rent_due_dow: period === 'weekly' ? (o.dueDow ?? null) : null,
+  };
+  // Only touch the add-on toggles when the caller passes them (so editing rent
+  // elsewhere doesn't silently reset dues/AC).
+  if (typeof o.duesEnabled === 'boolean') patch.dues_enabled = o.duesEnabled;
+  if (typeof o.acEnabled === 'boolean') patch.ac_enabled = o.acEnabled;
+  const { error } = await db().from('individuals').update(patch).eq('id', individualId);
   if (error) throw error;
 }
 
@@ -2280,7 +2290,7 @@ export async function getResidentContext() {
   if (!u.user) return null;
   const { data: ind } = await db()
     .from('individuals')
-    .select('id, org_id, monthly_rent_cents, rent_due_day, rent_period, rent_due_dow')
+    .select('id, org_id, monthly_rent_cents, rent_due_day, rent_period, rent_due_dow, dues_enabled, ac_enabled')
     .eq('profile_id', u.user.id)
     .maybeSingle();
   if (!ind) return null;
@@ -2292,7 +2302,11 @@ export async function getResidentContext() {
   return {
     individualId: ind.id,
     orgName: org?.name ?? undefined,
-    rentCents: ind.monthly_rent_cents ?? undefined,
+    // Bill the effective total (base + whichever add-ons are on).
+    rentCents: effectiveFeeCents(ind) || undefined,
+    baseRentCents: ind.monthly_rent_cents ?? undefined,
+    duesEnabled: !!ind.dues_enabled,
+    acEnabled: !!ind.ac_enabled,
     dueDay: ind.rent_due_day ?? undefined,
     rentPeriod: (ind.rent_period ?? 'monthly') as 'monthly' | 'weekly',
     rentDueDow: ind.rent_due_dow ?? undefined,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ActivityIndicator, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -293,12 +293,15 @@ function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null;
 
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DOW_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-/** "$185/wk · due Monday" or "$740 · due the 1st" for the roster line. */
+/** "$190/wk · due Monday" for the roster line — total includes any add-ons. */
 function feeLine(m: any): string {
-  if (!m?.monthly_rent_cents) return '';
-  const amt = money(m.monthly_rent_cents);
-  if (m.rent_period === 'weekly') return `${amt}/wk${m.rent_due_dow != null ? ` · due ${DOW_FULL[m.rent_due_dow]}` : ''}`;
-  return `${amt}${m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}`;
+  const total = dbApi.effectiveFeeCents(m);
+  if (!total) return '';
+  const amt = money(total);
+  const adds = [m.dues_enabled && 'dues', m.ac_enabled && 'A/C'].filter(Boolean).join(' + ');
+  const addNote = adds ? ` (incl. ${adds})` : '';
+  if (m.rent_period === 'weekly') return `${amt}/wk${m.rent_due_dow != null ? ` · due ${DOW_FULL[m.rent_due_dow]}` : ''}${addNote}`;
+  return `${amt}${m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}${addNote}`;
 }
 
 function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
@@ -306,6 +309,8 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
   const [period, setPeriod] = useState<'monthly' | 'weekly'>('monthly');
   const [dueDay, setDueDay] = useState('');
   const [dueDow, setDueDow] = useState<number | null>(null);
+  const [duesOn, setDuesOn] = useState(false);
+  const [acOn, setAcOn] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -314,20 +319,26 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
       setPeriod(member.rent_period === 'weekly' ? 'weekly' : 'monthly');
       setDueDay(member.rent_due_day ? String(member.rent_due_day) : '');
       setDueDow(member.rent_due_dow ?? null);
+      setDuesOn(!!member.dues_enabled);
+      setAcOn(!!member.ac_enabled);
     }
   }, [member]);
 
   if (!member) return null;
 
+  const baseCents = amount ? Math.round(parseFloat(amount) * 100) : 0;
+  const totalCents = baseCents + (duesOn ? dbApi.WEEKLY_DUES_CENTS : 0) + (acOn ? dbApi.WEEKLY_AC_CENTS : 0);
+
   const save = async () => {
     const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
     setBusy(true);
     try {
+      const addons = { duesEnabled: duesOn, acEnabled: acOn };
       if (period === 'weekly') {
-        await dbApi.setMemberRent(member.id, cents, { period: 'weekly', dueDow });
+        await dbApi.setMemberRent(member.id, cents, { period: 'weekly', dueDow, ...addons });
       } else {
         const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
-        await dbApi.setMemberRent(member.id, cents, { period: 'monthly', dueDay: day });
+        await dbApi.setMemberRent(member.id, cents, { period: 'monthly', dueDay: day, ...addons });
       }
       onSaved();
     } catch (e: any) {
@@ -376,6 +387,19 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
             </>
           )}
 
+          {/* Toggleable weekly add-ons */}
+          <View style={rentStyles.addRow}>
+            <Text style={rentStyles.addLabel}>House dues (+$5)</Text>
+            <Switch value={duesOn} onValueChange={setDuesOn} />
+          </View>
+          <View style={rentStyles.addRow}>
+            <Text style={rentStyles.addLabel}>A/C fee (+$10)</Text>
+            <Switch value={acOn} onValueChange={setAcOn} />
+          </View>
+          {(duesOn || acOn) && baseCents > 0 ? (
+            <Text style={rentStyles.total}>Weekly total: {money(totalCents)}{period === 'weekly' ? '/wk' : ''}</Text>
+          ) : null}
+
           <Button title="Save membership fee" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
@@ -397,6 +421,9 @@ const rentStyles = StyleSheet.create({
   dowChipOn: { borderColor: colors.primary, backgroundColor: colors.primary },
   dowTxt: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
   dowTxtOn: { color: '#fff' },
+  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.xs, marginTop: spacing.xs },
+  addLabel: { ...typography.body, fontWeight: '600' },
+  total: { ...typography.body, fontWeight: '800', color: colors.primary, marginTop: spacing.xs, marginBottom: spacing.sm },
 });
 
 function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
