@@ -194,7 +194,7 @@ export async function getMyProfile() {
 // embedded signatures + photos). Pulling it into a list made an 8-resident
 // roster take 2.2s and time out to 0 residents under load. The full
 // application is fetched on demand when a profile is opened.
-const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
 
 export async function listFacilitatorIndividuals() {
   const { data, error } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
@@ -2153,12 +2153,34 @@ export async function updateClient(
   if (error) throw error;
 }
 
-/** Facilitator: set a member's monthly rent + due day. */
-export async function setMemberRent(individualId: string, amountCents: number | null, dueDay: number | null) {
+/** Facilitator: set a member's membership fee. Monthly (due on a day 1–31) or
+ *  weekly (due on a weekday 0=Sun…6=Sat). `dueDay` as a bare number keeps the
+ *  old monthly calling convention working. */
+export async function setMemberRent(
+  individualId: string,
+  amountCents: number | null,
+  opts: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null } = null,
+) {
+  const o = (typeof opts === 'object' && opts !== null) ? opts : { period: 'monthly' as const, dueDay: opts };
+  const period = o.period ?? 'monthly';
   const { error } = await db()
     .from('individuals')
-    .update({ monthly_rent_cents: amountCents, rent_due_day: dueDay })
+    .update({
+      monthly_rent_cents: amountCents,
+      rent_period: period,
+      rent_due_day: period === 'monthly' ? (o.dueDay ?? null) : null,
+      rent_due_dow: period === 'weekly' ? (o.dueDow ?? null) : null,
+    })
     .eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Facilitator (owner): the org's one-time application/intake fee — on/off + amount. */
+export async function setOrgIntakeFee(orgId: string, enabled: boolean, amountCents: number | null) {
+  const { error } = await db()
+    .from('organizations')
+    .update({ intake_fee_enabled: enabled, intake_fee_cents: enabled ? amountCents : null })
+    .eq('id', orgId);
   if (error) throw error;
 }
 
@@ -2258,13 +2280,13 @@ export async function getResidentContext() {
   if (!u.user) return null;
   const { data: ind } = await db()
     .from('individuals')
-    .select('id, org_id, monthly_rent_cents, rent_due_day')
+    .select('id, org_id, monthly_rent_cents, rent_due_day, rent_period, rent_due_dow')
     .eq('profile_id', u.user.id)
     .maybeSingle();
   if (!ind) return null;
   const { data: org } = await db()
     .from('organizations')
-    .select('name, cashapp_tag, zelle_tag, venmo_tag, payment_link, stripe_account_id')
+    .select('name, cashapp_tag, zelle_tag, venmo_tag, payment_link, stripe_account_id, intake_fee_enabled, intake_fee_cents')
     .eq('id', ind.org_id)
     .maybeSingle();
   return {
@@ -2272,6 +2294,10 @@ export async function getResidentContext() {
     orgName: org?.name ?? undefined,
     rentCents: ind.monthly_rent_cents ?? undefined,
     dueDay: ind.rent_due_day ?? undefined,
+    rentPeriod: (ind.rent_period ?? 'monthly') as 'monthly' | 'weekly',
+    rentDueDow: ind.rent_due_dow ?? undefined,
+    intakeFeeEnabled: !!org?.intake_fee_enabled,
+    intakeFeeCents: org?.intake_fee_cents ?? undefined,
     cashapp: org?.cashapp_tag ?? undefined,
     zelle: org?.zelle_tag ?? undefined,
     venmo: org?.venmo_tag ?? undefined,

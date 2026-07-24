@@ -167,8 +167,7 @@ export function FacilitatorPaymentsScreen() {
                   <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
                     <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
                     <Text style={typography.caption}>
-                      Fee {money(m.monthly_rent_cents)}
-                      {m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}
+                      Fee {feeLine(m)}
                     </Text>
                     <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
                     <Text style={styles.expandHint}>
@@ -292,15 +291,29 @@ function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null;
   );
 }
 
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DOW_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** "$185/wk · due Monday" or "$740 · due the 1st" for the roster line. */
+function feeLine(m: any): string {
+  if (!m?.monthly_rent_cents) return '';
+  const amt = money(m.monthly_rent_cents);
+  if (m.rent_period === 'weekly') return `${amt}/wk${m.rent_due_dow != null ? ` · due ${DOW_FULL[m.rent_due_dow]}` : ''}`;
+  return `${amt}${m.rent_due_day ? ` · due the ${ordinal(m.rent_due_day)}` : ''}`;
+}
+
 function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState('');
+  const [period, setPeriod] = useState<'monthly' | 'weekly'>('monthly');
   const [dueDay, setDueDay] = useState('');
+  const [dueDow, setDueDow] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (member) {
       setAmount(member.monthly_rent_cents ? (member.monthly_rent_cents / 100).toFixed(2) : '');
+      setPeriod(member.rent_period === 'weekly' ? 'weekly' : 'monthly');
       setDueDay(member.rent_due_day ? String(member.rent_due_day) : '');
+      setDueDow(member.rent_due_dow ?? null);
     }
   }, [member]);
 
@@ -308,10 +321,14 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
 
   const save = async () => {
     const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
-    const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
     setBusy(true);
     try {
-      await dbApi.setMemberRent(member.id, cents, day);
+      if (period === 'weekly') {
+        await dbApi.setMemberRent(member.id, cents, { period: 'weekly', dueDow });
+      } else {
+        const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
+        await dbApi.setMemberRent(member.id, cents, { period: 'monthly', dueDay: day });
+      }
       onSaved();
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
@@ -325,13 +342,40 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
       <View style={styles.backdrop}>
         <View style={styles.modal}>
           <Text style={typography.h3}>Set membership fee · {member.first_name}</Text>
-          <Text style={[typography.caption, { marginTop: spacing.xs }]}>Monthly membership fee</Text>
+
+          {/* Weekly / Monthly toggle */}
+          <View style={rentStyles.segment}>
+            {(['weekly', 'monthly'] as const).map((p) => (
+              <TouchableOpacity key={p} onPress={() => setPeriod(p)} style={[rentStyles.segBtn, period === p && rentStyles.segBtnOn]}>
+                <Text style={[rentStyles.segTxt, period === p && rentStyles.segTxtOn]}>{p === 'weekly' ? 'Weekly' : 'Monthly'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[typography.caption, { marginTop: spacing.xs }]}>{period === 'weekly' ? 'Weekly membership fee' : 'Monthly membership fee'}</Text>
           <View style={styles.amtRow}>
             <Text style={styles.dollar}>$</Text>
             <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
           </View>
-          <Text style={[typography.caption]}>Due day of month (1–31)</Text>
-          <TextInput style={styles.dueInput} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+
+          {period === 'weekly' ? (
+            <>
+              <Text style={typography.caption}>Due each week on</Text>
+              <View style={rentStyles.dowRow}>
+                {DOW_LABELS.map((d, i) => (
+                  <TouchableOpacity key={d} onPress={() => setDueDow(i)} style={[rentStyles.dowChip, dueDow === i && rentStyles.dowChipOn]}>
+                    <Text style={[rentStyles.dowTxt, dueDow === i && rentStyles.dowTxtOn]}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={typography.caption}>Due day of month (1–31)</Text>
+              <TextInput style={styles.dueInput} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+            </>
+          )}
+
           <Button title="Save membership fee" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
@@ -341,6 +385,19 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
     </Modal>
   );
 }
+
+const rentStyles = StyleSheet.create({
+  segment: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4, marginTop: spacing.sm },
+  segBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
+  segBtnOn: { backgroundColor: colors.surface },
+  segTxt: { color: colors.textSecondary, fontWeight: '700' },
+  segTxtOn: { color: colors.primary },
+  dowRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.xs, marginBottom: spacing.sm },
+  dowChip: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  dowChipOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+  dowTxt: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  dowTxtOn: { color: '#fff' },
+});
 
 function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState('');

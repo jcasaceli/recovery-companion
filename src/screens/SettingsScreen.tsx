@@ -6,7 +6,7 @@ import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, startConnectExisting, getConnectExistingUrl, ConnectStatus } from '../services/payments';
-import { getMyOrg, setOrgPaymentHandles, setOrgBranding, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
+import { getMyOrg, setOrgPaymentHandles, setOrgBranding, setOrgIntakeFee, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
 import { pickPhoto, readFileBytes } from '../utils/attachments';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
@@ -48,6 +48,9 @@ export function SettingsScreen() {
   const [venmo, setVenmo] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [handlesSaved, setHandlesSaved] = useState(false);
+  const [intakeFeeOn, setIntakeFeeOn] = useState(false);
+  const [intakeFeeAmt, setIntakeFeeAmt] = useState('');
+  const [intakeFeeSaved, setIntakeFeeSaved] = useState(false);
   const [linkSaved, setLinkSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -124,6 +127,14 @@ export function SettingsScreen() {
     } catch (e: any) { Alert.alert('Could not save branding', e?.message ?? 'Try again.'); }
     finally { setBrandBusy(false); }
   };
+  const saveIntakeFee = async () => {
+    if (!orgId) return;
+    const cents = intakeFeeOn && intakeFeeAmt ? Math.round(parseFloat(intakeFeeAmt) * 100) : null;
+    try {
+      await setOrgIntakeFee(orgId, intakeFeeOn, cents);
+      setIntakeFeeSaved(true); setTimeout(() => setIntakeFeeSaved(false), 2500);
+    } catch (e: any) { Alert.alert('Could not save', e?.message ?? 'Try again.'); }
+  };
   const saveName = async () => {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -165,6 +176,7 @@ export function SettingsScreen() {
       getMyOrg().then((o: any) => {
         if (o) {
           setOrgId(o.id); setCashapp(o.cashapp_tag ?? ''); setZelle(o.zelle_tag ?? ''); setVenmo(o.venmo_tag ?? ''); setPaymentLink(o.payment_link ?? ''); setOrgName(o.name ?? '');
+          setIntakeFeeOn(!!o.intake_fee_enabled); setIntakeFeeAmt(o.intake_fee_cents ? (o.intake_fee_cents / 100).toFixed(2) : '');
           setBrandLogo(o.logo_url ?? ''); setBrandAddress(o.address ?? ''); setBrandPhone(o.contact_phone ?? ''); setBrandEmail(o.contact_email ?? '');
           // Ownership comes from org_members.is_owner (see loadManagers) — NOT
           // organizations.created_by, which only ever matches the founder and
@@ -494,6 +506,21 @@ export function SettingsScreen() {
             <Button title={handlesSaved ? 'Saved ✓' : 'Save CashApp / Zelle / Venmo'} variant="secondary" onPress={saveHandles} />
             {handlesSaved ? <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ Saved — members will see these on the Pay screen.</Text> : null}
           </Card>
+          {isOwner ? (
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[typography.body, { fontWeight: '600' }]}>Application / intake fee</Text>
+              <Switch value={intakeFeeOn} onValueChange={setIntakeFeeOn} />
+            </View>
+            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
+              A one-time fee for new residents. When on, set the amount below.
+            </Text>
+            {intakeFeeOn ? (
+              <TextInput style={styles.input} value={intakeFeeAmt} onChangeText={setIntakeFeeAmt} keyboardType="decimal-pad" placeholder="Amount, e.g. 200.00" placeholderTextColor={colors.textMuted} />
+            ) : null}
+            <Button title={intakeFeeSaved ? 'Saved ✓' : 'Save intake fee'} variant="secondary" onPress={saveIntakeFee} />
+          </Card>
+          ) : null}
 
           <Card>
             <Text style={[typography.body, { fontWeight: '600' }]}>Your own payment link</Text>
