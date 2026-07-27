@@ -347,6 +347,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           email: c.email ?? undefined,
           houseName: c.house_name ?? undefined,
           houseId: c.house_id ?? undefined,
+          bedLabel: c.bed_label ?? undefined,
           programName: c.program_name ?? undefined,
           status: (c.status ?? 'in_care') as 'in_care' | 'completed',
           levelOfCare: c.level_of_care ?? undefined,

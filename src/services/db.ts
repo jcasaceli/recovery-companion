@@ -2185,6 +2185,17 @@ export async function setMemberRent(
   if (error) throw error;
 }
 
+/** Bed board: move a resident into a house/bed (or clear it with nulls). Sets
+ *  both house_id and house_name so the roster and board stay in sync. */
+export async function assignBed(individualId: string, o: { houseId?: string | null; houseName?: string | null; bedLabel?: string | null }) {
+  const patch: any = {};
+  if (o.houseId !== undefined) patch.house_id = o.houseId;
+  if (o.houseName !== undefined) patch.house_name = o.houseName;
+  if (o.bedLabel !== undefined) patch.bed_label = o.bedLabel || null;
+  const { error } = await db().from('individuals').update(patch).eq('id', individualId);
+  if (error) throw error;
+}
+
 /** Facilitator (owner): the org's one-time application/intake fee — on/off + amount. */
 export async function setOrgIntakeFee(orgId: string, enabled: boolean, amountCents: number | null) {
   const { error } = await db()

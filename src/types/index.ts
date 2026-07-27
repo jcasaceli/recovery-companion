@@ -179,6 +179,7 @@ export interface ClientSummary {
   email?: string;
   houseName?: string;
   houseId?: string;
+  bedLabel?: string;
   programName?: string;
   status: ClientStatus;
   levelOfCare?: LevelOfCare;

@@ -28,6 +28,7 @@ import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { MeetingsScreen } from '../screens/MeetingsScreen';
 import { PaymentsScreen } from '../screens/PaymentsScreen';
 import { FacilitatorPaymentsScreen } from '../screens/FacilitatorPaymentsScreen';
+import { BedsScreen } from '../screens/BedsScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AgreementViewScreen } from '../screens/AgreementViewScreen';
 import { MemberAgreementsScreen } from '../screens/MemberAgreementsScreen';
@@ -129,6 +130,7 @@ export function RootNavigator() {
 const FAC_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Dashboard: { active: 'grid', inactive: 'grid-outline' },
   Clients: { active: 'people', inactive: 'people-outline' },
+  Beds: { active: 'bed', inactive: 'bed-outline' },
   Forms: { active: 'document-text', inactive: 'document-text-outline' },
   Payments: { active: 'card', inactive: 'card-outline' },
   Messages: { active: 'megaphone', inactive: 'megaphone-outline' },
@@ -161,10 +163,11 @@ function FacilitatorTabs() {
     >
       <FacTab.Screen name="Dashboard" component={DashboardScreen} />
       <FacTab.Screen name="Clients" component={ClientsStack} options={{ tabBarLabel: 'Members' }} />
+      <FacTab.Screen name="Beds" component={BedsScreen} />
       <FacTab.Screen name="Forms" component={FacilitatorFormsScreen} />
       <FacTab.Screen name="Payments" component={FacilitatorPaymentsScreen} />
-      <FacTab.Screen name="Messages" component={MessagesScreen} />
-      {/* Refer a Friend + Account live in the sidebar; hidden from the bottom bar to keep it uncluttered on mobile. */}
+      {/* Messages + Refer + Account live in the sidebar on web; hidden from the phone bottom bar to keep it uncluttered (Beds took its slot). */}
+      <FacTab.Screen name="Messages" component={MessagesScreen} options={{ tabBarItemStyle: sidebar ? undefined : { display: 'none' } }} />
       <FacTab.Screen name="ReferFriend" component={ReferFriendScreen} options={{ tabBarItemStyle: sidebar ? undefined : { display: 'none' }, tabBarLabel: 'Refer' }} />
       <FacTab.Screen name="Account" component={SettingsScreen} />
     </FacTab.Navigator>
