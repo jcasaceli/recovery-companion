@@ -47,6 +47,8 @@ export interface LovedOne {
   /** Rent (cloud) — shown to the member on Home/Pay rent. */
   monthlyRentCents?: number;
   rentDueDay?: number;
+  rentPeriod?: 'monthly' | 'weekly';
+  rentDueDow?: number;
 }
 
 /** 1 = really struggling … 5 = thriving */
@@ -182,6 +184,8 @@ export interface ClientSummary {
   levelOfCare?: LevelOfCare;
   monthlyRentCents?: number;
   rentDueDay?: number;
+  rentPeriod?: 'monthly' | 'weekly';
+  rentDueDow?: number;
   /** Storage path of the resident's profile photo (sign with getAvatarUrls to display). */
   avatarPath?: string;
   /** Free-text staff tags (diagnoses, substances, flags). */

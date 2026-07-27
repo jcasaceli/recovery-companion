@@ -65,6 +65,8 @@ export function ClientProfileScreen() {
 
   const [amount, setAmount] = useState(client?.monthlyRentCents ? (client.monthlyRentCents / 100).toFixed(2) : '');
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
+  const [rentPeriod, setRentPeriod] = useState<'monthly' | 'weekly'>(client?.rentPeriod === 'weekly' ? 'weekly' : 'monthly');
+  const [dueDow, setDueDow] = useState<number | null>(client?.rentDueDow ?? null);
   const [checkins, setCheckins] = useState<any[]>([]);
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
@@ -541,17 +543,20 @@ export function ClientProfileScreen() {
   };
 
   // Auto-saves on blur. Accepts "$500", "500", "$1,200.50" — the "$" is optional.
-  const saveRent = async () => {
-    const cents = parseMoneyCents(amount);
-    const dn = parseInt((dueDay || '').replace(/[^0-9]/g, ''), 10);
-    const day = isNaN(dn) ? null : Math.min(31, Math.max(1, dn));
-    if (cents === (client.monthlyRentCents ?? null) && day === (client.rentDueDay ?? null)) return;
+  const parseDay = (s: string) => {
+    const dn = parseInt((s || '').replace(/[^0-9]/g, ''), 10);
+    return isNaN(dn) ? null : Math.min(31, Math.max(1, dn));
+  };
+  /** Save with explicit period/schedule so toggle taps don't hit stale state. */
+  const commitRent = async (o: { period: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null }) => {
     try {
-      await setRent(id, cents, day);
+      await setRent(id, parseMoneyCents(amount), o);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message ?? 'Try again.');
     }
   };
+  const saveRent = () =>
+    commitRent(rentPeriod === 'weekly' ? { period: 'weekly', dueDow } : { period: 'monthly', dueDay: parseDay(dueDay) });
 
   const pickFrom = async (source: 'camera' | 'library') => {
     const perm = source === 'camera'
@@ -863,13 +868,43 @@ export function ClientProfileScreen() {
       <SectionTitle>Membership fee</SectionTitle>
       <Card>
         <Text style={[styles.statusLine, { color: rentColor }]}>{rentStatus} this month</Text>
-        <Text style={[styles.label, { marginTop: spacing.sm }]}>Monthly membership fee (you set this)</Text>
+
+        {/* Weekly / Monthly */}
+        <View style={styles.segment}>
+          {(['weekly', 'monthly'] as const).map((p) => (
+            <TouchableOpacity
+              key={p}
+              onPress={() => { setRentPeriod(p); commitRent(p === 'weekly' ? { period: 'weekly', dueDow } : { period: 'monthly', dueDay: parseDay(dueDay) }); }}
+              style={[styles.segBtn, rentPeriod === p && styles.segBtnOn]}
+            >
+              <Text style={[styles.segTxt, rentPeriod === p && styles.segTxtOn]}>{p === 'weekly' ? 'Weekly' : 'Monthly'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={[styles.label, { marginTop: spacing.sm }]}>{rentPeriod === 'weekly' ? 'Weekly' : 'Monthly'} membership fee (you set this)</Text>
         <View style={styles.amtRow}>
           <Text style={styles.dollar}>$</Text>
           <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} onBlur={saveRent} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
         </View>
-        <Text style={styles.label}>Due day of month (1–31)</Text>
-        <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} onBlur={saveRent} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+
+        {rentPeriod === 'weekly' ? (
+          <>
+            <Text style={styles.label}>Due each week on</Text>
+            <View style={styles.dowRow}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                <TouchableOpacity key={d} onPress={() => { setDueDow(i); commitRent({ period: 'weekly', dueDow: i }); }} style={[styles.dowChip, dueDow === i && styles.dowChipOn]}>
+                  <Text style={[styles.dowTxt, dueDow === i && styles.dowTxtOn]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.label}>Due day of month (1–31)</Text>
+            <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} onBlur={saveRent} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+          </>
+        )}
         <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Enter the amount with or without a "$" — it saves automatically.</Text>
       </Card>
 
@@ -1182,6 +1217,16 @@ const styles = StyleSheet.create({
   houseChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   houseChipText: { ...typography.caption, fontWeight: '700', color: colors.textSecondary },
   label: { ...typography.caption, marginBottom: spacing.xs },
+  segment: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4, marginTop: spacing.sm },
+  segBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
+  segBtnOn: { backgroundColor: colors.surface },
+  segTxt: { color: colors.textSecondary, fontWeight: '700' },
+  segTxtOn: { color: colors.primary },
+  dowRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.xs },
+  dowChip: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  dowChipOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+  dowTxt: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  dowTxtOn: { color: '#fff' },
   statusLine: { fontSize: 16, fontWeight: '700' },
   amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.md },
   dollar: { fontSize: 22, color: colors.textSecondary, marginRight: 4 },

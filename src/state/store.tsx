@@ -152,7 +152,7 @@ interface AppState extends PersistedState {
   /** Facilitator: change a client's level of care. */
   setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
   /** Facilitator: set a client's monthly rent (cents) + due day (1-31). */
-  setRent: (id: string, amountCents: number | null, dueDay: number | null) => Promise<void>;
+  setRent: (id: string, amountCents: number | null, opts?: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null }) => Promise<void>;
   /** Facilitator: edit a client's details (name/house/phone/email). */
   updateClient: (id: string, fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string }) => Promise<void>;
   /** Solo resident: log a meeting check-in on-device (no facilitator yet). */
@@ -352,6 +352,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           levelOfCare: c.level_of_care ?? undefined,
           monthlyRentCents: c.monthly_rent_cents ?? undefined,
           rentDueDay: c.rent_due_day ?? undefined,
+          rentPeriod: (c.rent_period ?? 'monthly') as 'monthly' | 'weekly',
+          rentDueDow: c.rent_due_dow ?? undefined,
           avatarPath: c.avatar_path ?? undefined,
           tags: Array.isArray(c.tags) ? c.tags : undefined,
         }));
@@ -709,12 +711,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }));
     };
 
-    const setRent: AppState['setRent'] = async (id, amountCents, dueDay) => {
-      if (cloud) await dbApi.setMemberRent(id, amountCents, dueDay).catch(logCloud);
+    const setRent: AppState['setRent'] = async (id, amountCents, opts = null) => {
+      const o = (typeof opts === 'object' && opts !== null) ? opts : { period: 'monthly' as const, dueDay: opts };
+      const period = o.period ?? 'monthly';
+      if (cloud) await dbApi.setMemberRent(id, amountCents, o).catch(logCloud);
       setState((s) => ({
         ...s,
         clients: s.clients.map((c) =>
-          c.id === id ? { ...c, monthlyRentCents: amountCents ?? undefined, rentDueDay: dueDay ?? undefined } : c,
+          c.id === id ? {
+            ...c,
+            monthlyRentCents: amountCents ?? undefined,
+            rentPeriod: period,
+            rentDueDay: period === 'monthly' ? (o.dueDay ?? undefined) : undefined,
+            rentDueDow: period === 'weekly' ? (o.dueDow ?? undefined) : undefined,
+          } : c,
         ),
       }));
     };
