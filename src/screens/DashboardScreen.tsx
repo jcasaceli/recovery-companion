@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking, Share, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card, SectionTitle, Button } from '../components/ui';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -224,7 +225,12 @@ export function DashboardScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={typography.h1}>Dashboard</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={typography.h1}>Dashboard</Text>
+          <TouchableOpacity onPress={() => nav.navigate('Messages')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Messages">
+            <Ionicons name="chatbubbles-outline" size={26} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
         <Text style={[typography.bodySecondary, { marginBottom: spacing.md }]}>{org?.name || 'Your sober living'}</Text>
 
         {/* Intake link — share the home's application with prospective residents */}
