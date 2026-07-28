@@ -1726,6 +1726,27 @@ export async function ensureFacilitatorOrg(name: string): Promise<string> {
   return org.id as string;
 }
 
+/** Facilitator: set the same membership fee on many members at once (one update).
+ *  Mirrors setMemberRent's column logic; add-on toggles only touched when passed. */
+export async function setBulkRent(
+  ids: string[],
+  amountCents: number | null,
+  opts: { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean } = {},
+) {
+  if (!ids.length) return;
+  const period = opts.period ?? 'monthly';
+  const patch: any = {
+    monthly_rent_cents: amountCents,
+    rent_period: period,
+    rent_due_day: period === 'monthly' ? (opts.dueDay ?? null) : null,
+    rent_due_dow: period === 'weekly' ? (opts.dueDow ?? null) : null,
+  };
+  if (typeof opts.duesEnabled === 'boolean') patch.dues_enabled = opts.duesEnabled;
+  if (typeof opts.acEnabled === 'boolean') patch.ac_enabled = opts.acEnabled;
+  const { error } = await db().from('individuals').update(patch).in('id', ids);
+  if (error) throw error;
+}
+
 /** Create an individual care record (facilitator). No returning-select: the
  *  store reloads afterward and finds the new client via a normal query. This
  *  avoids the RLS-on-returning issue (is_facilitator_for can't see the row that

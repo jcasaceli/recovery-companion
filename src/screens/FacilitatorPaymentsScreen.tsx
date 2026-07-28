@@ -37,6 +37,9 @@ export function FacilitatorPaymentsScreen() {
   const [tab, setTab] = useState<'members' | 'recent'>('members');
   const [search, setSearch] = useState('');
   const [houseFilter, setHouseFilter] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { subscriptionActive, reloadCloud } = useAppState();
   const locked = !subscriptionActive;
 
@@ -136,6 +139,20 @@ export function FacilitatorPaymentsScreen() {
   // Recent-payments tab: newest first, filtered by the same name search.
   const recentShown = payments.filter((p) => !q || (p.memberName ?? '').toLowerCase().includes(q));
 
+  // Bulk selection (respects the active house filter + search, so filtering to a
+  // house then "select all" selects exactly that house's residents).
+  const shownIds = shown.map((m) => m.id);
+  const allSelected = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
+  const toggleOne = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => setSelected((s) => {
+    const n = new Set(s);
+    if (allSelected) shownIds.forEach((id) => n.delete(id));
+    else shownIds.forEach((id) => n.add(id));
+    return n;
+  });
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+  const selectedMembers = members.filter((m) => selected.has(m.id));
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
@@ -158,30 +175,40 @@ export function FacilitatorPaymentsScreen() {
       : `Not paid (${money(rent)} due)`;
     const statusColor =
       st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
+    const isSel = selected.has(m.id);
     return (
-      <Card key={m.id}>
+      <Card key={m.id} style={selectMode && isSel ? styles.cardSel : undefined}>
         <View style={styles.memberRow}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
+          {selectMode ? (
+            <TouchableOpacity onPress={() => toggleOne(m.id)} style={styles.checkbox} activeOpacity={0.7}>
+              <View style={[styles.checkboxBox, isSel && styles.checkboxOn]}>{isSel ? <Text style={styles.checkboxTick}>✓</Text> : null}</View>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => (selectMode ? toggleOne(m.id) : setExpandedId(expanded ? null : m.id))}>
             <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
             <Text style={typography.caption}>
               Fee {feeLine(m)}
             </Text>
             <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
-            <Text style={styles.expandHint}>
-              {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
-            </Text>
+            {!selectMode ? (
+              <Text style={styles.expandHint}>
+                {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
+              </Text>
+            ) : null}
           </TouchableOpacity>
-          <View style={{ alignItems: 'flex-end' }}>
-            <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
-              <Text style={styles.recordBtnText}>Record</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
-              <Text style={styles.rentBtnText}>Set membership fee</Text>
-            </TouchableOpacity>
-          </View>
+          {!selectMode ? (
+            <View style={{ alignItems: 'flex-end' }}>
+              <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
+                <Text style={styles.recordBtnText}>Record</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
+                <Text style={styles.rentBtnText}>Set membership fee</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
-        {expanded ? (
+        {expanded && !selectMode ? (
           <View style={styles.history}>
             {history.length === 0 ? (
               <Text style={typography.bodySecondary}>No payments recorded yet.</Text>
@@ -247,6 +274,23 @@ export function FacilitatorPaymentsScreen() {
 
         {tab === 'members' ? (
           <>
+            {/* Bulk fee tools: enter selection mode, then select all (respects house filter) */}
+            <View style={styles.bulkBar}>
+              {!selectMode ? (
+                <TouchableOpacity onPress={() => setSelectMode(true)} style={styles.bulkToggle}>
+                  <Text style={styles.bulkToggleTxt}>Set fees in bulk</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity onPress={toggleAll} style={styles.selAll}>
+                    <View style={[styles.checkboxBox, allSelected && styles.checkboxOn]}>{allSelected ? <Text style={styles.checkboxTick}>✓</Text> : null}</View>
+                    <Text style={styles.selAllTxt}>Select all{houseFilter ? ` in ${houseFilter}` : ''} ({shownIds.length})</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={exitSelect}><Text style={styles.bulkCancel}>Cancel</Text></TouchableOpacity>
+                </>
+              )}
+            </View>
+
             {/* House filter — tap a house to view just its residents */}
             {houseNames.length > 1 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.houseChips}>
@@ -322,6 +366,16 @@ export function FacilitatorPaymentsScreen() {
         )}
       </ScrollView>
 
+      {/* Floating action bar while selecting members */}
+      {selectMode && tab === 'members' && selected.size > 0 ? (
+        <View style={styles.actionBar}>
+          <Text style={styles.actionCount}>{selected.size} selected</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setBulkOpen(true)}>
+            <Text style={styles.actionBtnTxt}>Set membership fee</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <RecordModal
         member={recordFor}
         onClose={() => setRecordFor(null)}
@@ -331,6 +385,13 @@ export function FacilitatorPaymentsScreen() {
         member={rentFor}
         onClose={() => setRentFor(null)}
         onSaved={() => { setRentFor(null); load(); }}
+      />
+      <BulkRentModal
+        visible={bulkOpen}
+        count={selected.size}
+        onClose={() => setBulkOpen(false)}
+        onSaved={() => { setBulkOpen(false); exitSelect(); load(); }}
+        ids={selectedMembers.map((m) => m.id)}
       />
       <EditDateModal
         payment={editDatePay}
@@ -494,6 +555,102 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
   );
 }
 
+/** Set the same membership fee on every selected member at once. */
+function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
+  visible: boolean; count: number; ids: string[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [period, setPeriod] = useState<'monthly' | 'weekly'>('monthly');
+  const [dueDay, setDueDay] = useState('');
+  const [dueDow, setDueDow] = useState<number | null>(null);
+  const [duesOn, setDuesOn] = useState(false);
+  const [acOn, setAcOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!visible) return null;
+
+  const baseCents = amount ? Math.round(parseFloat(amount) * 100) : 0;
+  const totalCents = baseCents + (duesOn ? dbApi.WEEKLY_DUES_CENTS : 0) + (acOn ? dbApi.WEEKLY_AC_CENTS : 0);
+
+  const save = async () => {
+    const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
+    setBusy(true);
+    try {
+      const addons = { duesEnabled: duesOn, acEnabled: acOn };
+      if (period === 'weekly') {
+        await dbApi.setBulkRent(ids, cents, { period: 'weekly', dueDow, ...addons });
+      } else {
+        const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : null;
+        await dbApi.setBulkRent(ids, cents, { period: 'monthly', dueDay: day, ...addons });
+      }
+      onSaved();
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.modal}>
+          <Text style={typography.h3}>Set fee for {count} member{count === 1 ? '' : 's'}</Text>
+          <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Applies the same membership fee to everyone selected.</Text>
+
+          <View style={rentStyles.segment}>
+            {(['weekly', 'monthly'] as const).map((p) => (
+              <TouchableOpacity key={p} onPress={() => setPeriod(p)} style={[rentStyles.segBtn, period === p && rentStyles.segBtnOn]}>
+                <Text style={[rentStyles.segTxt, period === p && rentStyles.segTxtOn]}>{p === 'weekly' ? 'Weekly' : 'Monthly'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[typography.caption, { marginTop: spacing.xs }]}>{period === 'weekly' ? 'Weekly membership fee' : 'Monthly membership fee'}</Text>
+          <View style={styles.amtRow}>
+            <Text style={styles.dollar}>$</Text>
+            <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
+          </View>
+
+          {period === 'weekly' ? (
+            <>
+              <Text style={typography.caption}>Due each week on</Text>
+              <View style={rentStyles.dowRow}>
+                {DOW_LABELS.map((d, i) => (
+                  <TouchableOpacity key={d} onPress={() => setDueDow(i)} style={[rentStyles.dowChip, dueDow === i && rentStyles.dowChipOn]}>
+                    <Text style={[rentStyles.dowTxt, dueDow === i && rentStyles.dowTxtOn]}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={typography.caption}>Due day of month (1–31)</Text>
+              <TextInput style={styles.dueInput} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
+            </>
+          )}
+
+          <View style={rentStyles.addRow}>
+            <Text style={rentStyles.addLabel}>House dues (+$5)</Text>
+            <Switch value={duesOn} onValueChange={setDuesOn} />
+          </View>
+          <View style={rentStyles.addRow}>
+            <Text style={rentStyles.addLabel}>A/C fee (+$10)</Text>
+            <Switch value={acOn} onValueChange={setAcOn} />
+          </View>
+          {(duesOn || acOn) && baseCents > 0 ? (
+            <Text style={rentStyles.total}>Total each: {money(totalCents)}{period === 'weekly' ? '/wk' : ''}</Text>
+          ) : null}
+
+          <Button title={busy ? 'Saving…' : `Apply to ${count} member${count === 1 ? '' : 's'}`} onPress={save} disabled={busy} />
+          <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+            <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const rentStyles = StyleSheet.create({
   segment: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4, marginTop: spacing.sm },
   segBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
@@ -597,6 +754,21 @@ const styles = StyleSheet.create({
   hChipTxt: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
   hChipTxtOn: { color: colors.textInverse },
   houseHeader: { ...typography.caption, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing.sm, marginBottom: spacing.xs, marginLeft: 2 },
+  bulkBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, minHeight: 32 },
+  bulkToggle: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primary },
+  bulkToggleTxt: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  selAll: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  selAllTxt: { ...typography.body, fontWeight: '700', color: colors.textPrimary },
+  bulkCancel: { color: colors.textSecondary, fontWeight: '600', paddingHorizontal: spacing.sm },
+  checkbox: { paddingRight: spacing.sm, paddingVertical: spacing.sm },
+  checkboxBox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  checkboxOn: { backgroundColor: colors.primary },
+  checkboxTick: { color: colors.textInverse, fontWeight: '900', fontSize: 14 },
+  cardSel: { borderColor: colors.primary, borderWidth: 1.5 },
+  actionBar: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.md, backgroundColor: colors.primaryDark, borderRadius: radius.lg, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...shadow.card },
+  actionCount: { color: colors.textInverse, fontWeight: '800', fontSize: 15 },
+  actionBtn: { backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  actionBtnTxt: { color: colors.primaryDark, fontWeight: '800', fontSize: 14 },
   memberRow: { flexDirection: 'row', alignItems: 'center' },
   statusLine: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
