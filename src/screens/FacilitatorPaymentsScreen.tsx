@@ -34,6 +34,9 @@ export function FacilitatorPaymentsScreen() {
   const [rentFor, setRentFor] = useState<any | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editDatePay, setEditDatePay] = useState<Payment | null>(null);
+  const [tab, setTab] = useState<'members' | 'recent'>('members');
+  const [search, setSearch] = useState('');
+  const [houseFilter, setHouseFilter] = useState<string | null>(null);
   const { subscriptionActive, reloadCloud } = useAppState();
   const locked = !subscriptionActive;
 
@@ -111,14 +114,27 @@ export function FacilitatorPaymentsScreen() {
     catch (e: any) { Alert.alert('Could not confirm', e?.message ?? 'Try again.'); }
   };
 
-  // Analytics for the current month (only clients who owe rent).
+  // House filter + name search. "Unassigned" collects members with no house.
+  const houseNames = Array.from(new Set(members.map((m) => m.house_name || 'Unassigned'))).sort();
+  const q = search.trim().toLowerCase();
+  const nameOf = (m: any) => `${m.first_name} ${m.last_name || ''}`.trim();
+  const shown = members.filter((m) => {
+    if (houseFilter && (m.house_name || 'Unassigned') !== houseFilter) return false;
+    if (q && !nameOf(m).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Analytics for the current month reflect the current filter (only fee-owing clients).
   let paid = 0, partial = 0, none = 0;
-  for (const m of members) {
+  for (const m of shown) {
     const s = payStatus(m);
     if (s === 'paid') paid++;
     else if (s === 'partial') partial++;
     else if (s === 'none') none++;
   }
+
+  // Recent-payments tab: newest first, filtered by the same name search.
+  const recentShown = payments.filter((p) => !q || (p.memberName ?? '').toLowerCase().includes(q));
 
   if (loading) {
     return (
@@ -128,113 +144,181 @@ export function FacilitatorPaymentsScreen() {
     );
   }
 
+  // One member card — reused whether the list is grouped by house or flat.
+  const memberCard = (m: any) => {
+    const st = payStatus(m);
+    const sum = paidSum(m.id);
+    const rent = m.monthly_rent_cents || 0;
+    const expanded = expandedId === m.id;
+    const history = payments.filter((p) => p.individualId === m.id);
+    const statusText =
+      st === 'norent' ? 'No fee set'
+      : st === 'paid' ? `Paid in full (${money(sum)})`
+      : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
+      : `Not paid (${money(rent)} due)`;
+    const statusColor =
+      st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
+    return (
+      <Card key={m.id}>
+        <View style={styles.memberRow}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
+            <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
+            <Text style={typography.caption}>
+              Fee {feeLine(m)}
+            </Text>
+            <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
+            <Text style={styles.expandHint}>
+              {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
+            </Text>
+          </TouchableOpacity>
+          <View style={{ alignItems: 'flex-end' }}>
+            <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
+              <Text style={styles.recordBtnText}>Record</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
+              <Text style={styles.rentBtnText}>Set membership fee</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {expanded ? (
+          <View style={styles.history}>
+            {history.length === 0 ? (
+              <Text style={typography.bodySecondary}>No payments recorded yet.</Text>
+            ) : (
+              history.map((p) => (
+                <View key={p.id} style={styles.histRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
+                    <TouchableOpacity onPress={() => setEditDatePay(p)}>
+                      <Text style={typography.caption}>
+                        {formatDate(p.paidAt)}
+                        {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                        {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
+                        {'  ✎'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  {p.status === 'reported' ? (
+                    <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
+                      <Text style={styles.confirmBtnText}>Confirm</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ))
+            )}
+          </View>
+        ) : null}
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={typography.h1}>Payments</Text>
 
-        <Card style={{ alignItems: 'center' }}>
-          <SectionTitle>This month</SectionTitle>
-          <PieChart
-            data={[
-              { label: 'Paid in full', value: paid, color: colors.success },
-              { label: 'Partially paid', value: partial, color: colors.warning },
-              { label: 'Not paid', value: none, color: colors.crisis },
-            ]}
+        {/* Members / Recent payments tabs */}
+        <View style={styles.tabRow}>
+          {(['members', 'recent'] as const).map((t) => (
+            <TouchableOpacity key={t} onPress={() => setTab(t)} style={[styles.tabBtn, tab === t && styles.tabBtnOn]}>
+              <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t === 'members' ? 'Members' : 'Recent payments'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Name search (both tabs) */}
+        <View style={styles.searchWrap}>
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search a member's name"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-        </Card>
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.clearX}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
-        <SectionTitle>Members</SectionTitle>
-        {members.length === 0 ? (
-          <Card><Text style={typography.bodySecondary}>No active members yet.</Text></Card>
-        ) : (
-          members.map((m) => {
-            const st = payStatus(m);
-            const sum = paidSum(m.id);
-            const rent = m.monthly_rent_cents || 0;
-            const expanded = expandedId === m.id;
-            const history = payments.filter((p) => p.individualId === m.id);
-            const statusText =
-              st === 'norent' ? 'No fee set'
-              : st === 'paid' ? `Paid in full (${money(sum)})`
-              : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
-              : `Not paid (${money(rent)} due)`;
-            const statusColor =
-              st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
-            return (
-              <Card key={m.id}>
-                <View style={styles.memberRow}>
-                  <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => setExpandedId(expanded ? null : m.id)}>
-                    <Text style={typography.h3}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
-                    <Text style={typography.caption}>
-                      Fee {feeLine(m)}
-                    </Text>
-                    <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
-                    <Text style={styles.expandHint}>
-                      {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
-                    </Text>
-                  </TouchableOpacity>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <TouchableOpacity style={styles.recordBtn} onPress={() => setRecordFor(m)}>
-                      <Text style={styles.recordBtnText}>Record</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
-                      <Text style={styles.rentBtnText}>Set membership fee</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {expanded ? (
-                  <View style={styles.history}>
-                    {history.length === 0 ? (
-                      <Text style={typography.bodySecondary}>No payments recorded yet.</Text>
-                    ) : (
-                      history.map((p) => (
-                        <View key={p.id} style={styles.histRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={typography.body}>{money(p.amountCents)} · {METHOD_LABEL[p.method]}</Text>
-                            <TouchableOpacity onPress={() => setEditDatePay(p)}>
-                              <Text style={typography.caption}>
-                                {formatDate(p.paidAt)}
-                                {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                                {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
-                                {'  ✎'}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                          {p.status === 'reported' ? (
-                            <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
-                              <Text style={styles.confirmBtnText}>Confirm</Text>
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
-                      ))
-                    )}
-                  </View>
-                ) : null}
-              </Card>
-            );
-          })
-        )}
-
-        <SectionTitle>Recent payments</SectionTitle>
-        {payments.length === 0 ? (
-          <Card><Text style={typography.bodySecondary}>No payments recorded yet.</Text></Card>
-        ) : (
-          payments.slice(0, 30).map((p) => (
-            <Card key={p.id} style={styles.payRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={typography.body}>{p.memberName ?? 'Member'} · {money(p.amountCents)}</Text>
-                <TouchableOpacity onPress={() => setEditDatePay(p)}>
-                  <Text style={typography.caption}>
-                    {METHOD_LABEL[p.method]} · {formatDate(p.paidAt)}
-                    {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                    {'  ✎'}
-                  </Text>
+        {tab === 'members' ? (
+          <>
+            {/* House filter — tap a house to view just its residents */}
+            {houseNames.length > 1 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.houseChips}>
+                <TouchableOpacity onPress={() => setHouseFilter(null)} style={[styles.hChip, !houseFilter && styles.hChipOn]}>
+                  <Text style={[styles.hChipTxt, !houseFilter && styles.hChipTxtOn]}>All houses</Text>
                 </TouchableOpacity>
-              </View>
+                {houseNames.map((h) => (
+                  <TouchableOpacity key={h} onPress={() => setHouseFilter(h)} style={[styles.hChip, houseFilter === h && styles.hChipOn]}>
+                    <Text style={[styles.hChipTxt, houseFilter === h && styles.hChipTxtOn]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : null}
+
+            <Card style={{ alignItems: 'center' }}>
+              <SectionTitle>{houseFilter ? `${houseFilter} · this month` : 'This month'}</SectionTitle>
+              <PieChart
+                data={[
+                  { label: 'Paid in full', value: paid, color: colors.success },
+                  { label: 'Partially paid', value: partial, color: colors.warning },
+                  { label: 'Not paid', value: none, color: colors.crisis },
+                ]}
+              />
             </Card>
-          ))
+
+            {shown.length === 0 ? (
+              <Card><Text style={typography.bodySecondary}>{members.length === 0 ? 'No active members yet.' : 'No members match your search.'}</Text></Card>
+            ) : houseFilter ? (
+              shown.map(memberCard)
+            ) : (
+              houseNames
+                .filter((h) => shown.some((m) => (m.house_name || 'Unassigned') === h))
+                .map((h) => {
+                  const inHouse = shown.filter((m) => (m.house_name || 'Unassigned') === h);
+                  return (
+                    <View key={h}>
+                      <Text style={styles.houseHeader}>{h} · {inHouse.length}</Text>
+                      {inHouse.map(memberCard)}
+                    </View>
+                  );
+                })
+            )}
+          </>
+        ) : (
+          <>
+            {recentShown.length === 0 ? (
+              <Card><Text style={typography.bodySecondary}>{payments.length === 0 ? 'No payments recorded yet.' : 'No payments match your search.'}</Text></Card>
+            ) : (
+              recentShown.map((p) => (
+                <Card key={p.id} style={styles.payRow}>
+                  <View style={styles.memberRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={typography.body}>{p.memberName ?? 'Member'} · {money(p.amountCents)}</Text>
+                      <TouchableOpacity onPress={() => setEditDatePay(p)}>
+                        <Text style={typography.caption}>
+                          {METHOD_LABEL[p.method]} · {formatDate(p.paidAt)}
+                          {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
+                          {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
+                          {'  ✎'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {p.status === 'reported' ? (
+                      <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
+                        <Text style={styles.confirmBtnText}>Confirm</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </Card>
+              ))
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -499,6 +583,20 @@ function ordinal(n: number) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  tabRow: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4, marginTop: spacing.sm, marginBottom: spacing.sm },
+  tabBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
+  tabBtnOn: { backgroundColor: colors.surface, ...shadow.card },
+  tabTxt: { color: colors.textSecondary, fontWeight: '700', fontSize: 14 },
+  tabTxtOn: { color: colors.primary },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  searchInput: { flex: 1, paddingVertical: spacing.sm + 2, fontSize: 15, color: colors.textPrimary },
+  clearX: { color: colors.textMuted, fontSize: 15, paddingHorizontal: 4, fontWeight: '700' },
+  houseChips: { gap: spacing.xs, paddingVertical: 2, paddingRight: spacing.md, marginBottom: spacing.sm },
+  hChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  hChipOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+  hChipTxt: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  hChipTxtOn: { color: colors.textInverse },
+  houseHeader: { ...typography.caption, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing.sm, marginBottom: spacing.xs, marginLeft: 2 },
   memberRow: { flexDirection: 'row', alignItems: 'center' },
   statusLine: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
