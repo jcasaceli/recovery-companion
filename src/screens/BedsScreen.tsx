@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
@@ -10,6 +11,8 @@ import * as dbApi from '../services/db';
  *  bed to move a resident in. Open counts come from each house's capacity. */
 export function BedsScreen() {
   const { clients, reloadCloud } = useAppState();
+  const nav = useNavigation<any>();
+  const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id } });
   const [houses, setHouses] = useState<dbApi.House[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [assignTo, setAssignTo] = useState<dbApi.House | null>(null);
@@ -79,11 +82,12 @@ export function BedsScreen() {
               {isOpen ? (
                 <View style={styles.bedList}>
                   {res.map((c) => (
-                    <View key={c.id} style={styles.bedRow}>
+                    <TouchableOpacity key={c.id} style={styles.bedRow} onPress={() => openClient(c.id)} activeOpacity={0.6}>
                       <Ionicons name="person" size={16} color={colors.primary} />
                       <Text style={styles.bedName}>{c.firstName} {c.lastName || ''}</Text>
                       <Text style={styles.bedTag}>{c.bedLabel || '—'}</Text>
-                    </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
                   ))}
                   {Array.from({ length: open }).map((_, i) => (
                     <TouchableOpacity key={`open-${i}`} style={[styles.bedRow, styles.openRow]} onPress={() => setAssignTo(h)} activeOpacity={0.7}>
