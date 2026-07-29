@@ -41,7 +41,7 @@ export async function listManagers(): Promise<{
  *  hand over — which may be a +alias if the email was already taken. */
 export async function addManager(
   name: string, email: string, phone: string, owner = false,
-): Promise<{ id: string; email: string; password: string; billed: boolean; owner?: boolean; aliased?: boolean; sharedWith?: string }> {
+): Promise<{ id: string; email: string; password?: string; billed: boolean; owner?: boolean; aliased?: boolean; sharedWith?: string; reused?: boolean }> {
   return call('/api/managers', 'POST', { name, email, phone, owner });
 }
 

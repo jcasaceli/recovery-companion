@@ -153,6 +153,64 @@ function plusAlias(email, name, n = 0) {
   return `${base}+${first}${n ? n + 1 : ''}@${domain}`;
 }
 
+/** Resolve an existing account's user id from its email. Profiles carry the
+ *  email for every user, so that's the fast path; fall back to scanning auth. */
+async function findUserIdByEmail(email) {
+  const { data } = await supabaseAdmin.from('profiles').select('id').eq('email', email).maybeSingle();
+  if (data?.id) return data.id;
+  try {
+    for (let page = 1; page <= 20; page++) {
+      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+      const u = (list?.users || []).find((x) => (x.email || '').toLowerCase() === email);
+      if (u) return u.id;
+      if (!list || (list.users || []).length < 200) break;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** Classify an existing user's org memberships relative to the org we want to
+ *  add them to. `disposableOrgs` are empty auto/demo orgs we can clean up so
+ *  the person can be re-homed here; `blocking` means they already belong to a
+ *  real, active organization (the app models one org per person, so we won't
+ *  silently move them). */
+async function membershipStatus(userId, targetOrgId) {
+  const { data: mems } = await supabaseAdmin
+    .from('org_members').select('org_id').eq('profile_id', userId);
+  const out = { inTarget: false, disposableOrgs: [], blocking: false };
+  for (const m of mems || []) {
+    if (m.org_id === targetOrgId) { out.inTarget = true; continue; }
+    const { data: org } = await supabaseAdmin
+      .from('organizations').select('subscription_status').eq('id', m.org_id).maybeSingle();
+    const { count } = await supabaseAdmin
+      .from('individuals').select('id', { count: 'exact', head: true }).eq('org_id', m.org_id);
+    const disposable = (!org || org.subscription_status === 'demo') && (count || 0) === 0;
+    if (disposable) out.disposableOrgs.push(m.org_id); else out.blocking = true;
+  }
+  return out;
+}
+
+function reusedHtml({ name, orgName, email }) {
+  const who = name || 'there';
+  const house = orgName || 'your sober living';
+  return `
+  <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2b2b2b">
+    <div style="background:#3E8E7E;border-radius:14px 14px 0 0;padding:18px 22px;color:#fff;font-weight:800;font-size:18px">🏠 You're a house manager</div>
+    <div style="border:1px solid #e3e0d9;border-top:0;border-radius:0 0 14px 14px;padding:24px;line-height:1.6">
+      <p style="margin:0 0 12px">Hi ${who}, you've been added as a <strong>house manager</strong> for <strong>${house}</strong> on Sober Living Companion.</p>
+      <p style="margin:0 0 12px">You already have an account — just sign in with the email and password you already use:</p>
+      <p style="margin:0 0 16px">Email: <strong>${email}</strong></p>
+      <p style="margin:0 0 14px;color:#6b6b6b;font-size:14px">Forgot your password? Tap "Forgot password?" on the sign-in screen to reset it.</p>
+      <p style="margin:0 0 16px">
+        <a href="${WEB_APP}" style="background:#3E8E7E;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">Open the web app</a>
+        <a href="${APP_STORE}" style="background:#111;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">iPhone</a>
+        <a href="${PLAY_STORE}" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">Android</a>
+      </p>
+      <p style="margin:0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
+    </div>
+  </div>`;
+}
+
 managersRouter.post('/', async (req, res) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Server missing SUPABASE_SERVICE_ROLE_KEY.' });
   const user = await getUser(req);
@@ -187,10 +245,56 @@ managersRouter.post('/', async (req, res) => {
       user_metadata: { role: 'facilitator', full_name: name, phone },
     });
 
-    // Auth allows exactly ONE account per email address. When a house shares an
-    // inbox, give this manager their own login via plus-addressing
-    // (house+john@gmail.com) — Gmail-style providers deliver it to the SAME
-    // inbox, but it's a distinct account, so every action stays attributable.
+    // The email is already registered. The usual reason is that THIS SAME
+    // person already has an account (they signed up themselves, or were added
+    // before) — not that a house wants to share one inbox. So by default we
+    // REUSE their existing login and attach it to this org, instead of silently
+    // minting a confusing "name+tag@" duplicate. (Plus-addressing is still
+    // available, but only when the caller explicitly asks via shareInbox:true.)
+    if (createErr && /already/i.test(createErr.message) && req.body?.shareInbox !== true) {
+      const existingId = await findUserIdByEmail(email);
+      if (existingId) {
+        const st = await membershipStatus(existingId, org.id);
+        if (st.inTarget) {
+          return res.status(409).json({ error: 'That person is already on your team.' });
+        }
+        if (st.blocking) {
+          return res.status(409).json({
+            error: 'That email already belongs to an active account on another organization. Use a different email for this manager, or have them removed from their other organization first.',
+          });
+        }
+        // Safe to reuse: clear out any empty auto/demo orgs they created, then
+        // attach their existing login to THIS org as staff.
+        for (const sid of st.disposableOrgs) {
+          await supabaseAdmin.from('houses').delete().eq('org_id', sid);
+          await supabaseAdmin.from('org_members').delete().eq('org_id', sid);
+          await supabaseAdmin.from('organizations').delete().eq('id', sid);
+        }
+        await supabaseAdmin.from('profiles').upsert(
+          { id: existingId, role: 'facilitator', full_name: name, email, phone }, { onConflict: 'id' });
+        await supabaseAdmin.from('org_members').upsert(
+          { org_id: org.id, profile_id: existingId, is_owner: asOwner }, { onConflict: 'org_id,profile_id' });
+        if (RESEND_API_KEY) {
+          fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: WELCOME_FROM, to: email, reply_to: 'joseph@soberlivingdirectory.com',
+              subject: `You've been added to ${org.name || 'Sober Living Companion'}`,
+              html: reusedHtml({ name, orgName: org.name, email }),
+            }),
+          }).then((r) => { if (!r.ok) r.text().then((t) => console.error('[managers] reuse email failed', r.status, t)); })
+            .catch((e) => console.error('[managers] reuse email error', e));
+        }
+        const billing = await syncManagerSeats(org);
+        return res.json({ id: existingId, email, reused: true, owner: asOwner, billed: billing.billed, seats: billing.seats });
+      }
+      return res.status(409).json({ error: 'That email is already registered. Please use a different email for this manager.' });
+    }
+
+    // Genuine shared-inbox request (shareInbox:true): give this manager their
+    // own plus-addressed login (house+john@gmail.com) that still lands in the
+    // shared inbox — a distinct account, so every action stays attributable.
     if (createErr && /already/i.test(createErr.message)) {
       for (let i = 0; i < 6; i++) {
         const candidate = plusAlias(email, name, i);

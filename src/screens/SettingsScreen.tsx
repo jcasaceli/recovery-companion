@@ -71,7 +71,7 @@ export function SettingsScreen() {
   const [mgrEmail, setMgrEmail] = useState('');
   const [mgrPhone, setMgrPhone] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
-  const [newCreds, setNewCreds] = useState<{ email: string; password: string; aliased?: boolean; sharedWith?: string } | null>(null);
+  const [newCreds, setNewCreds] = useState<{ email: string; password?: string; aliased?: boolean; sharedWith?: string; reused?: boolean } | null>(null);
   const [newMgr, setNewMgr] = useState<{ id: string; name: string } | null>(null);
   const [houses, setHouses] = useState<House[]>([]);
   const [assignedHouses, setAssignedHouses] = useState<Set<string>>(new Set());
@@ -222,7 +222,7 @@ export function SettingsScreen() {
     setMgrBusy(true);
     try {
       const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim(), mgrAsOwner);
-      setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith });
+      setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith, reused: r.reused });
       setNewMgr({ id: r.id, name: mgrName.trim() });
       setAssignedHouses(new Set());
       listHouses().then(setHouses).catch(() => {});
@@ -726,20 +726,30 @@ export function SettingsScreen() {
       <Modal visible={!!newCreds} transparent animationType="fade" onRequestClose={() => setNewCreds(null)}>
         <View style={styles.backdrop}>
           <View style={styles.modal}>
-            <Text style={typography.h3}>Manager created ✅</Text>
+            <Text style={typography.h3}>{newCreds?.reused ? 'Manager added ✅' : 'Manager created ✅'}</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-              Share these with your house manager. The password won't be shown again — they can change it after signing in.
+              {newCreds?.reused
+                ? 'This person already had an account, so we added it to your team — no new password needed.'
+                : "Share these with your house manager. The password won't be shown again — they can change it after signing in."}
             </Text>
             <View style={styles.credBox}>
               <Text style={styles.credLabel}>Email</Text>
               <Text selectable style={styles.credValue}>{newCreds?.email}</Text>
-              <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
-              <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
-              {newCreds?.aliased ? (
+              {newCreds?.reused ? (
                 <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17 }]}>
-                  ℹ️ {newCreds.sharedWith} already has an account, so this manager got their own login above. Emails to it still arrive in the {newCreds.sharedWith} inbox — they just sign in with this address.
+                  ℹ️ They sign in with their <Text style={{ fontWeight: '700' }}>existing password</Text> for this email. If they've forgotten it, they can tap "Forgot password?" on the sign-in screen. We've also emailed them a heads-up.
                 </Text>
-              ) : null}
+              ) : (
+                <>
+                  <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
+                  <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
+                  {newCreds?.aliased ? (
+                    <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17 }]}>
+                      ℹ️ {newCreds.sharedWith} already has an account, so this manager got their own login above. Emails to it still arrive in the {newCreds.sharedWith} inbox — they just sign in with this address.
+                    </Text>
+                  ) : null}
+                </>
+              )}
             </View>
 
             <Text style={[typography.body, { fontWeight: '700', marginBottom: 4 }]}>Which house{houses.length === 1 ? '' : 's'} should {newMgr?.name || 'this manager'} manage?</Text>
