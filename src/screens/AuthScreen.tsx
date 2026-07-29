@@ -22,7 +22,7 @@ function friendlyAuthError(raw?: string): string {
   const m = (raw || '').toLowerCase();
   if (m.includes('invalid login credentials')) return 'The email or password you entered is incorrect. Please double-check and try again.';
   if (m.includes('email not confirmed')) return 'Please confirm your email address first, then sign in.';
-  if (m.includes('already registered') || m.includes('already been registered') || m.includes('already exists')) return 'An account with this email already exists — try signing in instead.';
+  if (m.includes('already registered') || m.includes('already been registered') || m.includes('already exists')) return 'An account with this email already exists — try signing in instead. If you claimed a listing on soberlivingdirectory.com, it’s the same account: sign in with that email and password (or reset it if you’ve forgotten it).';
   if (m.includes('failed to fetch') || m.includes('network')) return "Couldn't connect. Please check your internet connection and try again.";
   if (m.includes('too many') || m.includes('rate limit')) return 'Too many attempts. Please wait a minute and try again.';
   if (m.includes('password should be') || m.includes('at least 6')) return 'Your password is too short — please use at least 8 characters.';
@@ -138,6 +138,7 @@ export function AuthScreen() {
               keyboardType="phone-pad"
             />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
+            <Text style={styles.hint}>Already claimed a listing on soberlivingdirectory.com? That’s the same account — sign in with that email and password instead of creating a new one.</Text>
 
             <View style={{ height: spacing.md }} />
             <Button
@@ -149,6 +150,9 @@ export function AuthScreen() {
                 (role === 'facilitator' && !orgName.trim())
               }
             />
+            <TouchableOpacity onPress={() => setStep('signin')} style={styles.link}>
+              <Text style={styles.linkText}>Already have an account? Sign in</Text>
+            </TouchableOpacity>
             {role === 'facilitator' ? (
               <TouchableOpacity onPress={openWebSignup} style={styles.link}>
                 <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
@@ -166,6 +170,7 @@ export function AuthScreen() {
               <Text style={styles.linkText}>Forgot password?</Text>
             </TouchableOpacity>
             <Button title="Sign in" onPress={doSignIn} disabled={busy || !email || !password} />
+            <Text style={[styles.hint, { textAlign: 'center', marginTop: spacing.sm }]}>If you claimed a listing on soberlivingdirectory.com, your login here is the same email and password. Don’t remember it? Tap “Forgot password?” to reset it.</Text>
             <BackLink onPress={() => setStep('choose')} />
           </View>
         )}
