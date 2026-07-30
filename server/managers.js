@@ -24,14 +24,18 @@ const APP_STORE = 'https://apps.apple.com/app/sober-living-companion/id678070509
 const PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.soberlivingcompanion.app';
 const WEB_APP = 'https://app.soberlivingcompanion.com';
 
-function managerHtml({ name, orgName, email, password }) {
+function managerHtml({ name, orgName, email, password, isOwner }) {
   const who = name || 'there';
   const house = orgName || 'your sober living';
+  const role = isOwner ? 'co-owner' : 'house manager';
+  const can = isOwner
+    ? 'You have full owner access — manage residents, staff, forms, UAs, payments, and settings.'
+    : 'You can manage residents, forms, agreements, UAs, and payments.';
   return `
   <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#2b2b2b">
-    <div style="background:#3E8E7E;border-radius:14px 14px 0 0;padding:18px 22px;color:#fff;font-weight:800;font-size:18px">🏠 You're a house manager</div>
+    <div style="background:#3E8E7E;border-radius:14px 14px 0 0;padding:18px 22px;color:#fff;font-weight:800;font-size:18px">🏠 You're a ${role}</div>
     <div style="border:1px solid #e3e0d9;border-top:0;border-radius:0 0 14px 14px;padding:24px;line-height:1.6">
-      <p style="margin:0 0 12px">Hi ${who}, you've been added as a <strong>house manager</strong> for <strong>${house}</strong> on Sober Living Companion. You can manage residents, forms, agreements, UAs, and payments.</p>
+      <p style="margin:0 0 12px">Hi ${who}, you've been added as a <strong>${role}</strong> for <strong>${house}</strong> on Sober Living Companion. ${can}</p>
       <p style="margin:0 0 6px;font-weight:700">Sign in with:</p>
       <p style="margin:0 0 4px">Email: <strong>${email}</strong></p>
       <p style="margin:0 0 16px">Temporary password: <strong style="font-size:18px;letter-spacing:1px;color:#2F6B5F">${password}</strong></p>
@@ -222,6 +226,9 @@ managersRouter.post('/', async (req, res) => {
   const email = (req.body?.email || '').trim().toLowerCase();
   const phone = (req.body?.phone || '').trim();
   const asOwner = req.body?.owner === true;
+  // Whether to email the new person their login (temp password + web link + app
+  // store links). Defaults ON; the owner can turn it off from the app.
+  const sendEmail = req.body?.sendEmail !== false;
   if (!name || !email) return res.status(400).json({ error: 'Name and email are required.' });
 
   // Co-owners are peers of the founder, so only an owner may create one, and
@@ -274,7 +281,9 @@ managersRouter.post('/', async (req, res) => {
           { id: existingId, role: 'facilitator', full_name: name, email, phone }, { onConflict: 'id' });
         await supabaseAdmin.from('org_members').upsert(
           { org_id: org.id, profile_id: existingId, is_owner: asOwner }, { onConflict: 'org_id,profile_id' });
-        if (RESEND_API_KEY) {
+        let reuseEmailed = false;
+        if (sendEmail && RESEND_API_KEY) {
+          reuseEmailed = true;
           fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -287,7 +296,7 @@ managersRouter.post('/', async (req, res) => {
             .catch((e) => console.error('[managers] reuse email error', e));
         }
         const billing = await syncManagerSeats(org);
-        return res.json({ id: existingId, email, reused: true, owner: asOwner, billed: billing.billed, seats: billing.seats });
+        return res.json({ id: existingId, email, reused: true, owner: asOwner, billed: billing.billed, seats: billing.seats, emailed: reuseEmailed, emailConfigured: !!RESEND_API_KEY });
       }
       return res.status(409).json({ error: 'That email is already registered. Please use a different email for this manager.' });
     }
@@ -337,8 +346,11 @@ managersRouter.post('/', async (req, res) => {
       { onConflict: 'org_id,profile_id' },
     );
 
-    // Email the new manager their temporary password.
-    if (RESEND_API_KEY) {
+    // Optionally email the new manager/co-owner their login — temp password +
+    // "open the web app" link + both app-store download links (see managerHtml).
+    let emailed = false;
+    if (sendEmail && RESEND_API_KEY) {
+      emailed = true;
       fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -346,15 +358,17 @@ managersRouter.post('/', async (req, res) => {
           from: WELCOME_FROM,
           to: loginEmail,
           reply_to: 'joseph@soberlivingdirectory.com',
-          subject: `You're a house manager on ${org.name || 'Sober Living Companion'}`,
-          html: managerHtml({ name, orgName: org.name, email: loginEmail, password }),
+          subject: `Your login for ${org.name || 'Sober Living Companion'}`,
+          html: managerHtml({ name, orgName: org.name, email: loginEmail, password, isOwner: asOwner }),
         }),
       }).then((r) => { if (!r.ok) r.text().then((t) => console.error('[managers] email failed', r.status, t)); })
         .catch((e) => console.error('[managers] email error', e));
+    } else if (sendEmail && !RESEND_API_KEY) {
+      console.warn('[managers] RESEND_API_KEY not set — could not email login to', loginEmail);
     }
 
     const billing = await syncManagerSeats(org);
-    res.json({ id: uid, email: loginEmail, password, aliased, owner: asOwner, sharedWith: aliased ? email : undefined, billed: billing.billed, seats: billing.seats });
+    res.json({ id: uid, email: loginEmail, password, aliased, owner: asOwner, sharedWith: aliased ? email : undefined, billed: billing.billed, seats: billing.seats, emailed, emailConfigured: !!RESEND_API_KEY });
   } catch (e) {
     console.error('[managers] create', e);
     res.status(500).json({ error: e.message });

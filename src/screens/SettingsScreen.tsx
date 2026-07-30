@@ -67,12 +67,13 @@ export function SettingsScreen() {
   const [owners, setOwners] = useState<Manager[]>([]);
   const [ownerSlotsLeft, setOwnerSlotsLeft] = useState(0);
   const [mgrAsOwner, setMgrAsOwner] = useState(false);
+  const [mgrSendEmail, setMgrSendEmail] = useState(true);
   const [mgrOpen, setMgrOpen] = useState(false);
   const [mgrName, setMgrName] = useState('');
   const [mgrEmail, setMgrEmail] = useState('');
   const [mgrPhone, setMgrPhone] = useState('');
   const [mgrBusy, setMgrBusy] = useState(false);
-  const [newCreds, setNewCreds] = useState<{ email: string; password?: string; aliased?: boolean; sharedWith?: string; reused?: boolean } | null>(null);
+  const [newCreds, setNewCreds] = useState<{ email: string; password?: string; aliased?: boolean; sharedWith?: string; reused?: boolean; emailed?: boolean; emailConfigured?: boolean } | null>(null);
   const [newMgr, setNewMgr] = useState<{ id: string; name: string } | null>(null);
   const [houses, setHouses] = useState<House[]>([]);
   const [assignedHouses, setAssignedHouses] = useState<Set<string>>(new Set());
@@ -222,12 +223,12 @@ export function SettingsScreen() {
     if (!mgrName.trim() || !mgrEmail.trim()) return;
     setMgrBusy(true);
     try {
-      const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim(), mgrAsOwner);
-      setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith, reused: r.reused });
+      const r = await addManager(mgrName.trim(), mgrEmail.trim(), mgrPhone.trim(), mgrAsOwner, mgrSendEmail);
+      setNewCreds({ email: r.email, password: r.password, aliased: r.aliased, sharedWith: r.sharedWith, reused: r.reused, emailed: r.emailed, emailConfigured: r.emailConfigured });
       setNewMgr({ id: r.id, name: mgrName.trim() });
       setAssignedHouses(new Set());
       listHouses().then(setHouses).catch(() => {});
-      setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone(''); setMgrAsOwner(false);
+      setMgrOpen(false); setMgrName(''); setMgrEmail(''); setMgrPhone(''); setMgrAsOwner(false); setMgrSendEmail(true);
       loadManagers();
     } catch (e: any) {
       Alert.alert('Could not add manager', e?.message ?? 'Try again.');
@@ -713,6 +714,22 @@ export function SettingsScreen() {
                 </View>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              onPress={() => setMgrSendEmail((v) => !v)}
+              style={styles.ownerToggle}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: mgrSendEmail }}
+            >
+              <View style={[styles.checkbox, mgrSendEmail && styles.checkboxOn]}>
+                {mgrSendEmail ? <Text style={styles.checkboxTick}>✓</Text> : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textPrimary }}>📧 Email login details to them</Text>
+                <Text style={typography.caption}>
+                  Emails their temporary password, a sign-in link, and both app-store download links.
+                </Text>
+              </View>
+            </TouchableOpacity>
             <Button title={mgrBusy ? 'Creating…' : mgrAsOwner ? 'Create co-owner' : 'Create manager'} onPress={addMgr} disabled={mgrBusy || !mgrName.trim() || !mgrEmail.trim()} />
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
@@ -738,6 +755,11 @@ export function SettingsScreen() {
                 <>
                   <Text style={[styles.credLabel, { marginTop: spacing.sm }]}>Temporary password</Text>
                   <Text selectable style={styles.credValue}>{newCreds?.password}</Text>
+                  {newCreds?.emailed ? (
+                    <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17 }]}>📧 We emailed these login details (password + sign-in & app-store links) to {newCreds.email}.</Text>
+                  ) : newCreds?.emailConfigured === false ? (
+                    <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17, color: colors.crisis }]}>⚠️ Couldn't email automatically (email service not set up) — share the password above manually.</Text>
+                  ) : null}
                   {newCreds?.aliased ? (
                     <Text style={[typography.caption, { marginTop: spacing.sm, lineHeight: 17 }]}>
                       ℹ️ {newCreds.sharedWith} already has an account, so this manager got their own login above. Emails to it still arrive in the {newCreds.sharedWith} inbox — they just sign in with this address.
