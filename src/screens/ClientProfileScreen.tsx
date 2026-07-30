@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
@@ -641,26 +642,22 @@ export function ClientProfileScreen() {
       <Button title="💵 Record payment" onPress={() => { setPayAmount(''); setPayMethod('zelle'); setPayOpen(true); }} />
       <View style={{ height: spacing.sm }} />
 
-      <Modal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
-            <Text style={typography.h3}>Record a payment</Text>
-            <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Log a payment {client.firstName} made this month.</Text>
-            <Text style={styles.label}>Amount ($)</Text>
-            <TextInput style={styles.input} value={payAmount} onChangeText={setPayAmount} placeholder="e.g. 800" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
-            <Text style={styles.label}>Method</Text>
-            <View style={styles.payMethods}>
-              {PAY_METHODS.map((m) => (
-                <TouchableOpacity key={m.value} onPress={() => setPayMethod(m.value)} style={[styles.payChip, payMethod === m.value && styles.payChipOn]}>
-                  <Text style={[styles.payChipText, payMethod === m.value && { color: colors.textInverse }]}>{m.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Button title={paySaving ? 'Saving…' : 'Record payment'} onPress={recordPay} disabled={paySaving || !payAmount.trim()} />
-            <TouchableOpacity onPress={() => setPayOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
-          </View>
+      <KeyboardModal visible={payOpen} onClose={() => setPayOpen(false)}>
+        <Text style={typography.h3}>Record a payment</Text>
+        <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>Log a payment {client.firstName} made this month.</Text>
+        <Text style={styles.label}>Amount ($)</Text>
+        <TextInput style={styles.input} value={payAmount} onChangeText={setPayAmount} placeholder="e.g. 800" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" />
+        <Text style={styles.label}>Method</Text>
+        <View style={styles.payMethods}>
+          {PAY_METHODS.map((m) => (
+            <TouchableOpacity key={m.value} onPress={() => setPayMethod(m.value)} style={[styles.payChip, payMethod === m.value && styles.payChipOn]}>
+              <Text style={[styles.payChipText, payMethod === m.value && { color: colors.textInverse }]}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </Modal>
+        <Button title={paySaving ? 'Saving…' : 'Record payment'} onPress={recordPay} disabled={paySaving || !payAmount.trim()} />
+        <TouchableOpacity onPress={() => setPayOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
+      </KeyboardModal>
 
       {/* Contact info + quick actions */}
       <SectionTitle>Contact</SectionTitle>

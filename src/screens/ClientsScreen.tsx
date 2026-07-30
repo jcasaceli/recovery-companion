@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, ScrollView, Platform, Image } from 'react-native';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -426,9 +427,7 @@ function BulkRentModal({ visible, count, onClose, onSave }: { visible: boolean; 
     try { await onSave(cents, day); setAmount(''); setDueDay(''); } finally { setBusy(false); }
   };
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+    <KeyboardModal visible onClose={onClose}>
           <Text style={typography.h3}>Set membership fee for {count} client{count === 1 ? '' : 's'}</Text>
           <View style={styles.amtRow}><Text style={styles.dollar}>$</Text>
             <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
@@ -436,9 +435,7 @@ function BulkRentModal({ visible, count, onClose, onSave }: { visible: boolean; 
           <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} keyboardType="number-pad" placeholder="Due day of month (1–31)" placeholderTextColor={colors.textMuted} />
           <Button title="Apply to all selected" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={styles.cancel}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </KeyboardModal>
   );
 }
 

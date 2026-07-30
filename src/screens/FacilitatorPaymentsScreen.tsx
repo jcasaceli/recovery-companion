@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Acti
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { Card, SectionTitle, Button } from '../components/ui';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { PieChart } from '../components/PieChart';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import * as dbApi from '../services/db';
@@ -417,9 +418,7 @@ function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null;
     finally { setBusy(false); }
   };
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+    <KeyboardModal visible onClose={onClose}>
           <Text style={typography.h3}>Change payment date</Text>
           <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
             {money(payment.amountCents)} · {METHOD_LABEL[payment.method]}
@@ -430,9 +429,7 @@ function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null;
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </KeyboardModal>
   );
 }
 
@@ -494,9 +491,7 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+    <KeyboardModal visible onClose={onClose}>
           <Text style={typography.h3}>Set membership fee · {member.first_name}</Text>
 
           {/* Weekly / Monthly toggle */}
@@ -549,9 +544,7 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </KeyboardModal>
   );
 }
 
@@ -591,9 +584,7 @@ function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+    <KeyboardModal visible onClose={onClose}>
           <Text style={typography.h3}>Set fee for {count} member{count === 1 ? '' : 's'}</Text>
           <Text style={[typography.caption, { marginBottom: spacing.xs }]}>Applies the same membership fee to everyone selected.</Text>
 
@@ -645,9 +636,7 @@ function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </KeyboardModal>
   );
 }
 
@@ -704,9 +693,7 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+    <KeyboardModal visible onClose={onClose}>
           <Text style={typography.h3}>Record payment · {member.first_name}</Text>
           <View style={styles.amtRow}>
             <Text style={styles.dollar}>$</Text>
@@ -726,9 +713,7 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </KeyboardModal>
   );
 }
 
