@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert, TextInput, ActivityIndicator, TouchableOpacity, Modal, Platform, Switch, Linking, Image } from 'react-native';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { useNavigation } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
@@ -684,9 +685,7 @@ export function SettingsScreen() {
       <Text style={styles.version}>Sober Living Companion · preview build</Text>
 
       {/* Add house manager */}
-      <Modal visible={mgrOpen} transparent animationType="fade" onRequestClose={() => setMgrOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={mgrOpen} onClose={() => setMgrOpen(false)}>
             <Text style={typography.h3}>{mgrAsOwner ? 'Add co-owner' : 'Add house manager'}</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               {mgrAsOwner
@@ -718,14 +717,10 @@ export function SettingsScreen() {
             <TouchableOpacity onPress={() => setMgrOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* One-time temp-password reveal */}
-      <Modal visible={!!newCreds} transparent animationType="fade" onRequestClose={() => setNewCreds(null)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={!!newCreds} onClose={() => setNewCreds(null)}>
             <Text style={typography.h3}>{newCreds?.reused ? 'Manager added ✅' : 'Manager created ✅'}</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               {newCreds?.reused
@@ -773,9 +768,7 @@ export function SettingsScreen() {
             )}
 
             <Button title="Done" onPress={() => { setNewCreds(null); setNewMgr(null); }} />
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
     </Screen>
   );
 }

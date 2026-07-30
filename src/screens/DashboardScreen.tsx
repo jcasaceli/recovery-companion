@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking, Share, Platform } from 'react-native';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -479,9 +480,7 @@ export function DashboardScreen() {
       </ScrollView>
 
       {/* Add house meeting */}
-      <Modal visible={evtOpen} transparent animationType="fade" onRequestClose={() => setEvtOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={evtOpen} onClose={() => setEvtOpen(false)}>
             <Text style={typography.h3}>Add house meeting</Text>
             {houses.length > 1 ? (
               <View style={styles.evtChips}>
@@ -508,9 +507,7 @@ export function DashboardScreen() {
             </View>
             <Button title={evtBusy ? 'Adding…' : 'Add meeting'} onPress={saveEvent} disabled={evtBusy} />
             <TouchableOpacity onPress={() => setEvtOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
     </SafeAreaView>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, ScrollView, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
+import { KeyboardModal } from '../components/KeyboardModal';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
@@ -374,9 +375,7 @@ export function FacilitatorFormsScreen() {
   const Modals = (
     <>
       {/* ── New form builder modal ───────────────────────────────────────────── */}
-      <Modal visible={builderOpen} transparent animationType="slide" onRequestClose={() => setBuilderOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={builderOpen} onClose={() => setBuilderOpen(false)}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingId ? 'Edit form' : 'New form'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Name your form, then add fields and signature spaces.</Text>
@@ -407,26 +406,18 @@ export function FacilitatorFormsScreen() {
               <Button title={busy ? 'Saving…' : (editingId ? '💾 Save changes' : 'Save & choose recipients')} onPress={saveAndSend} disabled={busy} />
               <TouchableOpacity onPress={() => { setBuilderOpen(false); setEditingId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* ── Send form modal ──────────────────────────────────────────────────── */}
-      <Modal visible={!!sendForm} transparent animationType="slide" onRequestClose={() => setSendForm(null)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={!!sendForm} onClose={() => setSendForm(null)}>
             <Text style={typography.h3}>Send “{sendForm?.title}”</Text>
             <RecipientPicker />
             <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendForm} disabled={busy} />
             <TouchableOpacity onPress={() => setSendForm(null)} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* ── Upload document modal ────────────────────────────────────────────── */}
-      <Modal visible={uploadOpen} transparent animationType="slide" onRequestClose={() => setUploadOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={uploadOpen} onClose={() => setUploadOpen(false)}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingDocId ? 'Edit document' : 'Upload a document'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Upload a photo or scan, place signature fields on it, then save it as a reusable template or send it to residents to sign.</Text>
@@ -458,14 +449,10 @@ export function FacilitatorFormsScreen() {
               <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendDoc} disabled={busy} />
               <TouchableOpacity onPress={() => { setUploadOpen(false); setEditingDocId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* ── Write agreement (rich text) modal ────────────────────────────────── */}
-      <Modal visible={writeOpen} transparent animationType="slide" onRequestClose={() => setWriteOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={[styles.modal, { maxWidth: 760, alignSelf: 'center', width: '100%' }]}>
+      <KeyboardModal visible={writeOpen} onClose={() => setWriteOpen(false)} cardStyle={{ maxWidth: 760, alignSelf: 'center', width: '100%' }}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={typography.h3}>{editingId ? 'Edit agreement' : 'Write an agreement'}</Text>
               <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Format the text, or paste from Word. Save it as a reusable template, or send it to residents to read and sign.</Text>
@@ -484,9 +471,7 @@ export function FacilitatorFormsScreen() {
               <Button title={busy ? 'Sending…' : 'Send to residents'} onPress={confirmSendWritten} disabled={busy} />
               <TouchableOpacity onPress={() => { setWriteOpen(false); setEditingId(null); }} style={styles.cancel}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
     </>
   );
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, RefreshControl, Alert } from 'react-native';
+import { KeyboardModal } from '../components/KeyboardModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -104,9 +105,7 @@ export function BedsScreen() {
         <Text style={styles.footHint}>Bed counts come from each house’s capacity (set in Settings). Pull down to refresh.</Text>
       </ScrollView>
 
-      <Modal visible={!!assignTo} transparent animationType="fade" onRequestClose={() => setAssignTo(null)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={!!assignTo} onClose={() => setAssignTo(null)}>
             <Text style={typography.h3}>Assign to {assignTo?.name}</Text>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Pick a resident to move into this house.</Text>
             <ScrollView style={{ maxHeight: 340 }}>
@@ -120,9 +119,7 @@ export function BedsScreen() {
             <TouchableOpacity onPress={() => setAssignTo(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
     </SafeAreaView>
   );
 }

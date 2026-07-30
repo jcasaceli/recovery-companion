@@ -959,9 +959,7 @@ export function ClientProfileScreen() {
       </Card>
 
       {/* Title prompt after picking a document */}
-      <Modal visible={!!pendingDoc} transparent animationType="fade" onRequestClose={() => setPendingDoc(null)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={!!pendingDoc} onClose={() => setPendingDoc(null)}>
             <Text style={typography.h3}>Name this agreement</Text>
             {pendingDoc ? <Image source={{ uri: pendingDoc }} style={styles.docPreview} resizeMode="contain" /> : null}
             <TextInput style={styles.input} value={docTitle} onChangeText={setDocTitle} placeholder="e.g. Membership Agreement 2026" placeholderTextColor={colors.textMuted} />
@@ -970,9 +968,7 @@ export function ClientProfileScreen() {
             <TouchableOpacity onPress={() => setPendingDoc(null)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* Curfew check-ins */}
       <CurfewManager individualId={id} memberName={client.firstName} />
@@ -1010,9 +1006,7 @@ export function ClientProfileScreen() {
         )}
       </Card>
 
-      <Modal visible={uaOpen} transparent animationType="fade" onRequestClose={() => setUaOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={uaOpen} onClose={() => setUaOpen(false)}>
             <Text style={typography.h3}>Log UA · {client.firstName}</Text>
             <Text style={[styles.label, { marginTop: spacing.sm }]}>Test date</Text>
             <DateField value={uaDate} onChange={setUaDate} placeholder="Pick the test date" />
@@ -1038,9 +1032,7 @@ export function ClientProfileScreen() {
             <TouchableOpacity onPress={() => { setUaOpen(false); setUaFile(null); }} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
               <Text style={{ color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* Meeting check-ins (staff view) */}
       <SectionTitle>Meeting check-ins</SectionTitle>
@@ -1149,9 +1141,7 @@ export function ClientProfileScreen() {
       </Card>
 
       {/* Merge duplicate picker */}
-      <Modal visible={mergeOpen} transparent animationType="fade" onRequestClose={() => setMergeOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modal}>
+      <KeyboardModal visible={mergeOpen} onClose={() => setMergeOpen(false)}>
             <Text style={typography.h3}>Merge a duplicate</Text>
             <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
               Pick the duplicate record to merge into {client.firstName}. Their data moves here and the duplicate is deleted.
@@ -1171,9 +1161,7 @@ export function ClientProfileScreen() {
               ))}
             </ScrollView>
             <TouchableOpacity onPress={() => setMergeOpen(false)} style={{ alignItems: 'center', paddingVertical: spacing.sm }}><Text style={{ color: colors.textSecondary }}>Cancel</Text></TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardModal>
 
       {/* Invite */}
       {client.phone || client.email ? (
