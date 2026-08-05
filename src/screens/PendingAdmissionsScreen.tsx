@@ -14,6 +14,8 @@ import {
   getAvatarUrls,
   listDocuments,
   getDocumentUrl,
+  listHouses,
+  House,
 } from '../services/db';
 
 type AppField = { label?: string; type?: string; value?: any };
@@ -99,6 +101,9 @@ export function PendingAdmissionsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Applicant | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [houses, setHouses] = useState<House[]>([]);
+  const [admitting, setAdmitting] = useState<Applicant | null>(null); // house-picker target
+  const [showDeclined, setShowDeclined] = useState(false);
 
   // Open the applicant's full application. The backend saves it as a formatted
   // PDF on their profile when they submit — so we can show it here without
@@ -138,6 +143,7 @@ export function PendingAdmissionsScreen() {
       ]);
       setRows(pending);
       setDeclined(dec);
+      listHouses().then(setHouses).catch(() => {});
       const paths = [...pending, ...dec].map((r) => r.avatar_path).filter(Boolean) as string[];
       if (paths.length) getAvatarUrls(paths).then(setAvatars).catch(() => {});
     } catch (e: any) {
@@ -149,26 +155,27 @@ export function PendingAdmissionsScreen() {
 
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
 
+  // Step 1: tapping Admit opens the house picker (or admits directly if the org
+  // has no houses set up yet). Step 2 (doAdmit) runs after they pick a house.
   const admit = (a: Applicant) => {
-    const name = fullName(a) || 'this applicant';
-    confirmThen(
-      'Admit into care?',
-      `${name} will become a resident and appear in your Members list. Their move-in date is set to today.`,
-      'Admit',
-      async () => {
-        setBusyId(a.id);
-        try {
-          await admitPendingAdmission(a.id);
-          setViewing(null);
-          await reloadCloud();
-          await load();
-        } catch (e: any) {
-          notify('Could not admit', e?.message ?? 'Please try again.');
-        } finally {
-          setBusyId(null);
-        }
-      },
-    );
+    if (houses.length === 0) { doAdmit(a, null); return; }
+    setViewing(null);
+    setAdmitting(a);
+  };
+
+  const doAdmit = async (a: Applicant, house: House | null) => {
+    setAdmitting(null);
+    setBusyId(a.id);
+    try {
+      await admitPendingAdmission(a.id, house ? house.id : undefined, house ? house.name : undefined);
+      setViewing(null);
+      await reloadCloud();
+      await load();
+    } catch (e: any) {
+      notify('Could not admit', e?.message ?? 'Please try again.');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const decline = (a: Applicant) => {
@@ -269,9 +276,20 @@ export function PendingAdmissionsScreen() {
 
             {declined.length > 0 ? (
               <>
-                <Text style={styles.sectionLabel}>DECLINED · {declined.length}</Text>
-                <Text style={styles.sectionHint}>Their info and full application are saved. Restore them to pending, or admit them, anytime.</Text>
-                {declined.map((a) => renderCard(a, 'declined'))}
+                <TouchableOpacity
+                  style={styles.declinedToggle}
+                  activeOpacity={0.7}
+                  onPress={() => setShowDeclined((v) => !v)}
+                >
+                  <Text style={styles.declinedToggleText}>View declined · {declined.length}</Text>
+                  <Text style={styles.declinedChevron}>{showDeclined ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
+                {showDeclined ? (
+                  <>
+                    <Text style={styles.sectionHint}>Their info and full application are saved. Restore them to pending, or admit them, anytime.</Text>
+                    {declined.map((a) => renderCard(a, 'declined'))}
+                  </>
+                ) : null}
               </>
             ) : null}
           </>
@@ -309,6 +327,30 @@ export function PendingAdmissionsScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* House picker — shown after tapping Admit, so they land in the right house */}
+      <Modal visible={!!admitting} animationType="fade" transparent onRequestClose={() => setAdmitting(null)}>
+        <View style={styles.pickerBackdrop}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>Assign {admitting ? (fullName(admitting) || 'this resident') : 'resident'} to a house</Text>
+            <Text style={styles.pickerSub}>They'll be admitted into care and their house managers will see them and get their alerts.</Text>
+            <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+              {houses.map((h) => (
+                <TouchableOpacity key={h.id} style={styles.pickerRow} onPress={() => admitting && doAdmit(admitting, h)}>
+                  <Text style={styles.pickerHouse}>🏠 {h.name}</Text>
+                  <Text style={styles.pickerGo}>Admit here →</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.pickerRow, styles.pickerRowGhost]} onPress={() => admitting && doAdmit(admitting, null)}>
+                <Text style={styles.pickerHouseGhost}>Admit without a house (assign later)</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <TouchableOpacity onPress={() => setAdmitting(null)} style={styles.pickerCancel}>
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -327,6 +369,21 @@ const styles = StyleSheet.create({
   noneNote: { ...typography.bodySecondary, marginBottom: spacing.md },
   sectionLabel: { fontSize: 12, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.6, marginTop: spacing.md, marginBottom: 2 },
   sectionHint: { ...typography.caption, marginBottom: spacing.md },
+  declinedToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm },
+  declinedToggleText: { ...typography.body, fontWeight: '700', color: colors.textSecondary },
+  declinedChevron: { fontSize: 16, color: colors.textSecondary, fontWeight: '800' },
+  // House picker
+  pickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: spacing.lg },
+  pickerCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  pickerTitle: { ...typography.h3, marginBottom: 4 },
+  pickerSub: { ...typography.caption, marginBottom: spacing.md },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, marginBottom: spacing.sm },
+  pickerRowGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
+  pickerHouse: { ...typography.body, fontWeight: '700' },
+  pickerHouseGhost: { ...typography.body, color: colors.textSecondary },
+  pickerGo: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  pickerCancel: { alignItems: 'center', paddingVertical: spacing.sm, marginTop: 2 },
+  pickerCancelText: { color: colors.textSecondary, fontWeight: '600' },
   restoreText: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
   avatarText: { color: colors.textInverse, fontWeight: '700', fontSize: 20 },
   applied: { ...typography.caption, marginTop: 1 },

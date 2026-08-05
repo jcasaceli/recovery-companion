@@ -55,7 +55,7 @@ export function ClientsScreen() {
     }, [locked]),
   );
 
-  const [filter, setFilter] = useState<ClientStatus>('in_care');
+  const [filter, setFilter] = useState<'in_care' | 'completed' | 'declined'>('in_care');
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -86,7 +86,9 @@ export function ClientsScreen() {
   const counts = {
     in_care: sourceClients.filter((c) => c.status === 'in_care').length,
     completed: sourceClients.filter((c) => c.status === 'completed').length,
+    declined: sourceClients.filter((c) => (c.status as string) === 'declined').length,
   };
+  const onDenied = filter === 'declined';
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
 
   const [importing, setImporting] = useState(false);
@@ -215,6 +217,13 @@ export function ClientsScreen() {
   const toggleSel = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
   const exitSelect = () => { setSelectMode(false); setSelected({}); };
 
+  // Denied/never-admitted applicants live under Pending Admission for review,
+  // where they can be admitted or restored. From this tab we just surface them.
+  const openClient = (c: any) => {
+    if (onDenied) { nav.navigate('PendingAdmissions'); return; }
+    nav.navigate('ClientProfile', { id: c.id });
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.adminBar}>
@@ -269,11 +278,22 @@ export function ClientsScreen() {
       <View style={styles.filters}>
         <FilterTab label={`In Care (${counts.in_care})`} active={filter === 'in_care'} onPress={() => setFilter('in_care')} />
         <FilterTab label={`Completed (${counts.completed})`} active={filter === 'completed'} onPress={() => setFilter('completed')} />
+        <FilterTab label={`Denied (${counts.declined})`} active={filter === 'declined'} onPress={() => setFilter('declined')} />
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.scrollFlex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {locked ? <Paywall onChanged={reloadCloud} /> : null}
-        {!locked && !selectMode && !adding ? (
+
+        {onDenied && !locked ? (
+          <View style={styles.deniedBanner}>
+            <Text style={styles.deniedBannerTitle}>Denied &amp; never-admitted applications</Text>
+            <Text style={styles.deniedBannerSub}>
+              People who applied but were denied or never moved in. Their full application is saved. Tap anyone to review, admit, or restore them.
+            </Text>
+          </View>
+        ) : null}
+
+        {!locked && !selectMode && !adding && !onDenied ? (
           <>
             <Button title="+ Add member" onPress={() => setAdding(true)} />
             {onWeb ? (
@@ -324,7 +344,7 @@ export function ClientsScreen() {
         ) : null}
 
         {shown.length === 0 ? (
-          <Text style={styles.empty}>{filter === 'in_care' ? 'No members in care yet.' : 'No completed members yet.'}</Text>
+          <Text style={styles.empty}>{filter === 'in_care' ? 'No members in care yet.' : filter === 'completed' ? 'No completed members yet.' : 'No denied or never-admitted applications.'}</Text>
         ) : isWeb ? (
           <View style={styles.grid}>
             {shown.map((c) => (
@@ -332,7 +352,7 @@ export function ClientsScreen() {
                 key={c.id}
                 style={styles.tile}
                 activeOpacity={0.75}
-                onPress={() => (selectMode && !locked ? toggleSel(c.id) : nav.navigate('ClientProfile', { id: c.id }))}
+                onPress={() => (selectMode && !locked && !onDenied ? toggleSel(c.id) : openClient(c))}
               >
                 <View style={styles.tilePhotoWrap}>
                   {c.avatarPath && avatars[c.avatarPath] ? (
@@ -358,9 +378,9 @@ export function ClientsScreen() {
               style={styles.row}
               activeOpacity={0.7}
               onPress={() =>
-                selectMode && !locked
+                selectMode && !locked && !onDenied
                   ? toggleSel(c.id)
-                  : nav.navigate('ClientProfile', { id: c.id })
+                  : openClient(c)
               }
             >
               {selectMode ? (
@@ -474,6 +494,9 @@ const styles = StyleSheet.create({
   // once a house had members). flexShrink:0 on the chip row is a second guard.
   scrollFlex: { flex: 1 },
   ioRow: { flexDirection: 'row', marginTop: spacing.sm },
+  deniedBanner: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.sm },
+  deniedBannerTitle: { ...typography.h3, fontSize: 15, marginBottom: 2 },
+  deniedBannerSub: { ...typography.caption, lineHeight: 17 },
   empty: { ...typography.bodySecondary, textAlign: 'center', marginTop: spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.card },
   check: { fontSize: 22, marginRight: spacing.md },

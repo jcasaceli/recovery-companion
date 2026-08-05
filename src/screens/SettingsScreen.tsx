@@ -9,6 +9,7 @@ import { useAuth } from '../state/auth';
 import { getConnectStatus, startConnectOnboarding, startPlatformSubscribe, startConnectExisting, getConnectExistingUrl, ConnectStatus } from '../services/payments';
 import { getMyOrg, setOrgPaymentHandles, setOrgBranding, setOrgIntakeFee, getMyNetworkName, leaveSoberLiving, updateMyProfileName, updatePassword, listHouses, assignManagerToHouse, setMyAvatar, getMyAvatarUrl, House } from '../services/db';
 import { pickPhoto, readFileBytes } from '../utils/attachments';
+import { notifyHouseAssignment } from '../services/push';
 import { deleteAccount } from '../services/account';
 import { getNotifyMemberActivity, setNotifyMemberActivity } from '../services/db';
 import { listManagers, addManager, removeManager, Manager } from '../services/managers';
@@ -81,7 +82,7 @@ export function SettingsScreen() {
     if (!newMgr) return;
     const on = !assignedHouses.has(houseId);
     setAssignedHouses((s) => { const n = new Set(s); if (on) n.add(houseId); else n.delete(houseId); return n; });
-    try { if (on) await assignManagerToHouse(houseId, newMgr.id); } catch (e: any) { Alert.alert('Could not assign', e?.message ?? 'Try again.'); }
+    try { if (on) { await assignManagerToHouse(houseId, newMgr.id); notifyHouseAssignment(newMgr.id, houseId); } } catch (e: any) { Alert.alert('Could not assign', e?.message ?? 'Try again.'); }
   };
   const [notifyActivity, setNotifyActivity] = useState(false);
 

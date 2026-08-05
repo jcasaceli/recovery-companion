@@ -6,6 +6,7 @@ import {
   House, listHouses, createHouse, renameHouse, deleteHouse,
   listHouseStaff, assignManagerToHouse, removeManagerFromHouse, setHouseCapacity,
 } from '../services/db';
+import { notifyHouseAssignment } from '../services/push';
 import { Manager } from '../services/managers';
 
 /**
@@ -66,7 +67,7 @@ export function HousesManager({ managers, isOwner = true }: { managers: Manager[
 
   const toggleManager = async (houseId: string, profileId: string, on: boolean) => {
     try {
-      if (on) await assignManagerToHouse(houseId, profileId);
+      if (on) { await assignManagerToHouse(houseId, profileId); notifyHouseAssignment(profileId, houseId); }
       else await removeManagerFromHouse(houseId, profileId);
       setStaff((s) => ({ ...s, [houseId]: on ? [...(s[houseId] || []), profileId] : (s[houseId] || []).filter((x) => x !== profileId) }));
     } catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }

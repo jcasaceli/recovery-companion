@@ -232,11 +232,14 @@ export async function listDeclinedAdmissions() {
 
 /** Owner/manager: admit an applicant into care — they become a full resident
  *  (move-in date = today) and appear in the Members roster. Works whether they
- *  were pending or previously declined. */
-export async function admitPendingAdmission(id: string) {
+ *  were pending or previously declined. Optionally assigns them to a house at
+ *  admit time (so managers of that house immediately see them + get alerts). */
+export async function admitPendingAdmission(id: string, houseId?: string | null, houseName?: string | null) {
   const today = new Date().toISOString().slice(0, 10);
+  const patch: any = { status: 'in_care', move_in_date: today };
+  if (houseId !== undefined) { patch.house_id = houseId; patch.house_name = houseName ?? null; }
   const { error } = await db()
-    .from('individuals').update({ status: 'in_care', move_in_date: today })
+    .from('individuals').update(patch)
     .eq('id', id).in('status', ['pending', 'declined']);
   if (error) throw error;
 }

@@ -190,6 +190,10 @@ export function DashboardScreen() {
     .filter((p) => p.individualId === id && p.periodMonth === pd && p.status === 'paid')
     .reduce((s, p) => s + p.amountCents, 0);
 
+  // Per-resident quick stats for the occupancy list.
+  const meetings7 = (id: string) => checkins.filter((c) => c.individualId === id).length;
+  const owedThisMonth = (m: any) => Math.max(0, (m.monthly_rent_cents || 0) - paidSum(m.id));
+
   const withRent = members.filter((m) => (m.monthly_rent_cents || 0) > 0);
   const expected = withRent.reduce((s, m) => s + (m.monthly_rent_cents || 0), 0);
   const collected = withRent.reduce((s, m) => s + Math.min(paidSum(m.id), m.monthly_rent_cents || 0), 0);
@@ -282,13 +286,28 @@ export function DashboardScreen() {
                     {cap != null ? `${residents.length}/${cap} beds · ${open} open` : `${residents.length} residents`}
                   </Text>
                 </View>
-                {residents.map((m) => (
-                  <TouchableOpacity key={m.id} style={styles.row} onPress={() => openClient(m.id)}>
-                    <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-                    <Text style={[typography.body, { flex: 1 }]}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
-                    <Text style={typography.caption}>{m.bed_label || 'No bed assigned'}</Text>
-                  </TouchableOpacity>
-                ))}
+                {residents.map((m) => {
+                  const owed = owedThisMonth(m);
+                  const mtgs = meetings7(m.id);
+                  const hasRent = (m.monthly_rent_cents || 0) > 0;
+                  return (
+                    <TouchableOpacity key={m.id} style={styles.row} onPress={() => openClient(m.id)}>
+                      <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={typography.body}>{m.first_name}{m.last_name ? ` ${m.last_name}` : ''}</Text>
+                        <Text style={typography.caption}>
+                          📍 {mtgs} meeting{mtgs === 1 ? '' : 's'} · 7d
+                          {hasRent ? (
+                            <Text style={{ color: owed > 0 ? colors.crisis : colors.success }}>
+                              {`  ·  ${owed > 0 ? `owes ${money(owed)}` : 'paid up'}`}
+                            </Text>
+                          ) : null}
+                        </Text>
+                      </View>
+                      <Text style={typography.caption}>{m.bed_label || 'No bed'}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
                 {cap == null ? <Text style={[typography.caption, { color: colors.textMuted }]}>Set a bed capacity in Account → Houses.</Text> : null}
               </View>
             );

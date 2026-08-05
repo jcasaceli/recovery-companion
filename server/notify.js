@@ -65,7 +65,7 @@ notifyRouter.post('/care', async (req, res) => {
 
     const { data: ind } = await admin
       .from('individuals')
-      .select('profile_id, org_id')
+      .select('profile_id, org_id, house_id')
       .eq('id', individualId)
       .maybeSingle();
     if (!ind) return res.json({ sent: 0, residentLinked: false });
@@ -75,8 +75,28 @@ notifyRouter.post('/care', async (req, res) => {
     // residentOnly (e.g. a "please share your location" nudge) pushes ONLY to the
     // resident's phone — not the whole care team.
     if (!residentOnly && ind.org_id) {
-      const { data: mems } = await admin.from('org_members').select('profile_id').eq('org_id', ind.org_id);
-      let staff = (mems ?? []).map((m) => m.profile_id);
+      const { data: mems } = await admin.from('org_members').select('profile_id, is_owner').eq('org_id', ind.org_id);
+      const owners = (mems ?? []).filter((m) => m.is_owner).map((m) => m.profile_id);
+      const managers = (mems ?? []).filter((m) => !m.is_owner).map((m) => m.profile_id);
+      // House scoping: a manager assigned to specific house(s) only gets alerts
+      // for residents living in those houses. A manager with NO house
+      // assignments keeps org-wide access (mirrors getMyHouseScope / the Members
+      // list), so they still get everything. Owners always get everything.
+      let scopedManagers = managers;
+      if (managers.length) {
+        const { data: hs } = await admin.from('house_staff').select('profile_id, house_id').in('profile_id', managers);
+        const byMgr = new Map();
+        for (const r of hs ?? []) {
+          if (!byMgr.has(r.profile_id)) byMgr.set(r.profile_id, new Set());
+          byMgr.get(r.profile_id).add(r.house_id);
+        }
+        scopedManagers = managers.filter((id) => {
+          const set = byMgr.get(id);
+          if (!set || set.size === 0) return true;              // unscoped manager → all houses
+          return ind.house_id ? set.has(ind.house_id) : false;  // scoped → only their houses
+        });
+      }
+      let staff = [...owners, ...scopedManagers];
       // Routine resident activity (check-ins, payment reports) respects each
       // staff member's "notify me about resident activity" toggle, which is OFF
       // by default — staff only get these if they explicitly opted in
@@ -94,6 +114,38 @@ notifyRouter.post('/care', async (req, res) => {
     res.json({ sent: tokens.length, residentLinked: !!ind.profile_id });
   } catch (e) {
     console.error('[notify] care', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Tell a manager they've just been assigned to a house — so they know they'll
+// start getting alerts for residents living there. Only an owner of that house's
+// org may trigger it.
+notifyRouter.post('/house-assignment', async (req, res) => {
+  if (!admin) return res.status(503).json({ error: 'not configured' });
+  try {
+    const user = await getUser(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated.' });
+    const { profileId, houseId } = req.body || {};
+    if (!profileId || !houseId) return res.status(400).json({ error: 'profileId and houseId required' });
+
+    const { data: house } = await admin.from('houses').select('id, name, org_id').eq('id', houseId).maybeSingle();
+    if (!house) return res.json({ sent: 0 });
+    // Authorization: caller must be an owner in the same org as the house.
+    const { data: me } = await admin
+      .from('org_members').select('is_owner')
+      .eq('org_id', house.org_id).eq('profile_id', user.id).maybeSingle();
+    if (!me || !me.is_owner) return res.status(403).json({ error: 'Not authorized' });
+
+    const tokens = await tokensFor([profileId]);
+    await expoPush(
+      tokens,
+      '🏠 You’ve been assigned to a house',
+      `You now manage ${house.name}. You’ll get alerts for the residents living there.`,
+    );
+    res.json({ sent: tokens.length });
+  } catch (e) {
+    console.error('[notify] house-assignment', e);
     res.status(500).json({ error: e.message });
   }
 });

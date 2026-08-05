@@ -62,6 +62,19 @@ export async function requestLocationShare(individualId: string): Promise<{ sent
   } catch { return null; }
 }
 
+/** Tell a manager they've just been assigned to a house (so they know they'll
+ *  now get alerts for residents there). Fire-and-forget; owner-only on the server. */
+export async function notifyHouseAssignment(profileId: string, houseId: string) {
+  if (!BACKEND_URL) return;
+  const t = await authToken();
+  if (!t) return;
+  fetch(`${BACKEND_URL}/api/notify/house-assignment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ profileId, houseId }),
+  }).catch(() => {});
+}
+
 /** Notify everyone who opted into community alerts. */
 export async function notifyCommunity(title: string, body: string) {
   if (!BACKEND_URL) return;

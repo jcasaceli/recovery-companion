@@ -1064,8 +1064,13 @@ export function ClientProfileScreen() {
           total check-in{checkins.length === 1 ? '' : 's'} · {checkins.filter((c) => c.createdAt > new Date(Date.now() - 7 * 86400000).toISOString()).length} this week
           {checkins.length ? ` · tap to ${showMeetings ? 'hide' : 'see'} all` : ''}
         </Text>
-        {showMeetings
-          ? checkins.map((c) => (
+        {showMeetings ? (
+          <ScrollView
+            style={{ maxHeight: 340 }}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            {checkins.map((c) => (
               <View key={c.id} style={styles.checkinRow}>
                 <Text style={typography.body}>
                   {c.kind === 'online' ? '💻 ' : '📍 '}
@@ -1084,8 +1089,14 @@ export function ClientProfileScreen() {
                       : ' · not confirmed'}
                 </Text>
               </View>
-            ))
-          : null}
+            ))}
+            {checkins.length > 6 ? (
+              <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, textAlign: 'center' }]}>
+                Scroll to see all {checkins.length} · tap the number above to close
+              </Text>
+            ) : null}
+          </ScrollView>
+        ) : null}
       </Card>
 
       {/* Sobriety — the resident sets this in their app; staff see it read-only. */}

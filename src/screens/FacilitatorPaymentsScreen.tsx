@@ -154,6 +154,18 @@ export function FacilitatorPaymentsScreen() {
   const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
   const selectedMembers = members.filter((m) => selected.has(m.id));
 
+  // One-tap: price a whole house. Selects every resident in the filtered house
+  // and opens the bulk fee modal (which then asks for confirmation before saving).
+  const priceWholeHouse = () => {
+    if (!shownIds.length) return;
+    setSelectMode(true);
+    setSelected(new Set(shownIds));
+    setBulkOpen(true);
+  };
+  // If every selected resident is in one house, the confirmation can name it.
+  const selectedHouses = Array.from(new Set(selectedMembers.map((m) => m.house_name || 'Unassigned')));
+  const bulkHouseName = selectedHouses.length === 1 ? selectedHouses[0] : null;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
@@ -306,6 +318,13 @@ export function FacilitatorPaymentsScreen() {
               </ScrollView>
             ) : null}
 
+            {/* Price a whole house in one tap (only when viewing a single house) */}
+            {houseFilter && !selectMode && shown.length > 0 ? (
+              <TouchableOpacity onPress={priceWholeHouse} style={styles.wholeHouseBtn}>
+                <Text style={styles.wholeHouseTxt}>💵 Set one price for all of {houseFilter} ({shown.length})</Text>
+              </TouchableOpacity>
+            ) : null}
+
             <Card style={{ alignItems: 'center' }}>
               <SectionTitle>{houseFilter ? `${houseFilter} · this month` : 'This month'}</SectionTitle>
               <PieChart
@@ -390,6 +409,7 @@ export function FacilitatorPaymentsScreen() {
       <BulkRentModal
         visible={bulkOpen}
         count={selected.size}
+        houseName={bulkHouseName}
         onClose={() => setBulkOpen(false)}
         onSaved={() => { setBulkOpen(false); exitSelect(); load(); }}
         ids={selectedMembers.map((m) => m.id)}
@@ -549,8 +569,8 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
 }
 
 /** Set the same membership fee on every selected member at once. */
-function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
-  visible: boolean; count: number; ids: string[]; onClose: () => void; onSaved: () => void;
+function BulkRentModal({ visible, count, ids, houseName, onClose, onSaved }: {
+  visible: boolean; count: number; ids: string[]; houseName?: string | null; onClose: () => void; onSaved: () => void;
 }) {
   const [amount, setAmount] = useState('');
   const [period, setPeriod] = useState<'monthly' | 'weekly'>('monthly');
@@ -564,8 +584,7 @@ function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
   const baseCents = amount ? Math.round(parseFloat(amount) * 100) : 0;
   const totalCents = baseCents + (duesOn ? dbApi.WEEKLY_DUES_CENTS : 0) + (acOn ? dbApi.WEEKLY_AC_CENTS : 0);
 
-  const save = async () => {
-    const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
+  const doSave = async (cents: number | null) => {
     setBusy(true);
     try {
       const addons = { duesEnabled: duesOn, acEnabled: acOn };
@@ -581,6 +600,28 @@ function BulkRentModal({ visible, count, ids, onClose, onSaved }: {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Confirm before overwriting everyone's fee — this is a bulk change and hard to
+  // eyeball, so we spell out exactly who changes and to what.
+  const save = () => {
+    const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
+    const periodWord = period === 'weekly' ? 'a week' : 'a month';
+    const amtLabel = cents == null ? 'no membership fee' : `${money(totalCents)} ${periodWord}`;
+    const title = houseName
+      ? `Change the price for everyone in ${houseName}?`
+      : `Change the price for ${count} member${count === 1 ? '' : 's'}?`;
+    const who = houseName
+      ? `Everyone in ${houseName} (${count} resident${count === 1 ? '' : 's'}) will be updated to ${amtLabel}.`
+      : `All ${count} selected resident${count === 1 ? '' : 's'} will be updated to ${amtLabel}.`;
+    Alert.alert(
+      title,
+      `${who}\n\nThis replaces their current fee. You can still set an individual price for anyone afterward.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, update everyone', onPress: () => doSave(cents) },
+      ],
+    );
   };
 
   return (
@@ -742,6 +783,8 @@ const styles = StyleSheet.create({
   bulkBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, minHeight: 32 },
   bulkToggle: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primary },
   bulkToggleTxt: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  wholeHouseBtn: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md, alignItems: 'center', marginBottom: spacing.sm },
+  wholeHouseTxt: { color: colors.primary, fontWeight: '800', fontSize: 14 },
   selAll: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   selAllTxt: { ...typography.body, fontWeight: '700', color: colors.textPrimary },
   bulkCancel: { color: colors.textSecondary, fontWeight: '600', paddingHorizontal: spacing.sm },
