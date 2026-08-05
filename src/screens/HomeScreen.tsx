@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, TextInput, Linking } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { DateField } from '../components/PickerFields';
@@ -6,6 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { notifyCareTeam, notifyCare, scheduleMeetingVerify, cancelMeetingVerify } from '../services/push';
+import { backfillAddresses } from '../services/geocode';
 import { recordMeetingCheckin, verifyMeetingCheckin, listMeetingCheckins, deleteMeetingCheckin, listHouseEvents, HouseEvent, getPassesEnabled, getMyCurfew, recordCurfewCheckin, listCurfewCheckins, curfewTimesForDay, Curfew, listMyAgreements, listMyFormResponses, getMyHouseName, getMyMedications, setMyMedications } from '../services/db';
 import { SwipeRow } from '../components/SwipeRow';
 import * as Location from 'expo-location';
@@ -87,7 +88,11 @@ export function HomeScreen() {
   const loadCheckins = useCallback(() => {
     // Solo residents read their on-device list (rendered directly); only
     // connected members pull from the cloud meeting-checkin table.
-    if (connected) listMeetingCheckins(lovedOne.id).then(setMyCheckins).catch(() => {});
+    if (connected) listMeetingCheckins(lovedOne.id).then(async (cs) => {
+      setMyCheckins(cs);
+      const filled = await backfillAddresses(cs);
+      if (filled !== cs) setMyCheckins(filled);
+    }).catch(() => {});
   }, [connected, lovedOne.id]);
   // Solo residents: mirror their on-device check-ins into the visible list.
   useEffect(() => { if (!connected) setMyCheckins(meetingCheckins); }, [connected, meetingCheckins]);
@@ -172,6 +177,35 @@ export function HomeScreen() {
     const mins = (Date.now() - new Date(c.createdAt).getTime()) / 60000;
     return mins >= 30 && mins <= 180;
   });
+
+  // Foreground auto-capture: if the resident has the app open when a check-in
+  // becomes confirmable, silently grab their location and confirm it — no tap
+  // needed. Only runs when location is ALREADY granted (never surprise-prompts),
+  // and if it confirms we cancel the scheduled reminder so the notification
+  // doesn't also fire. If the app was closed, the 35-min notification still
+  // fires as the fallback. Each check-in is tried once per session.
+  const autoTriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!connected) return;
+    const toTry = pendingConfirm.filter((c: any) => !autoTriedRef.current.has(c.id));
+    if (!toTry.length) return;
+    toTry.forEach((c: any) => autoTriedRef.current.add(c.id)); // mark up front to avoid re-entry
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== 'granted') return; // don't prompt; manual + notification cover it
+        let confirmedAny = false;
+        for (const c of toTry) {
+          try {
+            const pos = await Location.getCurrentPositionAsync({});
+            const r = await verifyMeetingCheckin(c.id, pos.coords.latitude, pos.coords.longitude);
+            if (r?.confirmed) { cancelMeetingVerify(c.id).catch(() => {}); confirmedAny = true; }
+          } catch { /* leave for the manual/notification path */ }
+        }
+        if (confirmedAny) loadCheckins();
+      } catch { /* ignore */ }
+    })();
+  }, [pendingConfirm, connected, loadCheckins]);
   // Re-render every second so the live recovery counter ticks.
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -487,7 +521,7 @@ export function HomeScreen() {
                         {c.kind === 'online' ? '💻 ' : '📍 '}
                         {c.kind === 'online'
                           ? `Online meeting${c.onlineMinutes ? ` · ${c.onlineMinutes} min` : ''}`
-                          : (c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared'))}
+                          : (c.address || (c.latitude != null ? 'Location shared' : 'Location not shared'))}
                       </Text>
                       <Text style={typography.caption}>
                         {formatDate(c.createdAt)}

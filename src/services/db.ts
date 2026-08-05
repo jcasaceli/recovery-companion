@@ -2298,6 +2298,14 @@ export async function confirmPayment(paymentId: string) {
   if (error) throw error;
 }
 
+/** Facilitator: decline a member-reported payment that was submitted in error
+ *  (wrong amount, never actually sent, duplicate). Only removes still-reported
+ *  rows — a confirmed 'paid' payment is never touched here. */
+export async function declinePayment(paymentId: string) {
+  const { error } = await db().from('payments').delete().eq('id', paymentId).eq('status', 'reported');
+  if (error) throw error;
+}
+
 /** Facilitator: all payments across their clients (newest first). */
 export async function listOrgPayments(): Promise<Payment[]> {
   const { data, error } = await db()

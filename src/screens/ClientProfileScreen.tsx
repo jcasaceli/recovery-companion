@@ -7,6 +7,7 @@ import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { KeyboardModal } from '../components/KeyboardModal';
 import { requestLocationShare } from '../services/push';
+import { backfillAddresses } from '../services/geocode';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
@@ -306,7 +307,11 @@ export function ClientProfileScreen() {
     async () => { await dismissUAFlags(id).catch(() => {}); loadUA(); });
 
   useEffect(() => {
-    listMeetingCheckins(id).then(setCheckins).catch(() => {});
+    listMeetingCheckins(id).then(async (cs) => {
+      setCheckins(cs);
+      const filled = await backfillAddresses(cs);
+      if (filled !== cs) setCheckins(filled);
+    }).catch(() => {});
     getMyOrg().then((o: any) => o && setOrg({ id: o.id, name: o.name, join_code: o.join_code })).catch(() => {});
     loadAgreements();
     loadUA();
@@ -1076,7 +1081,7 @@ export function ClientProfileScreen() {
                   {c.kind === 'online' ? '💻 ' : '📍 '}
                   {c.kind === 'online'
                     ? `Online meeting${c.onlineMinutes ? ` · ${c.onlineMinutes} min` : ''}`
-                    : (c.address || (c.latitude ? `${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)}` : 'Location not shared'))}
+                    : (c.address || (c.latitude != null ? 'Location shared' : 'Location not shared'))}
                 </Text>
                 <Text style={typography.caption}>
                   {formatDateTime(c.createdAt)}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ActivityIndicator, Switch, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { Card, SectionTitle, Button } from '../components/ui';
@@ -116,6 +116,18 @@ export function FacilitatorPaymentsScreen() {
   const confirm = async (id: string) => {
     try { await dbApi.confirmPayment(id); load(); }
     catch (e: any) { Alert.alert('Could not confirm', e?.message ?? 'Try again.'); }
+  };
+
+  // Decline a reported payment (submitted by accident / wrong amount / never
+  // actually sent). Confirms first, then removes it from the ledger.
+  const decline = (p: Payment) => {
+    const doDecline = async () => {
+      try { await dbApi.declinePayment(p.id); load(); }
+      catch (e: any) { Alert.alert('Could not decline', e?.message ?? 'Try again.'); }
+    };
+    const msg = `Remove ${p.memberName ?? 'this member'}'s reported ${money(p.amountCents)} payment? Use this if it was submitted by mistake. It won't count toward their balance.`;
+    if (Platform.OS === 'web') { const g: any = globalThis; if (!g.confirm || g.confirm(msg)) doDecline(); }
+    else Alert.alert('Decline payment?', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Decline', style: 'destructive', onPress: doDecline }]);
   };
 
   // House filter + name search. "Unassigned" collects members with no house.
@@ -374,9 +386,14 @@ export function FacilitatorPaymentsScreen() {
                       </TouchableOpacity>
                     </View>
                     {p.status === 'reported' ? (
-                      <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
-                        <Text style={styles.confirmBtnText}>Confirm</Text>
-                      </TouchableOpacity>
+                      <View style={styles.reportedBtns}>
+                        <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
+                          <Text style={styles.confirmBtnText}>Confirm</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.declineBtn2} onPress={() => decline(p)}>
+                          <Text style={styles.declineBtn2Text}>Decline</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : null}
                   </View>
                 </Card>
@@ -802,8 +819,11 @@ const styles = StyleSheet.create({
   expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
   history: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  reportedBtns: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   confirmBtn: { backgroundColor: colors.success, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
   confirmBtnText: { color: colors.textInverse, fontWeight: '700', fontSize: 12 },
+  declineBtn2: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.crisis, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  declineBtn2Text: { color: colors.crisis, fontWeight: '700', fontSize: 12 },
   recordBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginBottom: 6 },
   recordBtnText: { color: colors.textInverse, fontWeight: '700', fontSize: 13 },
   rentBtn: { paddingHorizontal: spacing.md, paddingVertical: 4 },
