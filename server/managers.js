@@ -45,7 +45,8 @@ function managerHtml({ name, orgName, email, password, isOwner }) {
         <a href="${APP_STORE}" style="background:#111;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">iPhone</a>
         <a href="${PLAY_STORE}" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">Android</a>
       </p>
-      <p style="margin:0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
+      <p style="margin:16px 0 0;padding-top:14px;border-top:1px solid #eee;color:#4b4b4b;font-size:14px;line-height:1.6">Need help? Open the <a href="https://soberlivingcompanion.com/docs" style="color:#2F6B5F;font-weight:700">Help tab</a>, watch our <a href="https://soberlivingcompanion.com/guides" style="color:#2F6B5F;font-weight:700">step-by-step guides</a>, or call our support line at <a href="tel:+12133216518" style="color:#2F6B5F;font-weight:700">(213) 321-6518</a>.</p>
+      <p style="margin:12px 0 0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
     </div>
   </div>`;
 }
@@ -210,7 +211,8 @@ function reusedHtml({ name, orgName, email }) {
         <a href="${APP_STORE}" style="background:#111;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">iPhone</a>
         <a href="${PLAY_STORE}" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:999px;display:inline-block;margin:0 6px 8px 0">Android</a>
       </p>
-      <p style="margin:0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
+      <p style="margin:16px 0 0;padding-top:14px;border-top:1px solid #eee;color:#4b4b4b;font-size:14px;line-height:1.6">Need help? Open the <a href="https://soberlivingcompanion.com/docs" style="color:#2F6B5F;font-weight:700">Help tab</a>, watch our <a href="https://soberlivingcompanion.com/guides" style="color:#2F6B5F;font-weight:700">step-by-step guides</a>, or call our support line at <a href="tel:+12133216518" style="color:#2F6B5F;font-weight:700">(213) 321-6518</a>.</p>
+      <p style="margin:12px 0 0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
     </div>
   </div>`;
 }

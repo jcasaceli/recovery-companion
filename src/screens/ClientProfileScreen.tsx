@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { openResolvedUrl } from '../utils/openFile';
 import { Screen, ScreenTitle, Card, SectionTitle, Button } from '../components/ui';
 import { KeyboardModal } from '../components/KeyboardModal';
+import { requestLocationShare } from '../services/push';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
@@ -69,6 +70,25 @@ export function ClientProfileScreen() {
   const [rentPeriod, setRentPeriod] = useState<'monthly' | 'weekly'>(client?.rentPeriod === 'weekly' ? 'weekly' : 'monthly');
   const [dueDow, setDueDow] = useState<number | null>(client?.rentDueDow ?? null);
   const [checkins, setCheckins] = useState<any[]>([]);
+  const [locReqBusy, setLocReqBusy] = useState(false);
+  const requestLocation = async () => {
+    setLocReqBusy(true);
+    try {
+      const r = await requestLocationShare(id);
+      const who = client?.firstName || 'This resident';
+      if (r && !r.residentLinked) {
+        Alert.alert('They haven’t joined the app yet', `${who} hasn’t downloaded the app and joined with a code, so there’s no phone to notify. Share their join code first, then you can request their location.`);
+      } else if (r && r.sent > 0) {
+        Alert.alert('Request sent ✅', `We pushed a notification to ${who}’s phone asking them to share their location.`);
+      } else {
+        Alert.alert('Couldn’t reach their phone', `${who} is linked, but their phone may have notifications turned off or hasn’t opened the app recently.`);
+      }
+    } catch {
+      Alert.alert('Could not send', 'Please try again.');
+    } finally {
+      setLocReqBusy(false);
+    }
+  };
   const [showMeetings, setShowMeetings] = useState(false);
   const [org, setOrg] = useState<{ id?: string; name?: string; join_code?: string } | null>(null);
   const [houseCode, setHouseCode] = useState<string | undefined>(undefined);
@@ -1036,6 +1056,8 @@ export function ClientProfileScreen() {
 
       {/* Meeting check-ins (staff view) */}
       <SectionTitle>Meeting check-ins</SectionTitle>
+      <Button title={locReqBusy ? 'Sending…' : '📍 Request their location'} variant="secondary" onPress={requestLocation} disabled={locReqBusy} />
+      <Text style={[typography.caption, { marginTop: 4, marginBottom: spacing.sm }]}>Sends a notification to {client.firstName}’s phone asking them to share their location (if they’ve joined the app).</Text>
       <Card onPress={() => setShowMeetings((v) => !v)}>
         <Text style={styles.meetingCount}>{checkins.length}</Text>
         <Text style={typography.bodySecondary}>

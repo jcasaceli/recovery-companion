@@ -436,7 +436,7 @@ export async function recordMeetingCheckin(
   return (data as any)?.id;
 }
 
-/** Resident: confirm they're still at the meeting ~45 min after checking in.
+/** Resident: confirm they're still at the meeting ~35 min after checking in.
  *  The distance is computed in the database from the original check-in, so the
  *  client can't claim it matched. Within 300m earns the confirmed badge. */
 export async function verifyMeetingCheckin(

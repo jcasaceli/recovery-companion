@@ -39,6 +39,29 @@ export async function notifyCare(individualId: string, title: string, body: stri
   }).catch(() => {});
 }
 
+/** Staff: push a "please share your location" nudge to just this resident's
+ *  phone. Returns { sent, residentLinked } so the UI can explain the result
+ *  (e.g. the resident hasn't joined the app yet, so there's no phone to ping). */
+export async function requestLocationShare(individualId: string): Promise<{ sent: number; residentLinked: boolean } | null> {
+  if (!BACKEND_URL) return null;
+  const t = await authToken();
+  if (!t) return null;
+  try {
+    const r = await fetch(`${BACKEND_URL}/api/notify/care`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({
+        individualId,
+        title: '📍 Please share your location',
+        body: 'Your sober living is asking you to share your location. Open Sober Living Companion and tap "I\'m at a meeting" or allow location to share where you are.',
+        kind: 'alert',
+        residentOnly: true,
+      }),
+    });
+    return await r.json();
+  } catch { return null; }
+}
+
 /** Notify everyone who opted into community alerts. */
 export async function notifyCommunity(title: string, body: string) {
   if (!BACKEND_URL) return;
@@ -144,13 +167,13 @@ export function describeAudience(audiences: NotifyAudience[]): string {
   return parts.slice(0, -1).join(', ') + ', and ' + parts[parts.length - 1];
 }
 
-// ── Meeting confirmation nudge (local, one-shot 45 minutes after check-in) ───
+// ── Meeting confirmation nudge (local, one-shot 35 minutes after check-in) ───
 const MEETING_VERIFY_PREFIX = 'meeting-verify-';
 
-/** Ask the resident to confirm they're still at the meeting, 45 minutes after
+/** Ask the resident to confirm they're still at the meeting, 35 minutes after
  *  they checked in. Local (not push) so it works without a server round-trip;
  *  the Home screen also shows a prompt card in case notifications are off. */
-export async function scheduleMeetingVerify(checkinId: string, minutes = 45): Promise<boolean> {
+export async function scheduleMeetingVerify(checkinId: string, minutes = 35): Promise<boolean> {
   if (Platform.OS === 'web') return false;   // no local scheduling on web
   try {
     const { status: existing } = await Notifications.getPermissionsAsync();

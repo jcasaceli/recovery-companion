@@ -60,7 +60,7 @@ notifyRouter.post('/care', async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
-    const { individualId, title, body, kind } = req.body || {};
+    const { individualId, title, body, kind, residentOnly } = req.body || {};
     if (!individualId) return res.status(400).json({ error: 'individualId required' });
 
     const { data: ind } = await admin
@@ -68,11 +68,13 @@ notifyRouter.post('/care', async (req, res) => {
       .select('profile_id, org_id')
       .eq('id', individualId)
       .maybeSingle();
-    if (!ind) return res.json({ sent: 0 });
+    if (!ind) return res.json({ sent: 0, residentLinked: false });
 
     const recipients = [];
     if (ind.profile_id) recipients.push(ind.profile_id);
-    if (ind.org_id) {
+    // residentOnly (e.g. a "please share your location" nudge) pushes ONLY to the
+    // resident's phone — not the whole care team.
+    if (!residentOnly && ind.org_id) {
       const { data: mems } = await admin.from('org_members').select('profile_id').eq('org_id', ind.org_id);
       let staff = (mems ?? []).map((m) => m.profile_id);
       // Routine resident activity (check-ins, payment reports) respects each
@@ -89,7 +91,7 @@ notifyRouter.post('/care', async (req, res) => {
     const targets = recipients.filter((id) => id !== user.id);
     const tokens = await tokensFor(targets);
     await expoPush(tokens, title || 'Update', body || '');
-    res.json({ sent: tokens.length });
+    res.json({ sent: tokens.length, residentLinked: !!ind.profile_id });
   } catch (e) {
     console.error('[notify] care', e);
     res.status(500).json({ error: e.message });

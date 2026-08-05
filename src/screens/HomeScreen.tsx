@@ -244,7 +244,7 @@ export function HomeScreen() {
     }
   };
 
-  // The 45-minute confirmation: prove they're still at the same place.
+  // The 35-minute confirmation: prove they're still at the same place.
   const confirmStillThere = async (c: any) => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -276,7 +276,7 @@ export function HomeScreen() {
       }
       if (connected) {
         const cid = await recordMeetingCheckin(lovedOne.id, lat, lng, address);
-        // Nudge them ~45 min in to confirm they're still there (earns the badge).
+        // Nudge them ~35 min in to confirm they're still there (earns the badge).
         if (cid && lat != null && lng != null) scheduleMeetingVerify(cid).catch(() => {});
         loadCheckins();
         notifyCare(lovedOne.id, 'Meeting check-in', `${lovedOne.firstName} checked in at a meeting${address ? ` (${address})` : ''}.`, 'activity');
@@ -442,7 +442,7 @@ export function HomeScreen() {
         </Card>
       ) : null}
 
-      {/* Anything waiting on the 45-minute confirmation */}
+      {/* Anything waiting on the 35-minute confirmation */}
       {!isFacilitator && pendingConfirm.length ? (
         <Card>
           <Text style={typography.h3}>Confirm you're still there</Text>

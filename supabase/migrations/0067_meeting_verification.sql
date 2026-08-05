@@ -55,7 +55,7 @@ begin
   if p_lat is null or p_lng is null then raise exception 'Location is required to confirm.'; end if;
 
   mins := extract(epoch from (now() - c.created_at)) / 60.0;
-  if mins < 30 then raise exception 'Too early — confirm about 45 minutes after checking in.'; end if;
+  if mins < 25 then raise exception 'Too early — confirm about 35 minutes after checking in.'; end if;
   if mins > 180 then raise exception 'Too late to confirm this meeting.'; end if;
 
   -- Haversine, metres. Earth radius 6371000.
