@@ -46,11 +46,11 @@ export function buildOutreach(email, homes) {
     </div>
     <p style="margin:2px 0 8px"><a href="${start}" style="color:#2F6B5F;font-weight:700">Get started for your home →</a></p>
     <p style="margin:0 0 18px">Want a quick walkthrough first? <a href="${CALENDLY}" style="color:#2F6B5F;font-weight:700">📅 Book a 15-minute demo →</a></p>
-    <p style="color:#3a474c;margin:0;font-size:14px">Not the right person? Please forward to whoever runs the house. Questions — or want to make sure this is real? Just reply, or call or text me directly at <a href="tel:+12133216518" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a>.</p>
+    <p style="color:#3a474c;margin:0;font-size:14px">Not the right person? Please forward to whoever runs the house. Questions — or want to make sure this is real? Just reply, or call or text me directly at <a href="tel:+19168776237" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a>.</p>
     <p style="color:#3a474c;margin:18px 0 0">Call or text anytime,<br>
       <strong>${SENDER_NAME}</strong>, ${SENDER_TITLE}<br>
       <a href="https://${SENDER_WEB}" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_WEB}</a><br>
-      📞 <a href="tel:+12133216518" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a></p>
+      📞 <a href="tel:+19168776237" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a></p>
     <div style="text-align:center;border-top:1px solid #e4eaec;margin-top:18px;padding-top:16px">
       <a href="https://apps.apple.com/app/sober-living-companion/id6780705094" style="text-decoration:none"><img src="${APP_SITE.replace('soberlivingcompanion.com', 'soberlivingdirectory.com')}/appstore-badge.png" width="150" height="55" alt="Download on the App Store" style="border:0;outline:none;display:inline-block;vertical-align:middle"></a>
       &nbsp;
@@ -82,7 +82,7 @@ function wrapFollowup(inner, email, name) {
     <p style="color:#3a474c;margin:18px 0 0">Call or text anytime,<br>
       <strong>${SENDER_NAME}</strong>, ${SENDER_TITLE}<br>
       <a href="https://${SENDER_WEB}" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_WEB}</a><br>
-      📞 <a href="tel:+12133216518" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a></p>
+      📞 <a href="tel:+19168776237" style="color:#2F6B5F;font-weight:700;text-decoration:none">${SENDER_PHONE}</a></p>
     <p style="color:#8a979c;font-size:12px;border-top:1px solid #e4eaec;margin-top:16px;padding-top:12px">
       You received this because ${esc(name)} is publicly listed as a recovery residence. ${esc(PHYSICAL_ADDRESS)}.<br>
       <a href="${unsub}" style="color:#8a979c">Unsubscribe</a> and we won't email this address again.</p>

@@ -75,6 +75,25 @@ export async function notifyHouseAssignment(profileId: string, houseId: string) 
   }).catch(() => {});
 }
 
+/** Email the resident an org-branded receipt for a recorded/confirmed payment.
+ *  Returns { sent, error } — error 'no_email' means no email is on file. */
+export async function sendPaymentReceipt(paymentId: string): Promise<{ sent: boolean; error?: string }> {
+  if (!BACKEND_URL) return { sent: false, error: 'no backend' };
+  const t = await authToken();
+  if (!t) return { sent: false, error: 'not signed in' };
+  try {
+    const r = await fetch(`${BACKEND_URL}/api/receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ paymentId }),
+    });
+    const d = await r.json();
+    return { sent: !!d.sent, error: d.error };
+  } catch (e: any) {
+    return { sent: false, error: e?.message };
+  }
+}
+
 /** Notify everyone who opted into community alerts. */
 export async function notifyCommunity(title: string, body: string) {
   if (!BACKEND_URL) return;

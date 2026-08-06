@@ -11,7 +11,7 @@ import { backfillAddresses } from '../services/geocode';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, listOrgStaff, getSubmittedInfo,
+  listMeetingCheckins, getMyOrg, listMyPayments, recordPayment, listNotes, deleteNote, addNote, setNoteFlagged, listOrgStaff, getSubmittedInfo,
   listAgreements, createAgreement, deleteAgreement, Agreement,
   listUATests, createUATest, deleteUATest, dismissUAFlags, UATest, UAResult,
   listHouses, getIndividual, setMemberBed, dischargeMember, readmitMember, House, updateClient, mergeMembers, listFacilitatorIndividuals,
@@ -103,6 +103,7 @@ export function ClientProfileScreen() {
   const [staffById, setStaffById] = useState<Record<string, { name?: string; isOwner: boolean }>>({});
   const [showSignedAgreements, setShowSignedAgreements] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [noteFlag, setNoteFlag] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteFile, setNoteFile] = useState<PickedFile | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -357,11 +358,16 @@ export function ClientProfileScreen() {
         const path = await uploadStaffFile(id, 'notes', noteFile.fileName, bytes, noteFile.mimeType);
         attachment = { path, name: noteFile.fileName, mime: noteFile.mimeType };
       }
-      await addNote(id, noteText.trim() || '(file attached)', 'facilitators', attachment);
-      setNoteText(''); setNoteFile(null);
+      await addNote(id, noteText.trim() || '(file attached)', 'facilitators', attachment, noteFlag);
+      setNoteText(''); setNoteFile(null); setNoteFlag(false);
       await reloadNotes();
     } catch (e: any) { Alert.alert('Could not add note', e?.message ?? 'Try again.'); }
     finally { setNoteSaving(false); }
+  };
+
+  const toggleNoteFlag = async (n: any) => {
+    try { await setNoteFlagged(n.id, !n.flagged); await reloadNotes(); }
+    catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }
   };
   const removeStaffNote = (noteId: string) => confirmThen('Delete note?', 'This permanently removes the note.', 'Delete',
     async () => { setStaffNotes((n) => n.filter((x) => x.id !== noteId)); try { await deleteNote(noteId); } catch {} });
@@ -848,6 +854,12 @@ export function ClientProfileScreen() {
           multiline
         />
         <StaffAttachmentPicker value={noteFile} onChange={setNoteFile} memberName={client.firstName} />
+        <TouchableOpacity onPress={() => setNoteFlag((v) => !v)} style={styles.noteFlagToggle} activeOpacity={0.7}>
+          <Text style={{ fontSize: 18, marginRight: 8 }}>{noteFlag ? '📌' : '⬜️'}</Text>
+          <Text style={[typography.caption, { flex: 1 }]}>
+            Flag on profile — puts a 📌 on the all-members list as a reminder (missed house meeting, missed case-management session, etc.)
+          </Text>
+        </TouchableOpacity>
         <Button title={noteSaving ? 'Saving…' : '➕ Add note'} onPress={addStaffNote} disabled={noteSaving || (!noteText.trim() && !noteFile)} />
         {staffNotes.length ? (
           <View style={{ marginTop: spacing.sm }}>
@@ -861,9 +873,13 @@ export function ClientProfileScreen() {
                     </TouchableOpacity>
                   ) : null}
                   <Text style={[typography.caption, { marginTop: 2 }]}>
+                    {n.flagged ? <Text style={{ fontWeight: '700', color: colors.warning }}>📌 Flagged · </Text> : null}
                     <Text style={{ fontWeight: '700', color: colors.primaryDark }}>{noteAuthorLabel(n)}</Text> · {formatDateTime(n.createdAt)}
                   </Text>
                 </View>
+                <TouchableOpacity onPress={() => toggleNoteFlag(n)} hitSlop={8} style={{ marginLeft: spacing.sm }}>
+                  <Text style={{ fontSize: 16, opacity: n.flagged ? 1 : 0.3 }}>📌</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => removeStaffNote(n.id)} hitSlop={8} style={{ marginLeft: spacing.sm }}>
                   <Text style={{ color: colors.textMuted, fontSize: 16 }}>🗑</Text>
                 </TouchableOpacity>
@@ -1259,6 +1275,7 @@ const styles = StyleSheet.create({
   checkinRow: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  noteFlagToggle: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs, marginBottom: spacing.xs },
   photoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   photoAvatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.surfaceAlt },
   photoAvatarEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryLight },

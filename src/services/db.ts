@@ -755,6 +755,7 @@ export interface Document {
   mimeType?: string;
   sizeBytes?: number;
   createdAt: string;
+  hiddenFromMember?: boolean;
 }
 
 function mapDocument(r: any): Document {
@@ -762,6 +763,7 @@ function mapDocument(r: any): Document {
     id: r.id, individualId: r.individual_id, title: r.title, fileData: r.file_data ?? undefined,
     storagePath: r.storage_path ?? undefined, fileName: r.file_name ?? undefined,
     mimeType: r.mime_type ?? undefined, sizeBytes: r.size_bytes ?? undefined, createdAt: r.created_at,
+    hiddenFromMember: r.hidden_from_member ?? false,
   };
 }
 
@@ -786,7 +788,7 @@ export async function getDocumentUrl(storagePath: string): Promise<string | null
 // Only old documents without a storage_path still use it, and those load it on
 // demand via getDocumentFileData when opened.
 const DOCUMENT_LIST_COLS =
-  'id,individual_id,org_id,title,storage_path,file_name,mime_type,size_bytes,created_at';
+  'id,individual_id,org_id,title,storage_path,file_name,mime_type,size_bytes,created_at,hidden_from_member';
 
 /** Legacy inline image data for one old document (no storage_path). */
 export async function getDocumentFileData(id: string): Promise<string | undefined> {
@@ -819,6 +821,14 @@ export async function createDocument(input: {
     file_name: input.fileName ?? null, mime_type: input.mimeType ?? null, size_bytes: input.sizeBytes ?? null,
     created_by: u.user?.id,
   });
+  if (error) throw error;
+}
+
+/** Staff: hide/show an uploaded document in the resident's Documents tab. RLS
+ *  enforces it too — a hidden document (and its file) never reaches the
+ *  resident's device. Staff always see everything (see migration 0071). */
+export async function setDocumentHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await db().from('documents').update({ hidden_from_member: hidden }).eq('id', id);
   if (error) throw error;
 }
 
@@ -1908,6 +1918,7 @@ export async function addNote(
   body: string,
   visibility: NoteVisibility,
   attachment?: { path: string; name: string; mime: string },
+  flagged = false,
 ) {
   const { data: u } = await db().auth.getUser();
   const { data, error } = await db()
@@ -1917,6 +1928,7 @@ export async function addNote(
       author_id: u.user?.id ?? null,
       body,
       visibility,
+      flagged,
       attachment_path: attachment?.path ?? null,
       attachment_name: attachment?.name ?? null,
       attachment_mime: attachment?.mime ?? null,
@@ -1925,6 +1937,21 @@ export async function addNote(
     .single();
   if (error) throw error;
   return mapNote(data);
+}
+
+/** Facilitator: flag/unflag a note so it shows a reminder marker on the
+ *  all-members list (e.g. "missed house meeting"). */
+export async function setNoteFlagged(noteId: string, flagged: boolean) {
+  const { error } = await db().from('notes').update({ flagged }).eq('id', noteId);
+  if (error) throw error;
+}
+
+/** Facilitator: individual ids that have at least one flagged note — used to
+ *  show the reminder marker on the Clients list. */
+export async function listNoteFlaggedIndividualIds(): Promise<string[]> {
+  const { data, error } = await db().from('notes').select('individual_id').eq('flagged', true);
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((r: any) => r.individual_id).filter(Boolean)));
 }
 
 // ---------------------------------------------------------------------------
@@ -2264,8 +2291,11 @@ export async function recordPayment(p: {
   onTime?: boolean;
   periodMonth?: string;
   paidAt?: string;
-  /** 'paid' (facilitator-confirmed) or 'reported' (member said they paid). */
+  /** 'paid' (facilitator-confirmed) or 'reported' (member said they paid, or a
+   *  third party was billed but hasn't paid yet — doesn't count until confirmed). */
   status?: 'paid' | 'reported';
+  /** If a third party is paying on the resident's behalf, their name. */
+  thirdPartyName?: string;
 }) {
   const { data: u } = await db().auth.getUser();
   const { error } = await db().from('payments').insert({
@@ -2278,6 +2308,7 @@ export async function recordPayment(p: {
     period_month: p.periodMonth ?? null,
     source: 'manual',
     paid_at: p.paidAt ?? new Date().toISOString(),
+    third_party_name: p.thirdPartyName ?? null,
     created_by: u.user?.id ?? null,
   });
   if (error) throw error;
@@ -2289,6 +2320,13 @@ export async function updatePaymentDate(paymentId: string, paidAtISO: string, on
   const patch: any = { paid_at: paidAtISO };
   if (onTime !== undefined) patch.on_time = onTime;
   const { error } = await db().from('payments').update(patch).eq('id', paymentId);
+  if (error) throw error;
+}
+
+/** Facilitator (owner/manager): correct the amount of a recorded payment — e.g.
+ *  the wrong figure was logged, or a partial payment was entered as full. */
+export async function updatePaymentAmount(paymentId: string, amountCents: number) {
+  const { error } = await db().from('payments').update({ amount_cents: amountCents }).eq('id', paymentId);
   if (error) throw error;
 }
 
@@ -2374,6 +2412,7 @@ function mapPayment(r: any): Payment {
     onTime: r.on_time ?? undefined,
     periodMonth: r.period_month ?? undefined,
     paidAt: r.paid_at,
+    thirdPartyName: r.third_party_name ?? undefined,
   };
 }
 
@@ -2424,6 +2463,7 @@ function mapNote(r: any): Note {
     authorId: r.author_id ?? undefined,
     authorName: r.profiles?.full_name ?? 'Care team',
     authorRole: (r.profiles?.role as AppRole) ?? 'facilitator',
+    flagged: r.flagged ?? false,
     createdAt: r.created_at,
     attachmentPath: r.attachment_path ?? undefined,
     attachmentName: r.attachment_name ?? undefined,

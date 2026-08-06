@@ -13,6 +13,7 @@ import { notifyRouter } from './notify.js';
 import { accountRouter } from './account.js';
 import { inviteRouter } from './invite.js';
 import { managersRouter } from './managers.js';
+import { receiptRouter } from './receipt.js';
 import { intakeRouter } from './intake.js';
 import { formsRouter } from './forms.js';
 import { referralsRouter } from './referrals.js';
@@ -54,6 +55,7 @@ app.use('/api/notify', notifyRouter);
 app.use('/api/account', accountRouter);
 app.use('/api/invite', inviteRouter);
 app.use('/api/managers', managersRouter);
+app.use('/api/receipt', receiptRouter);
 app.use('/api/referrals', referralsRouter);
 
 // Manual trigger for rent reminders (handy for testing the cron logic).

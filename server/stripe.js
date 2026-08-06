@@ -71,7 +71,7 @@ async function sendWelcomeEmail(to, orgName) {
       <p style="margin:0 0 16px;background:#F3F7F5;border-radius:10px;padding:12px 14px;color:#2b2b2b"><strong>Adding more houses:</strong> Open the <strong>Account</strong> tab → <strong>Houses</strong> → <strong>Add house</strong>. Name it and set a bed count — each house gets its own join code, and you can assign managers to specific houses. Add as many as you like.</p>
       <p style="margin:0 0 16px;background:#FFF6E5;border:1px solid #F0D69A;border-radius:10px;padding:12px 14px;color:#2b2b2b"><strong>Switching from OneStep, SobrietyHub, or Oathtrack?</strong> Bring your residents with you — import them via <strong>CSV</strong> in a couple minutes, just <strong>reply to this email</strong> and we'll move them for you, or schedule a <strong>free onboarding session</strong>: <a href="https://calendly.com/empowernextproject-info/30min" style="color:#2F6B5F;font-weight:700">book a time →</a></p>
       <p style="margin:0 0 16px"><a href="https://app.soberlivingcompanion.com" style="background:#2E9E5B;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open my dashboard →</a></p>
-      <p style="margin:0;color:#6b6b6b;font-size:14px">Questions? Just reply to this email, or call Joseph at (213) 321-6518. We're a non-profit and we're here to help you succeed.</p>
+      <p style="margin:0;color:#6b6b6b;font-size:14px">Questions? Just reply to this email, or call Joseph at (916) 877-6237. We're a non-profit and we're here to help you succeed.</p>
       <p style="margin:14px 0 0;color:#9a9a9a;font-size:12px">Sober Living Companion · a program of Empower Next Project, a non-profit.</p>
     </div>
   </div>`;

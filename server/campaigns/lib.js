@@ -20,7 +20,7 @@ export const admin =
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ytwcckpacadcaxklqviq.supabase.co';
 export const UNSUB_SITE = 'https://soberlivingdirectory.com';
 export const PHYSICAL_ADDRESS = process.env.CAMPAIGN_ADDRESS || 'Empower Next Project, 1501 Bartlett Lane, Sacramento, CA 95815';
-export const SENDER_PHONE = '(213) 321-6518';
+export const SENDER_PHONE = '(916) 877-6237';
 
 // ── tiny CSV parser (handles quoted fields with commas/newlines) ─────────────
 export function parseCsv(text) {

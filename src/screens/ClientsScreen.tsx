@@ -7,7 +7,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listNoteFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -26,6 +26,7 @@ export function ClientsScreen() {
   const [org, setOrg] = useState<{ name?: string; join_code?: string } | null>(null);
 
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [noteFlagged, setNoteFlagged] = useState<Set<string>>(new Set());
   const [avatars, setAvatars] = useState<Record<string, string>>({}); // path -> signed url
   useEffect(() => {
     const paths = clients.map((c) => c.avatarPath).filter(Boolean) as string[];
@@ -41,6 +42,7 @@ export function ClientsScreen() {
   useEffect(() => {
     getMyOrg().then((o: any) => o && setOrg({ name: o.name, join_code: o.join_code })).catch(() => {});
     listFlaggedIndividualIds().then((ids) => setFlagged(new Set(ids))).catch(() => {});
+    listNoteFlaggedIndividualIds().then((ids) => setNoteFlagged(new Set(ids))).catch(() => {});
     listHouses().then(setHouses).catch(() => {});
     getMyHouseScope().then(setScope).catch(() => {});
   }, []);
@@ -365,7 +367,7 @@ export function ClientsScreen() {
                   {selectMode ? <Text style={[styles.tileBadge, styles.tileCheck]}>{selected[c.id] ? '☑️' : '⬜️'}</Text> : null}
                   {flagged.has(c.id) ? <Text style={[styles.tileBadge, styles.tileFlag]}>🚩</Text> : null}
                 </View>
-                <Text style={styles.tileName} numberOfLines={1}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}</Text>
+                <Text style={styles.tileName} numberOfLines={1}>{c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{noteFlagged.has(c.id) ? ' 📌' : ''}</Text>
                 <Text style={styles.tileMeta} numberOfLines={1}>{houseLabel(c.houseId) || c.houseName || 'Sober Living'}</Text>
                 {c.tags && c.tags.length ? <Text style={styles.tileTags} numberOfLines={2}>{c.tags.join(' · ')}</Text> : null}
               </TouchableOpacity>
@@ -392,7 +394,7 @@ export function ClientsScreen() {
               )}
               <View style={{ flex: 1 }}>
                 <Text style={typography.h3}>
-                  {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}
+                  {c.firstName}{c.lastName ? ` ${c.lastName}` : ''}{flagged.has(c.id) ? '  🚩' : ''}{noteFlagged.has(c.id) ? '  📌' : ''}
                 </Text>
                 <Text style={typography.caption}>
                   {houseLabel(c.houseId) || c.houseName ? `${houseLabel(c.houseId) || c.houseName} · ` : ''}Fee: {money(c.monthlyRentCents)}{c.rentDueDay ? ` · due the ${ordinal(c.rentDueDay)}` : ''}

@@ -10,6 +10,7 @@ import * as dbApi from '../services/db';
 import { Payment, PaymentMethod } from '../types';
 import { formatDate } from '../utils/format';
 import { DateField } from '../components/PickerFields';
+import { sendPaymentReceipt } from '../services/push';
 import { useAppState } from '../state/store';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS, DEMO_PAY_STATUS, DEMO_PIE } from '../data/demo';
@@ -35,6 +36,7 @@ export function FacilitatorPaymentsScreen() {
   const [rentFor, setRentFor] = useState<any | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editDatePay, setEditDatePay] = useState<Payment | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<'members' | 'recent'>('members');
   const [search, setSearch] = useState('');
   const [houseFilter, setHouseFilter] = useState<string | null>(null);
@@ -116,6 +118,17 @@ export function FacilitatorPaymentsScreen() {
   const confirm = async (id: string) => {
     try { await dbApi.confirmPayment(id); load(); }
     catch (e: any) { Alert.alert('Could not confirm', e?.message ?? 'Try again.'); }
+  };
+
+  // Email the resident an org-branded receipt for a confirmed/recorded payment.
+  const sendReceipt = async (p: Payment) => {
+    setReceiptBusy(p.id);
+    try {
+      const r = await sendPaymentReceipt(p.id);
+      if (r.sent) Alert.alert('Receipt sent ✅', `Emailed a receipt to ${p.memberName ?? 'the resident'}.`);
+      else if (r.error === 'no_email') Alert.alert('No email on file', `Add an email to ${p.memberName ?? 'this resident'}’s profile first, then send the receipt.`);
+      else Alert.alert('Could not send receipt', r.error ?? 'Please try again.');
+    } finally { setReceiptBusy(null); }
   };
 
   // Decline a reported payment (submitted by accident / wrong amount / never
@@ -380,7 +393,8 @@ export function FacilitatorPaymentsScreen() {
                         <Text style={typography.caption}>
                           {METHOD_LABEL[p.method]} · {formatDate(p.paidAt)}
                           {p.onTime === false ? ' · late' : p.onTime ? ' · on time' : ''}
-                          {p.status === 'reported' ? ' · reported (unconfirmed)' : ''}
+                          {p.thirdPartyName ? ` · paid by ${p.thirdPartyName}` : ''}
+                          {p.status === 'reported' ? (p.thirdPartyName ? ' · awaiting payment' : ' · reported (unconfirmed)') : ''}
                           {'  ✎'}
                         </Text>
                       </TouchableOpacity>
@@ -388,13 +402,17 @@ export function FacilitatorPaymentsScreen() {
                     {p.status === 'reported' ? (
                       <View style={styles.reportedBtns}>
                         <TouchableOpacity style={styles.confirmBtn} onPress={() => confirm(p.id)}>
-                          <Text style={styles.confirmBtnText}>Confirm</Text>
+                          <Text style={styles.confirmBtnText}>{p.thirdPartyName ? 'Mark paid' : 'Confirm'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.declineBtn2} onPress={() => decline(p)}>
                           <Text style={styles.declineBtn2Text}>Decline</Text>
                         </TouchableOpacity>
                       </View>
-                    ) : null}
+                    ) : (
+                      <TouchableOpacity style={styles.receiptBtn} onPress={() => sendReceipt(p)} disabled={receiptBusy === p.id}>
+                        <Text style={styles.receiptBtnText}>{receiptBusy === p.id ? '…' : '📧 Receipt'}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </Card>
               ))
@@ -442,13 +460,22 @@ export function FacilitatorPaymentsScreen() {
 
 function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null; onClose: () => void; onSaved: () => void }) {
   const [date, setDate] = useState<string>('');
+  const [amount, setAmount] = useState<string>('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (payment) setDate((payment.paidAt || '').slice(0, 10)); }, [payment]);
+  useEffect(() => {
+    if (payment) {
+      setDate((payment.paidAt || '').slice(0, 10));
+      setAmount(payment.amountCents ? (payment.amountCents / 100).toFixed(2) : '');
+    }
+  }, [payment]);
   if (!payment) return null;
   const save = async () => {
     if (!date) return;
+    const cents = amount ? Math.round(parseFloat(amount) * 100) : 0;
+    if (!cents || cents < 1) { Alert.alert('Enter an amount', 'The payment amount must be more than $0.'); return; }
     setBusy(true);
     try {
+      if (cents !== payment.amountCents) await dbApi.updatePaymentAmount(payment.id, cents);
       await dbApi.updatePaymentDate(payment.id, new Date(date + 'T12:00:00').toISOString());
       onSaved();
     } catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }
@@ -456,13 +483,19 @@ function EditDateModal({ payment, onClose, onSaved }: { payment: Payment | null;
   };
   return (
     <KeyboardModal visible onClose={onClose}>
-          <Text style={typography.h3}>Change payment date</Text>
+          <Text style={typography.h3}>Edit payment</Text>
           <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
-            {money(payment.amountCents)} · {METHOD_LABEL[payment.method]}
+            {payment.memberName ?? 'Member'} · {METHOD_LABEL[payment.method]}
           </Text>
+          <Text style={typography.caption}>Amount paid</Text>
+          <View style={styles.amtRow}>
+            <Text style={styles.dollar}>$</Text>
+            <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
+          </View>
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>Date paid</Text>
           <DateField value={date} onChange={setDate} placeholder="Pick the date paid" />
           <View style={{ height: spacing.sm }} />
-          <Button title={busy ? 'Saving…' : 'Save date'} onPress={save} disabled={busy} />
+          <Button title={busy ? 'Saving…' : 'Save changes'} onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
@@ -718,10 +751,17 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [paidDate, setPaidDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [thirdParty, setThirdParty] = useState(false);
+  const [thirdPartyName, setThirdPartyName] = useState('');
+  const [thirdPartyPaid, setThirdPartyPaid] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (member) { setAmount(member.monthly_rent_cents ? (member.monthly_rent_cents / 100).toFixed(2) : ''); setPaidDate(new Date().toISOString().slice(0, 10)); }
+    if (member) {
+      setAmount(member.monthly_rent_cents ? (member.monthly_rent_cents / 100).toFixed(2) : '');
+      setPaidDate(new Date().toISOString().slice(0, 10));
+      setThirdParty(false); setThirdPartyName(''); setThirdPartyPaid(true);
+    }
   }, [member]);
 
   if (!member) return null;
@@ -741,6 +781,10 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
         onTime,
         periodMonth: currentPeriod(),
         paidAt: paidDate ? new Date(paidDate + 'T12:00:00').toISOString() : undefined,
+        thirdPartyName: thirdParty && thirdPartyName.trim() ? thirdPartyName.trim() : undefined,
+        // A third-party invoice that hasn't been paid yet is logged as 'reported'
+        // so it does NOT count toward the resident's balance until confirmed.
+        status: thirdParty && !thirdPartyPaid ? 'reported' : 'paid',
       });
       onSaved();
     } catch (e: any) {
@@ -766,6 +810,38 @@ function RecordModal({ member, onClose, onSaved }: { member: any | null; onClose
           </View>
           <Text style={styles.dateLbl}>Date paid</Text>
           <DateField value={paidDate} onChange={setPaidDate} placeholder="Pick the date paid" />
+
+          <View style={rentStyles.addRow}>
+            <Text style={rentStyles.addLabel}>Paid by a third party</Text>
+            <Switch value={thirdParty} onValueChange={setThirdParty} trackColor={{ true: colors.primary }} />
+          </View>
+          {thirdParty ? (
+            <>
+              <TextInput
+                style={styles.dueInput}
+                value={thirdPartyName}
+                onChangeText={setThirdPartyName}
+                placeholder="Third party's name (optional — e.g. agency, family member)"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={rentStyles.segment}>
+                {([['paid', 'Paid'], ['unpaid', 'Not paid yet']] as const).map(([k, label]) => {
+                  const on = (k === 'paid') === thirdPartyPaid;
+                  return (
+                    <TouchableOpacity key={k} onPress={() => setThirdPartyPaid(k === 'paid')} style={[rentStyles.segBtn, on && rentStyles.segBtnOn]}>
+                      <Text style={[rentStyles.segTxt, on && rentStyles.segTxtOn]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {!thirdPartyPaid ? (
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                  Logged as an open invoice — it won’t count toward {member.first_name}’s balance until you mark it paid (tap “Confirm” on it later).
+                </Text>
+              ) : null}
+            </>
+          ) : null}
+
           <View style={{ height: spacing.sm }} />
           <Button title="Save payment" onPress={save} disabled={busy} />
           <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
@@ -830,6 +906,8 @@ const styles = StyleSheet.create({
   rentBtnText: { color: colors.primary, fontWeight: '600', fontSize: 12 },
   dueInput: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, marginTop: 4, marginBottom: spacing.md },
   payRow: { paddingVertical: spacing.sm + 2 },
+  receiptBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.primary, marginLeft: spacing.sm },
+  receiptBtnText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: spacing.lg },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
   amtRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, marginVertical: spacing.md },

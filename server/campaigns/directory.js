@@ -88,12 +88,12 @@ export function buildEmail(email, homes, VIEWS) {
     <div style="background:#f1f8f7;border:1px solid #d6ece8;border-radius:10px;padding:12px 14px;margin:0 0 16px;color:#16242a;font-size:13.5px;line-height:1.5">
       Your listing is <strong>100% free, forever</strong> — we never ask for payment or card details, and we never sell leads or your information. Sober Living Directory is a program of <strong>Empower Next Project</strong>, a registered 501(c)(3) non-profit (EIN 39-3580172).
     </div>
-    <p style="color:#3a474c;margin:0;font-size:14px">Not the right person? Please forward to whoever handles intake. Any questions — or want to make sure this is real? Just reply, or call me directly at <a href="tel:+12133216518" style="color:#0E5F5A;font-weight:700;text-decoration:none">${SENDER_PHONE}</a>.</p>
+    <p style="color:#3a474c;margin:0;font-size:14px">Not the right person? Please forward to whoever handles intake. Any questions — or want to make sure this is real? Just reply, or call me directly at <a href="tel:+19168776237" style="color:#0E5F5A;font-weight:700;text-decoration:none">${SENDER_PHONE}</a>.</p>
     <p style="color:#3a474c;margin:16px 0 0">In recovery together,<br>
       <strong>${SENDER_NAME}</strong><br>
       <span style="color:#5c6b71">${SENDER_TITLE}</span><br>
       <span style="color:#5c6b71">${SENDER_ORG}</span><br>
-      📞 <a href="tel:+12133216518" style="color:#0E5F5A;font-weight:700;text-decoration:none">${SENDER_PHONE}</a> &nbsp;·&nbsp; <a href="mailto:joseph@soberlivingdirectory.com" style="color:#0E5F5A;text-decoration:none">joseph@soberlivingdirectory.com</a></p>
+      📞 <a href="tel:+19168776237" style="color:#0E5F5A;font-weight:700;text-decoration:none">${SENDER_PHONE}</a> &nbsp;·&nbsp; <a href="mailto:joseph@soberlivingdirectory.com" style="color:#0E5F5A;text-decoration:none">joseph@soberlivingdirectory.com</a></p>
     <div style="text-align:center;border-top:1px solid #e4eaec;margin-top:18px;padding-top:16px">
       <p style="color:#3a474c;margin:0 0 10px;font-size:14px"><strong>📱 New — our free companion app:</strong> <strong>Sober Living Companion</strong> helps homes &amp; residents track sober days, find meetings, pay membership &amp; run the house.</p>
       <a href="https://apps.apple.com/app/sober-living-companion/id6780705094" style="text-decoration:none"><img src="${SITE}/appstore-badge.png" width="150" height="55" alt="Download on the App Store" style="border:0;outline:none;display:inline-block;vertical-align:middle"></a>

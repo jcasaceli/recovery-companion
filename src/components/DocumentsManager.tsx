@@ -7,7 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { decode } from 'base64-arraybuffer';
 import { Card, SectionTitle, Button } from './ui';
 import { colors, spacing, radius, typography } from '../theme';
-import { listDocuments, createDocument, deleteDocument, uploadDocumentFile, getDocumentUrl, getDocumentFileData, Document } from '../services/db';
+import { listDocuments, createDocument, deleteDocument, setDocumentHidden, uploadDocumentFile, getDocumentUrl, getDocumentFileData, Document } from '../services/db';
 import { formatDate } from '../utils/format';
 
 type Pending = { uri: string; fileName: string; mimeType: string; size?: number; isImage: boolean };
@@ -116,6 +116,12 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
     ]);
   };
 
+  // Hide/show a document from the resident's own Documents tab (staff-only).
+  const toggleHidden = async (d: Document) => {
+    try { await setDocumentHidden(d.id, !d.hiddenFromMember); load(); }
+    catch (e: any) { Alert.alert('Could not update', e?.message ?? 'Try again.'); }
+  };
+
   return (
     <>
       {hideHeader ? null : <SectionTitle>Documents</SectionTitle>}
@@ -149,16 +155,25 @@ export function DocumentsManager({ individualId, orgId, memberName, hideHeader }
             {showDocs ? (
               <>
                 {docs.map((d) => (
-                  <TouchableOpacity key={d.id} style={styles.row} onPress={() => open(d)} onLongPress={() => remove(d)}>
-                    <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={typography.body}>{d.title}</Text>
-                      <Text style={typography.caption}>{d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}</Text>
-                    </View>
-                    <Text style={[typography.caption, { color: colors.primary }]}>Open</Text>
-                  </TouchableOpacity>
+                  <View key={d.id} style={styles.row}>
+                    <TouchableOpacity style={styles.rowMain} onPress={() => open(d)} onLongPress={() => remove(d)}>
+                      <Text style={styles.icon}>{iconFor(d.mimeType, d.fileName)}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={typography.body}>{d.title}{d.hiddenFromMember ? '  🙈' : ''}</Text>
+                        <Text style={typography.caption}>
+                          {d.fileName ? `${d.fileName} · ` : ''}Added {formatDate(d.createdAt)}
+                          {d.hiddenFromMember ? ' · hidden from resident' : ''}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => toggleHidden(d)} style={styles.hideBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={[typography.caption, { fontWeight: '700', color: d.hiddenFromMember ? colors.warning : colors.primary }]}>
+                        {d.hiddenFromMember ? '👁 Show' : '🙈 Hide'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ))}
-                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Long-press a document to delete it.</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Tap a document to open · long-press to delete · Hide keeps it staff-only (the resident won’t see it).</Text>
               </>
             ) : null}
           </View>
@@ -188,6 +203,8 @@ const styles = StyleSheet.create({
   fileChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  rowMain: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  hideBtn: { paddingHorizontal: spacing.sm, paddingVertical: 4, marginLeft: spacing.sm },
   icon: { fontSize: 20, marginRight: spacing.sm },
   collapseBtn: { paddingVertical: spacing.sm },
   collapseText: { ...typography.caption, color: colors.primary, fontWeight: '800' },

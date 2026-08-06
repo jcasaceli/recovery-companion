@@ -160,6 +160,8 @@ export interface Payment {
   periodMonth?: string;
   /** ISO datetime string */
   paidAt: string;
+  /** If a third party paid on the resident's behalf, their name (optional). */
+  thirdPartyName?: string;
 }
 
 export type LevelOfCare =
@@ -230,6 +232,8 @@ export interface Note {
   authorId?: string;
   authorName: string;
   authorRole: AppRole;
+  /** Flagged notes surface a reminder marker on the all-members list. */
+  flagged?: boolean;
   /** ISO datetime string */
   createdAt: string;
   /** STAFF-ONLY file attached to the note (e.g. a UA result). Residents can never open it. */
