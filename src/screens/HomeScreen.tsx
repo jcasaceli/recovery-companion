@@ -41,7 +41,6 @@ export function HomeScreen() {
   const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne.id || '');
   const [meds, setMeds] = useState<string[]>([]);
   const [medInput, setMedInput] = useState('');
-  const [onlineUrl, setOnlineUrl] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   // Residents maintain their own medication list; staff see the same list on the
   // client profile. set_my_medications only ever writes this one column.
@@ -240,44 +239,6 @@ export function HomeScreen() {
     );
   };
 
-  // Online meetings (Zoom etc.). We can only observe that the app stayed open,
-  // which is NOT proof of attendance — so these are logged as self-reported and
-  // never earn the confirmed badge. 10 minutes is the minimum to count.
-  const ONLINE_MIN_MINUTES = 10;
-  const [onlineStart, setOnlineStart] = useState<number | null>(null);
-
-  const startOnlineMeeting = async () => {
-    const url = (onlineUrl || '').trim();
-    if (!url) { Alert.alert('Add the meeting link', 'Paste the Zoom (or other) link first.'); return; }
-    setOnlineStart(Date.now());
-    const full = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    Linking.openURL(full).catch(() => Alert.alert('Could not open that link', 'Check the meeting link and try again.'));
-  };
-
-  const finishOnlineMeeting = async () => {
-    if (!onlineStart) return;
-    const mins = Math.floor((Date.now() - onlineStart) / 60000);
-    if (mins < ONLINE_MIN_MINUTES) {
-      Alert.alert(
-        'Not long enough yet',
-        `You've been in the meeting about ${mins} minute${mins === 1 ? '' : 's'}. It logs automatically once you reach ${ONLINE_MIN_MINUTES}.`,
-      );
-      return;
-    }
-    try {
-      if (connected) {
-        await recordMeetingCheckin(lovedOne.id, undefined, undefined, 'Online meeting', 'online', mins);
-        loadCheckins();
-        notifyCare(lovedOne.id, 'Online meeting', `${lovedOne.firstName} attended an online meeting (${mins} min, self-reported).`, 'activity');
-      }
-      setOnlineStart(null);
-      setOnlineUrl('');
-      Alert.alert('Logged ✅', `${mins} minutes recorded. Online meetings are logged as self-reported — your house staff can see it.`);
-    } catch (e: any) {
-      Alert.alert('Could not log it', e?.message ?? 'Try again.');
-    }
-  };
-
   // The 35-minute confirmation: prove they're still at the same place.
   const confirmStillThere = async (c: any) => {
     try {
@@ -419,8 +380,8 @@ export function HomeScreen() {
             {selfView ? <Text style={styles.heroTapHint}>Tap to open your Sobriety Clock ⏱️</Text> : null}
           </>
         ) : (
-          <Text style={styles.heroBreakdown}>
-            {selfView ? 'Set your sobriety date below to start your counter.' : 'No sobriety date set yet.'}
+          <Text style={selfView ? styles.heroTapHint : styles.heroBreakdown}>
+            {selfView ? 'Click here to set your sobriety date counter →' : 'No sobriety date set yet.'}
           </Text>
         )}
       </Card>
@@ -449,34 +410,6 @@ export function HomeScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {/* Online meetings — honestly labelled: we can only see the app was open. */}
-      {!isFacilitator ? (
-        <Card>
-          <Text style={typography.h3}>Online meeting</Text>
-          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-            {onlineStart
-              ? 'Come back and tap “I finished” when the meeting ends.'
-              : `Paste a Zoom or other meeting link. It logs after ${ONLINE_MIN_MINUTES} minutes as self-reported attendance.`}
-          </Text>
-          {!onlineStart ? (
-            <>
-              <TextInput
-                style={styles.medInput}
-                value={onlineUrl}
-                onChangeText={setOnlineUrl}
-                placeholder="https://zoom.us/j/…"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <View style={{ height: spacing.sm }} />
-              <Button title="Join online meeting" onPress={startOnlineMeeting} disabled={!onlineUrl.trim()} />
-            </>
-          ) : (
-            <Button title="I finished the meeting" onPress={finishOnlineMeeting} />
-          )}
-        </Card>
-      ) : null}
 
       {/* Anything waiting on the 35-minute confirmation */}
       {!isFacilitator && pendingConfirm.length ? (

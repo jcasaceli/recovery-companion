@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Linking, Alert } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
+import { useAppState } from '../state/store';
+import { useAuth } from '../state/auth';
+import { recordMeetingCheckin } from '../services/db';
+import { notifyCare } from '../services/push';
 
-type Fellowship = 'AA' | 'NA' | 'SMART' | 'Dharma';
+type Fellowship = 'AA' | 'NA' | 'SMART' | 'Dharma' | 'GA';
 interface Mtg {
   id: string;
   fellowship: Fellowship;
@@ -17,9 +21,9 @@ interface Mtg {
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const FELLOWSHIPS: Fellowship[] = ['AA', 'NA', 'SMART', 'Dharma'];
+const FELLOWSHIPS: Fellowship[] = ['AA', 'NA', 'SMART', 'Dharma', 'GA'];
 const FELLOWSHIP_COLOR: Record<Fellowship, string> = {
-  AA: colors.primary, NA: colors.accent, SMART: '#6C7BD9', Dharma: '#B07BD9',
+  AA: colors.primary, NA: colors.accent, SMART: '#6C7BD9', Dharma: '#B07BD9', GA: '#D98C5F',
 };
 
 // Official, maintained online-meeting finders for each fellowship. These always
@@ -29,7 +33,13 @@ const FELLOWSHIP_FINDER: Record<Fellowship, string> = {
   NA: 'https://virtual-na.org/meetings/',
   SMART: 'https://meetings.smartrecovery.org/',
   Dharma: 'https://recoverydharma.online/',
+  GA: 'https://gamblersanonymous.org/virtual-meetings/',
 };
+
+// Gamblers Anonymous runs a searchable directory (in-person / virtual / phone)
+// rather than a fixed 24/7 online schedule, so we link straight to the official
+// finder + national hotline instead of inventing weekly time slots.
+const GA_HOTLINE = '18552255542'; // 855-2CALLGA
 
 /** "19:00" -> "7:00 PM" */
 function to12h(hhmm: string): string {
@@ -115,6 +125,48 @@ export function MeetingsScreen() {
   const openUrl = (url: string) =>
     Linking.openURL(url).catch(() => Alert.alert('Could not open link', 'Please try again.'));
 
+  // ---- Log any online meeting (paste a Zoom/other link) — moved here from Home ----
+  // We can only observe the app stayed open, which is NOT proof of attendance, so
+  // these log as self-reported and never earn the confirmed badge. 10 min minimum.
+  const { lovedOne } = useAppState();
+  const auth = useAuth();
+  const isFacilitator = auth.profile?.role === 'facilitator';
+  const connected = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lovedOne?.id || '');
+  const ONLINE_MIN_MINUTES = 10;
+  const [onlineUrl, setOnlineUrl] = useState('');
+  const [onlineStart, setOnlineStart] = useState<number | null>(null);
+
+  const startOnlineMeeting = async () => {
+    const url = (onlineUrl || '').trim();
+    if (!url) { Alert.alert('Add the meeting link', 'Paste the Zoom (or other) link first.'); return; }
+    setOnlineStart(Date.now());
+    const full = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    Linking.openURL(full).catch(() => Alert.alert('Could not open that link', 'Check the meeting link and try again.'));
+  };
+
+  const finishOnlineMeeting = async () => {
+    if (!onlineStart) return;
+    const mins = Math.floor((Date.now() - onlineStart) / 60000);
+    if (mins < ONLINE_MIN_MINUTES) {
+      Alert.alert(
+        'Not long enough yet',
+        `You've been in the meeting about ${mins} minute${mins === 1 ? '' : 's'}. It logs automatically once you reach ${ONLINE_MIN_MINUTES}.`,
+      );
+      return;
+    }
+    try {
+      if (connected) {
+        await recordMeetingCheckin(lovedOne.id, undefined, undefined, 'Online meeting', 'online', mins);
+        notifyCare(lovedOne.id, 'Online meeting', `${lovedOne.firstName} attended an online meeting (${mins} min, self-reported).`, 'activity');
+      }
+      setOnlineStart(null);
+      setOnlineUrl('');
+      Alert.alert('Logged ✅', `${mins} minutes recorded. Online meetings are logged as self-reported — your house staff can see it.`);
+    } catch (e: any) {
+      Alert.alert('Could not log it', e?.message ?? 'Try again.');
+    }
+  };
+
   const addToCalendar = async (m: Mtg) => {
     try {
       const { status } = await Calendar.requestCalendarPermissionsAsync();
@@ -141,7 +193,36 @@ export function MeetingsScreen() {
 
   return (
     <Screen edges={[]}>
-      <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma — online, 24/7" />
+      <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma · GA — online" />
+
+      {/* Log any online meeting (paste your own Zoom/other link). Members only. */}
+      {!isFacilitator ? (
+        <Card>
+          <Text style={typography.h3}>Log an online meeting</Text>
+          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+            {onlineStart
+              ? 'Come back and tap “I finished” when the meeting ends.'
+              : `In your own Zoom or other meeting? Paste the link — it logs after ${ONLINE_MIN_MINUTES} minutes as self-reported attendance.`}
+          </Text>
+          {!onlineStart ? (
+            <>
+              <TextInput
+                style={styles.input}
+                value={onlineUrl}
+                onChangeText={setOnlineUrl}
+                placeholder="https://zoom.us/j/…"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+              <View style={{ height: spacing.sm }} />
+              <Button title="Join online meeting" onPress={startOnlineMeeting} disabled={!onlineUrl.trim()} />
+            </>
+          ) : (
+            <Button title="I finished the meeting" onPress={finishOnlineMeeting} />
+          )}
+        </Card>
+      ) : null}
 
       <View style={styles.filters}>
         {(['ALL', ...FELLOWSHIPS] as const).map((f) => (
@@ -169,10 +250,31 @@ export function MeetingsScreen() {
         </Card>
       ))}
 
+      {/* Gamblers Anonymous — real directory + hotline, no invented time slots. */}
+      {filter === 'ALL' || filter === 'GA' ? (
+        <Card>
+          <View style={styles.row}>
+            <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR.GA }]}>
+              <Text style={styles.badgeText}>GA</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={typography.h3}>Gamblers Anonymous</Text>
+              <Text style={typography.caption}>In-person, virtual &amp; phone meetings · find one by day or location</Text>
+            </View>
+          </View>
+          <View style={styles.actions}>
+            <View style={{ flex: 1 }}><Button title="Find a meeting →" onPress={() => openUrl(FELLOWSHIP_FINDER.GA)} /></View>
+            <View style={{ flex: 1 }}><Button title="Call 855-2CALLGA" variant="secondary" onPress={() => openUrl(`tel:${GA_HOTLINE}`)} /></View>
+          </View>
+        </Card>
+      ) : null}
+
       <Text style={styles.note}>
         The weekly times are a guide to common meeting formats. Tap “Join online” to open the
         fellowship’s official directory and join the exact live meeting — AA’s Online Intergroup
         (aa-intergroup.org) runs Zoom meetings 24/7, so there’s almost always one starting soon.
+        Gamblers Anonymous uses a searchable directory, so tap “Find a meeting” for its current
+        virtual, phone, and in-person schedule.
       </Text>
     </Screen>
   );
@@ -188,5 +290,6 @@ const styles = StyleSheet.create({
   badge: { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4, marginRight: spacing.md },
   badgeText: { color: colors.textInverse, fontWeight: '800', fontSize: 12 },
   actions: { flexDirection: 'row', gap: spacing.sm },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.textPrimary, backgroundColor: colors.surface, fontSize: 15 },
   note: { ...typography.caption, marginTop: spacing.sm },
 });
