@@ -33,12 +33,34 @@ const BROWSER_UA =
 // return the code4recovery JSON shape (name, slug, day 0-6, time, latitude,
 // longitude, types, formatted_address). Add more CA intergroups here as verified;
 // the sync skips any that fail so a bad/blocked URL never breaks the others.
+// Confirmed-working AA intergroup Meeting Guide feeds across the US (each verified
+// to return the code4recovery JSON with geo). NA is nationwide-live via BMLT, so
+// this AA list adds density in major metros. Add more as they're verified; the
+// sync skips any feed it can't fetch (a blocked/moved URL never breaks the rest).
 const AA_FEEDS = [
+  // West / CA
   { key: 'aa-san-diego', name: 'AA San Diego', url: 'https://aasandiego.org/wp-admin/admin-ajax.php?action=meetings' },
-  { key: 'aa-sf-marin', name: 'AA SF & Marin', url: 'https://aasfmarin.org/meetings.json' },
-  { key: 'aa-sacramento', name: 'AA Sacramento', url: 'https://aasacramento.org/wp-admin/admin-ajax.php?action=meetings' },
-  { key: 'aa-orange-county', name: 'AA Orange County', url: 'https://www.ocaa.org/wp-admin/admin-ajax.php?action=meetings' },
-  { key: 'aa-contra-costa', name: 'AA Contra Costa', url: 'https://aa-contracosta.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-orange-county', name: 'AA Orange County', url: 'https://oc-aa.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-seattle', name: 'AA Seattle', url: 'https://seattleaa.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-phoenix', name: 'AA Phoenix', url: 'https://aaphoenix.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-tucson', name: 'AA Tucson', url: 'https://aatucson.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-denver', name: 'AA Denver', url: 'https://daccaa.org/wp-admin/admin-ajax.php?action=meetings' },
+  // Central / South
+  { key: 'aa-houston', name: 'AA Houston', url: 'https://aahouston.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-kansas-city', name: 'AA Kansas City', url: 'https://kc-aa.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-minneapolis', name: 'AA Minneapolis', url: 'https://aaminneapolis.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-cincinnati', name: 'AA Cincinnati', url: 'https://aacincinnati.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-nashville', name: 'AA Nashville', url: 'https://aanashville.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-atlanta', name: 'AA Atlanta', url: 'https://atlantaaa.org/wp-admin/admin-ajax.php?action=meetings' },
+  // Florida
+  { key: 'aa-palm-beach', name: 'AA Palm Beach County', url: 'https://aapalmbeachcounty.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-pinellas', name: 'AA Pinellas (Tampa Bay)', url: 'https://aapinellas.org/wp-admin/admin-ajax.php?action=meetings' },
+  // East Coast
+  { key: 'aa-nyc', name: 'AA New York (Intergroup)', url: 'https://nyintergroup.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-connecticut', name: 'AA Connecticut', url: 'https://ct-aa.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-philadelphia', name: 'AA SE Pennsylvania', url: 'https://aasepia.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-dc', name: 'AA Washington DC', url: 'https://aa-dc.org/wp-admin/admin-ajax.php?action=meetings' },
+  { key: 'aa-virginia', name: 'AA Virginia', url: 'https://aavirginia.org/wp-admin/admin-ajax.php?action=meetings' },
 ];
 
 // National NA aggregator (BMLT). Queried live; -N geo_width = auto-expand radius
