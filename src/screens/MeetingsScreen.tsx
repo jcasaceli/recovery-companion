@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Linking, Alert, Platform, ActivityIndicator } from 'react-native';
 import * as Calendar from 'expo-calendar';
+import * as Location from 'expo-location';
 import { Screen, ScreenTitle, Card, Button } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
 import { recordMeetingCheckin } from '../services/db';
 import { notifyCare } from '../services/push';
+import { getNearbyMeetings, InPersonMeeting } from '../services/meetings';
 
 type Fellowship = 'AA' | 'NA' | 'SMART' | 'Dharma' | 'GA';
 interface Mtg {
@@ -167,6 +169,71 @@ export function MeetingsScreen() {
     }
   };
 
+  // ---- In-person meeting search (real AA/NA data via backend, sorted by distance) ----
+  const [mode, setMode] = useState<'online' | 'inperson'>('online');
+  const [ipFellow, setIpFellow] = useState<'ALL' | 'AA' | 'NA'>('ALL');
+  const [ipLoading, setIpLoading] = useState(false);
+  const [ipError, setIpError] = useState<string | null>(null);
+  const [ipMeetings, setIpMeetings] = useState<InPersonMeeting[] | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  const runNearbySearch = async (c: { lat: number; lng: number }, fellowship: 'ALL' | 'AA' | 'NA') => {
+    setIpLoading(true); setIpError(null);
+    try {
+      const r = await getNearbyMeetings(c.lat, c.lng, { fellowship, radius: 25, limit: 60 });
+      setIpMeetings(r.meetings || []);
+    } catch (e: any) {
+      setIpError(e?.message || 'Could not load meetings.'); setIpMeetings(null);
+    } finally { setIpLoading(false); }
+  };
+
+  const findNearMe = async () => {
+    setIpError(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setIpError('Location permission is needed to find meetings near you.'); return; }
+      setIpLoading(true);
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setCoords(c);
+      await runNearbySearch(c, ipFellow);
+    } catch (e: any) {
+      setIpError(e?.message || 'Could not get your location.'); setIpLoading(false);
+    }
+  };
+
+  const pickIpFellow = (f: 'ALL' | 'AA' | 'NA') => {
+    setIpFellow(f);
+    if (coords) runNearbySearch(coords, f);
+  };
+
+  const openDirections = (m: InPersonMeeting) => {
+    const q = m.address ? encodeURIComponent(m.address) : `${m.lat},${m.lng}`;
+    openUrl(`https://www.google.com/maps/dir/?api=1&destination=${q}`);
+  };
+
+  const addInPersonToCalendar = async (m: InPersonMeeting) => {
+    if (m.day == null || !m.time) { Alert.alert('No set time', 'This meeting has no fixed weekly time to add.'); return; }
+    try {
+      const { status } = await Calendar.requestCalendarPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission needed', 'Allow calendar access to add this meeting.'); return; }
+      const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+      const writable = cals.find((c) => c.allowsModifications) ?? cals[0];
+      if (!writable) { Alert.alert('No calendar', 'No writable calendar found.'); return; }
+      const start = nextOccurrence(m.day, m.time);
+      await Calendar.createEventAsync(writable.id, {
+        title: `${m.fellowship} — ${m.name}`,
+        startDate: start,
+        endDate: new Date(start.getTime() + 3600000),
+        location: m.address || m.city || undefined,
+        alarms: [{ relativeOffset: -30 }],
+      });
+      Alert.alert('Added', `"${m.name}" was added to your calendar with a 30-minute reminder.`);
+    } catch {
+      Alert.alert('Could not add', 'Something went wrong adding to your calendar.');
+    }
+  };
+
   const addToCalendar = async (m: Mtg) => {
     try {
       const { status } = await Calendar.requestCalendarPermissionsAsync();
@@ -191,96 +258,199 @@ export function MeetingsScreen() {
     }
   };
 
+  const IP_FELLOWS: Array<'ALL' | 'AA' | 'NA'> = ['ALL', 'AA', 'NA'];
+
   return (
     <Screen edges={[]}>
-      <ScreenTitle title="Meetings" subtitle="AA · NA · SMART · Dharma · GA — online" />
+      <ScreenTitle title="Meetings" subtitle="Online 24/7 · or find in-person meetings near you" />
 
-      {/* Log any online meeting (paste your own Zoom/other link). Members only. */}
-      {!isFacilitator ? (
-        <Card>
-          <Text style={typography.h3}>Log an online meeting</Text>
-          <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
-            {onlineStart
-              ? 'Come back and tap “I finished” when the meeting ends.'
-              : `In your own Zoom or other meeting? Paste the link — it logs after ${ONLINE_MIN_MINUTES} minutes as self-reported attendance.`}
-          </Text>
-          {!onlineStart ? (
-            <>
-              <TextInput
-                style={styles.input}
-                value={onlineUrl}
-                onChangeText={setOnlineUrl}
-                placeholder="https://zoom.us/j/…"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              <View style={{ height: spacing.sm }} />
-              <Button title="Join online meeting" onPress={startOnlineMeeting} disabled={!onlineUrl.trim()} />
-            </>
-          ) : (
-            <Button title="I finished the meeting" onPress={finishOnlineMeeting} />
-          )}
-        </Card>
-      ) : null}
-
-      <View style={styles.filters}>
-        {(['ALL', ...FELLOWSHIPS] as const).map((f) => (
-          <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.filter, filter === f ? styles.filterActive : null]}>
-            <Text style={[styles.filterText, filter === f ? styles.filterTextActive : null]}>{f}</Text>
+      {/* Online | In person */}
+      <View style={styles.modeToggle}>
+        {(['online', 'inperson'] as const).map((mo) => (
+          <TouchableOpacity key={mo} onPress={() => setMode(mo)} style={[styles.modeBtn, mode === mo ? styles.modeBtnActive : null]}>
+            <Text style={[styles.modeText, mode === mo ? styles.modeTextActive : null]}>{mo === 'online' ? 'Online' : 'In person'}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {meetings.map((m) => (
-        <Card key={m.id}>
-          <View style={styles.row}>
-            <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR[m.fellowship] }]}>
-              <Text style={styles.badgeText}>{m.fellowship}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={typography.h3}>{m.name}</Text>
-              <Text style={typography.caption}>{DAYS[m.dayOfWeek]} · {to12h(m.startTime)} · {m.isOnline ? 'Online' : m.region}</Text>
-            </View>
-          </View>
-          <View style={styles.actions}>
-            {m.isOnline ? <View style={{ flex: 1 }}><Button title="Join online →" onPress={() => openUrl(FELLOWSHIP_FINDER[m.fellowship])} /></View> : null}
-            <View style={{ flex: 1 }}><Button title="Add to calendar" variant="secondary" onPress={() => addToCalendar(m)} /></View>
-          </View>
-        </Card>
-      ))}
+      {mode === 'online' ? (
+        <>
+          {/* Log any online meeting (paste your own Zoom/other link). Members only. */}
+          {!isFacilitator ? (
+            <Card>
+              <Text style={typography.h3}>Log an online meeting</Text>
+              <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+                {onlineStart
+                  ? 'Come back and tap “I finished” when the meeting ends.'
+                  : `In your own Zoom or other meeting? Paste the link — it logs after ${ONLINE_MIN_MINUTES} minutes as self-reported attendance.`}
+              </Text>
+              {!onlineStart ? (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    value={onlineUrl}
+                    onChangeText={setOnlineUrl}
+                    placeholder="https://zoom.us/j/…"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                  />
+                  <View style={{ height: spacing.sm }} />
+                  <Button title="Join online meeting" onPress={startOnlineMeeting} disabled={!onlineUrl.trim()} />
+                </>
+              ) : (
+                <Button title="I finished the meeting" onPress={finishOnlineMeeting} />
+              )}
+            </Card>
+          ) : null}
 
-      {/* Gamblers Anonymous — real directory + hotline, no invented time slots. */}
-      {filter === 'ALL' || filter === 'GA' ? (
-        <Card>
-          <View style={styles.row}>
-            <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR.GA }]}>
-              <Text style={styles.badgeText}>GA</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={typography.h3}>Gamblers Anonymous</Text>
-              <Text style={typography.caption}>In-person, virtual &amp; phone meetings · find one by day or location</Text>
-            </View>
+          <View style={styles.filters}>
+            {(['ALL', ...FELLOWSHIPS] as const).map((f) => (
+              <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.filter, filter === f ? styles.filterActive : null]}>
+                <Text style={[styles.filterText, filter === f ? styles.filterTextActive : null]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={styles.actions}>
-            <View style={{ flex: 1 }}><Button title="Find a meeting →" onPress={() => openUrl(FELLOWSHIP_FINDER.GA)} /></View>
-            <View style={{ flex: 1 }}><Button title="Call 855-2CALLGA" variant="secondary" onPress={() => openUrl(`tel:${GA_HOTLINE}`)} /></View>
-          </View>
-        </Card>
-      ) : null}
 
-      <Text style={styles.note}>
-        The weekly times are a guide to common meeting formats. Tap “Join online” to open the
-        fellowship’s official directory and join the exact live meeting — AA’s Online Intergroup
-        (aa-intergroup.org) runs Zoom meetings 24/7, so there’s almost always one starting soon.
-        Gamblers Anonymous uses a searchable directory, so tap “Find a meeting” for its current
-        virtual, phone, and in-person schedule.
-      </Text>
+          {meetings.map((m) => (
+            <Card key={m.id}>
+              <View style={styles.row}>
+                <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR[m.fellowship] }]}>
+                  <Text style={styles.badgeText}>{m.fellowship}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.h3}>{m.name}</Text>
+                  <Text style={typography.caption}>{DAYS[m.dayOfWeek]} · {to12h(m.startTime)} · {m.isOnline ? 'Online' : m.region}</Text>
+                </View>
+              </View>
+              <View style={styles.actions}>
+                {m.isOnline ? <View style={{ flex: 1 }}><Button title="Join online →" onPress={() => openUrl(FELLOWSHIP_FINDER[m.fellowship])} /></View> : null}
+                <View style={{ flex: 1 }}><Button title="Add to calendar" variant="secondary" onPress={() => addToCalendar(m)} /></View>
+              </View>
+            </Card>
+          ))}
+
+          {/* Gamblers Anonymous — real directory + hotline, no invented time slots. */}
+          {filter === 'ALL' || filter === 'GA' ? (
+            <Card>
+              <View style={styles.row}>
+                <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR.GA }]}>
+                  <Text style={styles.badgeText}>GA</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.h3}>Gamblers Anonymous</Text>
+                  <Text style={typography.caption}>In-person, virtual &amp; phone meetings · find one by day or location</Text>
+                </View>
+              </View>
+              <View style={styles.actions}>
+                <View style={{ flex: 1 }}><Button title="Find a meeting →" onPress={() => openUrl(FELLOWSHIP_FINDER.GA)} /></View>
+                <View style={{ flex: 1 }}><Button title="Call 855-2CALLGA" variant="secondary" onPress={() => openUrl(`tel:${GA_HOTLINE}`)} /></View>
+              </View>
+            </Card>
+          ) : null}
+
+          <Text style={styles.note}>
+            The weekly times are a guide to common meeting formats. Tap “Join online” to open the
+            fellowship’s official directory and join the exact live meeting — AA’s Online Intergroup
+            (aa-intergroup.org) runs Zoom meetings 24/7, so there’s almost always one starting soon.
+            Gamblers Anonymous uses a searchable directory, so tap “Find a meeting” for its current
+            virtual, phone, and in-person schedule.
+          </Text>
+        </>
+      ) : (
+        <>
+          <Card>
+            <Text style={typography.h3}>Find meetings near you</Text>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+              Real AA &amp; NA in-person meetings, closest first. We use your location only to sort by
+              distance — it isn’t stored.
+            </Text>
+            <Button title={coords ? '📍 Update my location' : '📍 Use my location'} onPress={findNearMe} disabled={ipLoading} />
+          </Card>
+
+          {coords ? (
+            <View style={styles.filters}>
+              {IP_FELLOWS.map((f) => (
+                <TouchableOpacity key={f} onPress={() => pickIpFellow(f)} style={[styles.filter, ipFellow === f ? styles.filterActive : null]}>
+                  <Text style={[styles.filterText, ipFellow === f ? styles.filterTextActive : null]}>{f}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {ipLoading ? (
+            <Card>
+              <View style={styles.center}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[typography.caption, { marginTop: spacing.sm }]}>Finding meetings near you…</Text>
+              </View>
+            </Card>
+          ) : null}
+
+          {!ipLoading && ipError ? (
+            <Card><Text style={{ color: '#B00020' }}>{ipError}</Text></Card>
+          ) : null}
+
+          {!ipLoading && ipMeetings && ipMeetings.length === 0 ? (
+            <Card><Text style={typography.body}>No in-person meetings found within 25 miles. Try a different fellowship, or use the Online tab.</Text></Card>
+          ) : null}
+
+          {!ipLoading && ipMeetings ? ipMeetings.map((m) => (
+            <Card key={`${m.source}-${m.slug}`}>
+              <View style={styles.row}>
+                <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR[m.fellowship] }]}>
+                  <Text style={styles.badgeText}>{m.fellowship}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.h3}>{m.name}</Text>
+                  <Text style={typography.caption}>
+                    {m.day != null ? DAYS[m.day] : 'Varies'}{m.time ? ` · ${to12h(m.time)}` : ''}{m.city ? ` · ${m.city}` : ''} · {m.distance_mi} mi
+                  </Text>
+                  {m.address ? <Text style={typography.caption}>{m.address}</Text> : null}
+                </View>
+              </View>
+              <View style={styles.actions}>
+                <View style={{ flex: 1 }}><Button title="Directions →" onPress={() => openDirections(m)} /></View>
+                <View style={{ flex: 1 }}><Button title="Add to calendar" variant="secondary" onPress={() => addInPersonToCalendar(m)} /></View>
+              </View>
+            </Card>
+          )) : null}
+
+          {/* GA has no open feed to search — link to its official directory. */}
+          <Card>
+            <View style={styles.row}>
+              <View style={[styles.badge, { backgroundColor: FELLOWSHIP_COLOR.GA }]}>
+                <Text style={styles.badgeText}>GA</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.h3}>Gamblers Anonymous</Text>
+                <Text style={typography.caption}>In-person, virtual &amp; phone meetings via the official directory</Text>
+              </View>
+            </View>
+            <View style={styles.actions}>
+              <View style={{ flex: 1 }}><Button title="Find a meeting →" onPress={() => openUrl(FELLOWSHIP_FINDER.GA)} /></View>
+              <View style={{ flex: 1 }}><Button title="Call 855-2CALLGA" variant="secondary" onPress={() => openUrl(`tel:${GA_HOTLINE}`)} /></View>
+            </View>
+          </Card>
+
+          <Text style={styles.note}>
+            In-person data comes from the official AA (Meeting Guide) and NA (BMLT) directories —
+            coverage is best in California right now and expanding. Always confirm details before
+            attending; meeting times and locations can change.
+          </Text>
+        </>
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  modeToggle: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, padding: 4, marginBottom: spacing.md },
+  modeBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.pill, alignItems: 'center' },
+  modeBtnActive: { backgroundColor: colors.primary },
+  modeText: { color: colors.textSecondary, fontWeight: '700', fontSize: 14 },
+  modeTextActive: { color: colors.textInverse },
+  center: { alignItems: 'center', paddingVertical: spacing.md },
   filters: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   filter: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface, marginRight: spacing.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
   filterActive: { backgroundColor: colors.primary, borderColor: colors.primary },

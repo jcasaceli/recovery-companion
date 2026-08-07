@@ -17,6 +17,7 @@ import { receiptRouter } from './receipt.js';
 import { intakeRouter } from './intake.js';
 import { formsRouter } from './forms.js';
 import { referralsRouter } from './referrals.js';
+import meetingsRouter, { syncAaMeetings } from './meetings.js';
 import { runRentReminders } from './reminders.js';
 import { initCampaigns, guardedRun } from './campaigns/index.js';
 import { sentTodayCount } from './campaigns/lib.js';
@@ -57,6 +58,7 @@ app.use('/api/invite', inviteRouter);
 app.use('/api/managers', managersRouter);
 app.use('/api/receipt', receiptRouter);
 app.use('/api/referrals', referralsRouter);
+app.use('/api/meetings', meetingsRouter);
 
 // Manual trigger for rent reminders (handy for testing the cron logic).
 app.get('/api/reminders/run', async (_req, res) => {
@@ -66,6 +68,13 @@ app.get('/api/reminders/run', async (_req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Nightly AA Meeting Guide feed sync at 3:30 AM (NA is queried live, not synced).
+cron.schedule('30 3 * * *', () => {
+  syncAaMeetings()
+    .then((r) => console.log('[meetings] nightly AA sync:', JSON.stringify(r.report || r)))
+    .catch((e) => console.warn('[meetings] nightly AA sync failed', e));
 });
 
 // Daily rent reminders at 9:00 AM (server local time).
