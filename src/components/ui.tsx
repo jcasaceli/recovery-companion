@@ -28,8 +28,8 @@ function ConnectBanner() {
   if (!show) return null;
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('LinkMember')} style={styles.connectBanner}>
-      <Ionicons name="key-outline" size={16} color={colors.textInverse} />
-      <Text style={styles.connectText}>Enter sober living code</Text>
+      <Ionicons name="home-outline" size={16} color={colors.textInverse} />
+      <Text style={styles.connectText}>Join a sober living</Text>
       <Ionicons name="chevron-forward" size={16} color={colors.textInverse} />
     </TouchableOpacity>
   );

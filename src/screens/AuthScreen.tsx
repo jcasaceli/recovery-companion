@@ -8,14 +8,13 @@ import { useAuth } from '../state/auth';
 import { AppRole } from '../types';
 import { toUsE164 } from '../utils/format';
 
-const ROLES: { value: AppRole; label: string; blurb: string }[] = [
-  { value: 'individual', label: 'I am a member of a sober living network', blurb: 'Track progress, pay membership fees, and find meetings.' },
-  { value: 'facilitator', label: "I'm a sober living owner/manager", blurb: 'Manage your house(s), members, payments, forms & agreements.' },
-];
-
 const WEB_SIGNUP_URL = 'https://soberlivingcompanion.com';
 
-type Step = 'choose' | 'signin' | 'signup';
+// Resident-first onboarding: the app opens straight into a free resident
+// sign-up (name + email + password → instant login). An "owner" path is a
+// secondary option. Existing accounts are unaffected — only new sign-ups see
+// this, and both paths still create the same roles as before.
+type Step = 'resident' | 'owner' | 'signin';
 
 /** Turn raw auth errors into friendly, human messages. */
 function friendlyAuthError(raw?: string): string {
@@ -32,13 +31,13 @@ function friendlyAuthError(raw?: string): string {
 
 export function AuthScreen() {
   const auth = useAuth();
-  const [step, setStep] = useState<Step>('choose');
+  const [step, setStep] = useState<Step>('resident');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   // shared fields
-  const [role, setRole] = useState<AppRole>('individual');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -59,12 +58,24 @@ export function AuthScreen() {
     }
   };
 
-  const doSignUp = () =>
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
+  const doSignUp = (role: AppRole) =>
     run(async () => {
-      const signedIn = await auth.signUp({ email: email.trim().toLowerCase(), password, role, fullName, phone: toUsE164(phone), verifyChannel: channel, orgName: orgName || undefined, houseName: houseName || undefined });
-      // With email confirmation off, signUp returns a session and
-      // onAuthStateChange flips the app to signed-in automatically. If
-      // confirmation is on, there's no session yet — send them to sign in.
+      const signedIn = await auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+        fullName: fullName || (role === 'facilitator' ? orgName.trim() : ''),
+        phone: phone.trim() ? toUsE164(phone) : undefined,
+        verifyChannel: channel,
+        orgName: role === 'facilitator' ? (orgName || undefined) : undefined,
+        houseName: role === 'facilitator' ? (houseName || undefined) : undefined,
+      });
+      // With email confirmation off (current setting), signUp returns a session
+      // and onAuthStateChange flips the app to signed-in automatically — the
+      // resident lands straight on Home. If confirmation is ever turned on,
+      // there's no session yet, so we send them to sign in.
       if (!signedIn) {
         Alert.alert('Account created', 'If asked, confirm your email from the link we sent, then sign in.');
         setStep('signin');
@@ -97,68 +108,74 @@ export function AuthScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {step === 'choose' && (
+        {step === 'resident' && (
           <View>
-            <Text style={styles.lead}>Create an account to get started.</Text>
-            {ROLES.map((r) => (
-              <TouchableOpacity
-                key={r.value}
-                style={[styles.roleCard, role === r.value ? styles.roleActive : null]}
-                onPress={() => setRole(r.value)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.roleLabel}>{r.label}</Text>
-                <Text style={styles.roleBlurb}>{r.blurb}</Text>
-              </TouchableOpacity>
-            ))}
-            <View style={{ height: spacing.md }} />
-            <Button title="Continue" onPress={() => setStep('signup')} />
-            <TouchableOpacity onPress={() => setStep('signin')} style={styles.link}>
-              <Text style={styles.linkText}>I already have an account</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {step === 'signup' && (
-          <View>
-            <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Your name" />
-            {role === 'facilitator' ? (
-              <>
-                <Field label="Organization name" value={orgName} onChange={setOrgName} placeholder="e.g. All-In Recovery Homes" />
-                <Field label="House name" value={houseName} onChange={setHouseName} placeholder="e.g. Middletown House #1" />
-                <Text style={styles.hint}>Have more houses? Don’t worry — you can add more later in the app.</Text>
-              </>
-            ) : null}
+            <Text style={styles.lead}>Start free — track your sober days, find meetings, sign forms, and more. You can join your sober living later with a code.</Text>
+            <View style={styles.nameRow}>
+              <View style={{ flex: 1 }}>
+                <Field label="First name" value={firstName} onChange={setFirstName} placeholder="First" autoCap="words" />
+              </View>
+              <View style={{ width: spacing.sm }} />
+              <View style={{ flex: 1 }}>
+                <Field label="Last name" value={lastName} onChange={setLastName} placeholder="Last" autoCap="words" />
+              </View>
+            </View>
             <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-            <Field
-              label={role === 'individual' ? 'Phone' : 'Phone (optional)'}
-              value={phone}
-              onChange={setPhone}
-              placeholder="(555) 123-4567"
-              keyboardType="phone-pad"
-            />
             <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
-            <Text style={styles.hint}>Already claimed a listing on soberlivingdirectory.com? That’s the same account — sign in with that email and password instead of creating a new one.</Text>
 
             <View style={{ height: spacing.md }} />
             <Button
-              title="Create account"
-              onPress={doSignUp}
-              disabled={
-                busy || !email || !password || !fullName ||
-                (role === 'individual' && !phone.trim()) ||
-                (role === 'facilitator' && !orgName.trim())
-              }
+              title="Create my free account"
+              onPress={() => doSignUp('individual')}
+              disabled={busy || !email || !password || !firstName.trim() || !lastName.trim()}
+            />
+            <TouchableOpacity onPress={() => setStep('signin')} style={styles.link}>
+              <Text style={styles.linkText}>I already have an account — sign in</Text>
+            </TouchableOpacity>
+
+            <View style={styles.ownerCard}>
+              <Text style={styles.ownerTitle}>Own a sober living?</Text>
+              <Text style={styles.ownerBlurb}>Manage your houses, members, payments, forms &amp; more from an admin profile.</Text>
+              <TouchableOpacity onPress={() => { setError(''); setStep('owner'); }} style={styles.ownerBtn}>
+                <Text style={styles.ownerBtnText}>Set up an admin account →</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {step === 'owner' && (
+          <View>
+            <Text style={styles.lead}>Manage your sober living — houses, members, payments, forms, agreements &amp; more.</Text>
+            <View style={styles.nameRow}>
+              <View style={{ flex: 1 }}>
+                <Field label="First name" value={firstName} onChange={setFirstName} placeholder="First" autoCap="words" />
+              </View>
+              <View style={{ width: spacing.sm }} />
+              <View style={{ flex: 1 }}>
+                <Field label="Last name" value={lastName} onChange={setLastName} placeholder="Last" autoCap="words" />
+              </View>
+            </View>
+            <Field label="Organization name" value={orgName} onChange={setOrgName} placeholder="e.g. All-In Recovery Homes" />
+            <Field label="House name" value={houseName} onChange={setHouseName} placeholder="e.g. Middletown House #1" />
+            <Text style={styles.hint}>Have more houses? You can add them later in the app.</Text>
+            <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+            <Field label="Phone (optional)" value={phone} onChange={setPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" />
+            <Field label="Password" value={password} onChange={setPassword} placeholder="Choose a password" secure />
+            <Text style={styles.hint}>Already claimed a listing on soberlivingdirectory.com? That’s the same account — sign in instead.</Text>
+
+            <View style={{ height: spacing.md }} />
+            <Button
+              title="Create admin account"
+              onPress={() => doSignUp('facilitator')}
+              disabled={busy || !email || !password || !firstName.trim() || !orgName.trim()}
             />
             <TouchableOpacity onPress={() => setStep('signin')} style={styles.link}>
               <Text style={styles.linkText}>Already have an account? Sign in</Text>
             </TouchableOpacity>
-            {role === 'facilitator' ? (
-              <TouchableOpacity onPress={openWebSignup} style={styles.link}>
-                <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
-              </TouchableOpacity>
-            ) : null}
-            <BackLink onPress={() => setStep('choose')} />
+            <TouchableOpacity onPress={openWebSignup} style={styles.link}>
+              <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
+            </TouchableOpacity>
+            <BackLink onPress={() => { setError(''); setStep('resident'); }} />
           </View>
         )}
 
@@ -171,7 +188,7 @@ export function AuthScreen() {
             </TouchableOpacity>
             <Button title="Sign in" onPress={doSignIn} disabled={busy || !email || !password} />
             <Text style={[styles.hint, { textAlign: 'center', marginTop: spacing.sm }]}>If you claimed a listing on soberlivingdirectory.com, your login here is the same email and password. Don’t remember it? Tap “Forgot password?” to reset it.</Text>
-            <BackLink onPress={() => setStep('choose')} />
+            <BackLink onPress={() => setStep('resident')} />
           </View>
         )}
 
@@ -187,9 +204,9 @@ export function AuthScreen() {
 }
 
 function Field({
-  label, value, onChange, placeholder, secure, keyboardType,
+  label, value, onChange, placeholder, secure, keyboardType, autoCap,
 }: {
-  label: string; value: string; onChange: (s: string) => void; placeholder?: string; secure?: boolean; keyboardType?: any;
+  label: string; value: string; onChange: (s: string) => void; placeholder?: string; secure?: boolean; keyboardType?: any; autoCap?: 'none' | 'words';
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -203,7 +220,7 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           secureTextEntry={secure && !show}
-          autoCapitalize="none"
+          autoCapitalize={autoCap ?? 'none'}
           keyboardType={keyboardType}
         />
         {secure ? (
@@ -235,10 +252,12 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 48, textAlign: 'center', marginTop: spacing.lg },
   title: { ...typography.h1, textAlign: 'center', marginBottom: spacing.lg },
   lead: { ...typography.bodySecondary, marginBottom: spacing.md },
-  roleCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, borderWidth: 2, borderColor: colors.border },
-  roleActive: { borderColor: colors.primary },
-  roleLabel: { ...typography.h3 },
-  roleBlurb: { ...typography.caption, marginTop: 2 },
+  nameRow: { flexDirection: 'row' },
+  ownerCard: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  ownerTitle: { ...typography.h3, fontSize: 16 },
+  ownerBlurb: { ...typography.caption, marginTop: 2, marginBottom: spacing.sm },
+  ownerBtn: { alignSelf: 'flex-start' },
+  ownerBtnText: { color: colors.primary, fontWeight: '800' },
   fieldLabel: { ...typography.bodySecondary, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.xs },
   hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
   input: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, fontSize: 16, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border },

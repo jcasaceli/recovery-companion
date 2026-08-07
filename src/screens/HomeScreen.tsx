@@ -425,8 +425,10 @@ export function HomeScreen() {
         )}
       </Card>
 
-      {/* Prominent Pay membership fee button for members */}
-      {!isFacilitator ? (
+      {/* Prominent Pay membership fee button — only once the resident has joined
+          a sober living (a connected/linked member). Unlinked residents don't
+          owe anyone, so we hide it and show the "Join a sober living" banner. */}
+      {!isFacilitator && connected ? (
         <TouchableOpacity style={styles.payRent} activeOpacity={0.85} onPress={() => nav.navigate('Payments')}>
           <Ionicons name="card" size={40} color={colors.textInverse} />
           <Text style={styles.payRentText}>Pay membership fee</Text>
