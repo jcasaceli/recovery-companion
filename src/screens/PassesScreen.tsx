@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Screen, ScreenTitle, Card, SectionTitle, Button, Pill } from '../components/ui';
 import { colors, spacing, radius, typography } from '../theme';
 import { DateField, TimeField } from '../components/PickerFields';
-import { getPassesEnabled, submitPass, listMyPasses, cancelPass, Pass, PassType } from '../services/db';
+import { getPassesEnabled, getPassesAskChore, submitPass, listMyPasses, cancelPass, Pass, PassType } from '../services/db';
 import { notifyCare } from '../services/push';
 import { formatDate, to12h } from '../utils/format';
 
@@ -16,6 +16,7 @@ const STATUS: Record<Pass['status'], { label: string; color: string }> = {
 
 export function PassesScreen() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [askChore, setAskChore] = useState(false);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,12 +27,13 @@ export function PassesScreen() {
   const [destination, setDestination] = useState('');
   const [reason, setReason] = useState('');
   const [contact, setContact] = useState('');
+  const [choreCover, setChoreCover] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([getPassesEnabled(), listMyPasses()])
-      .then(([en, mine]) => { setEnabled(en); setPasses(mine); })
+    Promise.all([getPassesEnabled(), listMyPasses(), getPassesAskChore()])
+      .then(([en, mine, chore]) => { setEnabled(en); setPasses(mine); setAskChore(chore); })
       .catch(() => setEnabled(false))
       .finally(() => setLoading(false));
   }, []);
@@ -39,7 +41,7 @@ export function PassesScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const reset = () => {
-    setStartDate(''); setEndDate(''); setReturnTime(''); setDestination(''); setReason(''); setContact('');
+    setStartDate(''); setEndDate(''); setReturnTime(''); setDestination(''); setReason(''); setContact(''); setChoreCover('');
   };
 
   const submit = async () => {
@@ -55,6 +57,7 @@ export function PassesScreen() {
         type, startDate, endDate: end, returnTime: returnTime || undefined,
         destination: destination.trim() || undefined, reason: reason.trim() || undefined,
         contactPhone: contact.trim() || undefined,
+        choreCover: askChore ? (choreCover.trim() || undefined) : undefined,
       });
       const kind = type === 'overnight' ? 'an overnight' : 'a multi-day';
       notifyCare(res.individualId, 'New pass request', `${res.firstName || 'A member'} requested ${kind} pass for ${formatDate(startDate)}.`, 'alert');
@@ -137,6 +140,13 @@ export function PassesScreen() {
 
         <Text style={styles.label}>Contact phone while out</Text>
         <TextInput style={styles.input} value={contact} onChangeText={setContact} placeholder="(555) 123-4567" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
+
+        {askChore ? (
+          <>
+            <Text style={styles.label}>Who's covering your chores while you're out?</Text>
+            <TextInput style={styles.input} value={choreCover} onChangeText={setChoreCover} placeholder="Name of who will cover your chores" placeholderTextColor={colors.textMuted} />
+          </>
+        ) : null}
 
         <View style={{ height: spacing.sm }} />
         <Button title={busy ? 'Sending…' : 'Submit request'} onPress={submit} disabled={busy || !startDate} />

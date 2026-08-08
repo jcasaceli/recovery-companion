@@ -539,6 +539,7 @@ export interface Pass {
   destination?: string;
   reason?: string;
   contactPhone?: string;
+  choreCover?: string;      // who's covering their chores while out (org-optional field)
   status: PassStatus;
   reviewedAt?: string;
   reviewNote?: string;
@@ -553,6 +554,7 @@ function mapPass(r: any): Pass {
     type: r.type, startDate: r.start_date, endDate: r.end_date,
     returnTime: r.return_time ?? undefined, destination: r.destination ?? undefined,
     reason: r.reason ?? undefined, contactPhone: r.contact_phone ?? undefined,
+    choreCover: r.chore_cover ?? undefined,
     status: r.status, reviewedAt: r.reviewed_at ?? undefined, reviewNote: r.review_note ?? undefined,
     createdAt: r.created_at,
   };
@@ -567,6 +569,16 @@ export async function getPassesEnabled(): Promise<boolean> {
   return !!data?.passes_enabled;
 }
 
+/** Whether the caller's org also asks who covers the member's chores during a pass.
+ *  Org-scoped opt-in (organizations.passes_ask_chore) — off for everyone by default. */
+export async function getPassesAskChore(): Promise<boolean> {
+  const me = await resolveMyIndividual();
+  const orgId = me?.record?.org_id;
+  if (!orgId) return false;
+  const { data } = await db().from('organizations').select('passes_ask_chore').eq('id', orgId).maybeSingle();
+  return !!data?.passes_ask_chore;
+}
+
 /** Owner: turn the pass feature on (all members) or off (no members). */
 export async function setPassesEnabled(orgId: string, enabled: boolean) {
   const { error } = await db().from('organizations').update({ passes_enabled: enabled }).eq('id', orgId);
@@ -576,7 +588,7 @@ export async function setPassesEnabled(orgId: string, enabled: boolean) {
 /** Member: submit a pass request. */
 export async function submitPass(input: {
   type: PassType; startDate: string; endDate: string; returnTime?: string;
-  destination?: string; reason?: string; contactPhone?: string;
+  destination?: string; reason?: string; contactPhone?: string; choreCover?: string;
 }) {
   const me = await resolveMyIndividual();
   if (!me) throw new Error('We couldn’t find your member record.');
@@ -585,6 +597,7 @@ export async function submitPass(input: {
     type: input.type, start_date: input.startDate, end_date: input.endDate,
     return_time: input.returnTime ?? null, destination: input.destination ?? null,
     reason: input.reason ?? null, contact_phone: input.contactPhone ?? null,
+    chore_cover: input.choreCover ?? null,
   });
   if (error) throw error;
   return { individualId: me.individualId, firstName: me.record.first_name as string | undefined };

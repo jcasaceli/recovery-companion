@@ -38,6 +38,8 @@ export function DashboardScreen() {
   const [houses, setHouses] = useState<House[]>([]);
   const [events, setEvents] = useState<HouseEvent[]>([]);
   const [passes, setPasses] = useState<Pass[]>([]);
+  const [approvedPasses, setApprovedPasses] = useState<Pass[]>([]);
+  const [passView, setPassView] = useState<'pending' | 'approved'>('pending');
   const [curfews, setCurfews] = useState<(Curfew & { memberName?: string })[]>([]);
   const [curfewToday, setCurfewToday] = useState<CurfewCheckin[]>([]);
   const [isOwner, setIsOwner] = useState(false);
@@ -63,7 +65,10 @@ export function DashboardScreen() {
     }).catch(() => {});
     listHouseEvents().then(setEvents).catch(() => {});
   };
-  const loadPasses = () => { listOrgPasses('pending').then(setPasses).catch(() => {}); };
+  const loadPasses = () => {
+    listOrgPasses('pending').then(setPasses).catch(() => {});
+    listOrgPasses('approved').then(setApprovedPasses).catch(() => {});
+  };
   const loadCurfews = () => {
     listOrgCurfews().then(setCurfews).catch(() => {});
     const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
@@ -402,31 +407,68 @@ export function DashboardScreen() {
               <Switch value={!!org?.passesEnabled} onValueChange={togglePasses} trackColor={{ true: colors.primary }} />
             </View>
           ) : null}
-          {passes.length === 0 ? (
-            <Text style={[typography.bodySecondary, isOwner ? { marginTop: spacing.sm } : null]}>No pending pass requests.</Text>
+          {/* Pending | Approved toggle — approvals no longer disappear. */}
+          <View style={[styles.passToggle, isOwner ? { marginTop: spacing.sm } : null]}>
+            {(['pending', 'approved'] as const).map((v) => (
+              <TouchableOpacity key={v} onPress={() => setPassView(v)} style={[styles.passTab, passView === v ? styles.passTabActive : null]}>
+                <Text style={[styles.passTabText, passView === v ? styles.passTabTextActive : null]}>
+                  {v === 'pending'
+                    ? `Pending${passes.length ? ` (${passes.length})` : ''}`
+                    : `Approved${approvedPasses.length ? ` (${approvedPasses.length})` : ''}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {passView === 'pending' ? (
+            passes.length === 0 ? (
+              <Text style={[typography.bodySecondary, { marginTop: spacing.sm }]}>No pending pass requests.</Text>
+            ) : (
+              passes.map((p) => (
+                <View key={p.id} style={styles.passCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>{p.memberName ?? 'Member'}</Text>
+                    <Text style={[typography.caption, { color: colors.warning, fontWeight: '700' }]}>
+                      {p.type === 'overnight' ? 'OVERNIGHT' : 'MULTI-DAY'}
+                    </Text>
+                  </View>
+                  <Text style={typography.caption}>{passWhen(p)}</Text>
+                  {p.destination ? <Text style={typography.caption}>📍 {p.destination}</Text> : null}
+                  {p.reason ? <Text style={typography.caption}>📝 {p.reason}</Text> : null}
+                  {p.choreCover ? <Text style={typography.caption}>🧹 Chores: {p.choreCover}</Text> : null}
+                  {p.contactPhone ? <Text style={typography.caption}>📞 {p.contactPhone}</Text> : null}
+                  <View style={styles.passBtns}>
+                    <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.success }]} onPress={() => decide(p, 'approved')}>
+                      <Text style={styles.passBtnText}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.crisis }]} onPress={() => decide(p, 'denied')}>
+                      <Text style={styles.passBtnText}>Deny</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )
           ) : (
-            passes.map((p) => (
-              <View key={p.id} style={styles.passCard}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>{p.memberName ?? 'Member'}</Text>
-                  <Text style={[typography.caption, { color: colors.warning, fontWeight: '700' }]}>
-                    {p.type === 'overnight' ? 'OVERNIGHT' : 'MULTI-DAY'}
-                  </Text>
+            approvedPasses.length === 0 ? (
+              <Text style={[typography.bodySecondary, { marginTop: spacing.sm }]}>No approved passes yet.</Text>
+            ) : (
+              approvedPasses.map((p) => (
+                <View key={p.id} style={styles.passCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>{p.memberName ?? 'Member'}</Text>
+                    <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>
+                      {p.type === 'overnight' ? 'OVERNIGHT' : 'MULTI-DAY'}
+                    </Text>
+                  </View>
+                  <Text style={typography.caption}>{passWhen(p)}</Text>
+                  {p.destination ? <Text style={typography.caption}>📍 {p.destination}</Text> : null}
+                  {p.reason ? <Text style={typography.caption}>📝 {p.reason}</Text> : null}
+                  {p.choreCover ? <Text style={typography.caption}>🧹 Chores: {p.choreCover}</Text> : null}
+                  {p.contactPhone ? <Text style={typography.caption}>📞 {p.contactPhone}</Text> : null}
+                  <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginTop: 2 }]}>✓ Approved</Text>
                 </View>
-                <Text style={typography.caption}>{passWhen(p)}</Text>
-                {p.destination ? <Text style={typography.caption}>📍 {p.destination}</Text> : null}
-                {p.reason ? <Text style={typography.caption}>📝 {p.reason}</Text> : null}
-                {p.contactPhone ? <Text style={typography.caption}>📞 {p.contactPhone}</Text> : null}
-                <View style={styles.passBtns}>
-                  <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.success }]} onPress={() => decide(p, 'approved')}>
-                    <Text style={styles.passBtnText}>Approve</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.passBtn, { backgroundColor: colors.crisis }]} onPress={() => decide(p, 'denied')}>
-                    <Text style={styles.passBtnText}>Deny</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
+              ))
+            )
           )}
         </Card>
 
@@ -573,6 +615,11 @@ const styles = StyleSheet.create({
   evtChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   evtChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
   evtSwitch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: spacing.sm },
+  passToggle: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, padding: 3 },
+  passTab: { flex: 1, paddingVertical: 7, borderRadius: radius.pill, alignItems: 'center' },
+  passTabActive: { backgroundColor: colors.primary },
+  passTabText: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  passTabTextActive: { color: colors.textInverse },
   passCard: { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm, marginTop: spacing.sm },
   passBtns: { flexDirection: 'row', marginTop: spacing.sm },
   passBtn: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, marginRight: spacing.sm },
