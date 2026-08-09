@@ -44,6 +44,11 @@ const LEARN: SupportLink[] = [
     description: 'How to set boundaries while staying connected and supportive.',
     url: 'https://drugfree.org/article/how-to-help-your-child-or-loved-one/',
   },
+  {
+    title: 'Bridgecrest Behavioral Health',
+    description: 'Anger management, court-approved batterers intervention, and CADC addiction counseling — founded by Drew Roletti, CADC.',
+    url: 'https://bridgecrestbehavioralhealth.com/',
+  },
 ];
 
 export function ResourcesScreen() {
