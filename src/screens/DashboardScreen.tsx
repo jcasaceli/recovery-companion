@@ -55,6 +55,16 @@ export function DashboardScreen() {
   const [evtRecurring, setEvtRecurring] = useState(false);
   const [evtBusy, setEvtBusy] = useState(false);
 
+  // Meeting-attendance report — an overhead view of how many meetings each
+  // resident attended over a date range the operator picks. Collapsed by
+  // default so the dashboard looks unchanged until it's opened.
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportFrom, setReportFrom] = useState('');
+  const [reportTo, setReportTo] = useState('');
+  const [reportRows, setReportRows] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [reportTotal, setReportTotal] = useState(0);
+  const [reportBusy, setReportBusy] = useState(false);
+
   const loadEvents = () => {
     // With a single house the chips below are hidden, so nothing would ever set
     // evtHouseId and saveEvent would reject with "Pick a house" and no picker to
@@ -78,6 +88,34 @@ export function DashboardScreen() {
   // A new operator's first house is named after their sober living. Best-effort,
   // runs once; no-op if they already have a house.
   useEffect(() => { ensureDefaultHouse(); }, []);
+
+  // Default the attendance report to the last 30 days.
+  useEffect(() => {
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const to = new Date(); const from = new Date(); from.setDate(from.getDate() - 30);
+    setReportFrom(fmt(from)); setReportTo(fmt(to));
+  }, []);
+
+  const runReport = useCallback(async () => {
+    if (!reportFrom || !reportTo) return;
+    setReportBusy(true);
+    try {
+      const fromISO = new Date(`${reportFrom}T00:00:00`).toISOString();
+      const toISO = new Date(`${reportTo}T23:59:59`).toISOString();
+      const ci = await listOrgCheckins(fromISO, toISO);
+      const counts: Record<string, number> = {};
+      for (const c of ci) counts[c.individualId] = (counts[c.individualId] || 0) + 1;
+      const rows = members
+        .map((m: any) => ({ id: m.id, name: `${m.first_name}${m.last_name ? ` ${m.last_name}` : ''}`, count: counts[m.id] || 0 }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      setReportRows(rows);
+      setReportTotal(ci.length);
+    } catch { Alert.alert('Report', 'Could not load meeting attendance for that range.'); }
+    finally { setReportBusy(false); }
+  }, [reportFrom, reportTo, members]);
+
+  // Re-run whenever the range changes while the report is open.
+  useEffect(() => { if (reportOpen) runReport(); }, [reportOpen, reportFrom, reportTo, members]);
 
   const load = useCallback(() => {
     if (!subscriptionActive) { setLoading(false); return; }
@@ -283,6 +321,42 @@ export function DashboardScreen() {
           <Stat label="UA flags" value={String(flags.length)} color={flags.length ? colors.crisis : colors.textSecondary} />
           <Stat label="Pass requests" value={String(passes.length)} color={passes.length ? colors.warning : colors.textSecondary} />
         </View>
+
+        {/* Meeting attendance report — collapsible overhead view over any range */}
+        <Card>
+          <TouchableOpacity onPress={() => setReportOpen((v) => !v)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[typography.body, { flex: 1, fontWeight: '700' }]}>📊 Meeting attendance report</Text>
+            <Ionicons name={reportOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+          {reportOpen ? (
+            <View style={{ marginTop: spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reportLabel}>From</Text>
+                  <DateField value={reportFrom} onChange={setReportFrom} placeholder="Start" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reportLabel}>To</Text>
+                  <DateField value={reportTo} onChange={setReportTo} placeholder="End" />
+                </View>
+              </View>
+              <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>
+                {reportBusy ? 'Loading…' : `${reportTotal} verified meeting${reportTotal === 1 ? '' : 's'} across all residents in this range`}
+              </Text>
+              <View style={{ marginTop: spacing.xs }}>
+                {reportRows.map((r) => (
+                  <TouchableOpacity key={r.id} style={styles.reportRow} onPress={() => openClient(r.id)}>
+                    <Text style={[typography.body, { flex: 1 }]}>{r.name}</Text>
+                    <Text style={[typography.body, { fontWeight: '700', color: r.count ? colors.textPrimary : colors.textMuted }]}>{r.count}</Text>
+                  </TouchableOpacity>
+                ))}
+                {!reportRows.length && !reportBusy ? <Text style={typography.caption}>No residents.</Text> : null}
+              </View>
+            </View>
+          ) : (
+            <Text style={[typography.caption, { marginTop: 4 }]}>Pick a date range to see how many meetings each resident attended.</Text>
+          )}
+        </Card>
 
         {/* Occupancy */}
         <SectionTitle>Occupancy &amp; beds</SectionTitle>
@@ -611,6 +685,8 @@ const styles = StyleSheet.create({
   kpiValue: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
   kpiLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  reportLabel: { ...typography.caption, fontWeight: '600', marginBottom: 4 },
+  reportRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
   docIcon: { fontSize: 18, marginRight: spacing.sm },
   barTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, marginTop: spacing.sm, overflow: 'hidden' },

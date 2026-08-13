@@ -1546,12 +1546,15 @@ export async function listOrgAgreements(): Promise<Agreement[]> {
   return (data ?? []).map(mapAgreement);
 }
 
-/** All meeting check-ins across the org since a given ISO datetime (dashboard). */
-export async function listOrgCheckins(sinceISO: string): Promise<{ individualId: string; createdAt: string }[]> {
-  const { data, error } = await db()
+/** All meeting check-ins across the org in a window (dashboard). Pass untilISO
+ *  to bound the range (inclusive end) for the attendance report. */
+export async function listOrgCheckins(sinceISO: string, untilISO?: string): Promise<{ individualId: string; createdAt: string }[]> {
+  let q = db()
     .from('meeting_checkins')
     .select('individual_id, created_at')
     .gte('created_at', sinceISO);
+  if (untilISO) q = q.lte('created_at', untilISO);
+  const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).map((r: any) => ({ individualId: r.individual_id, createdAt: r.created_at }));
 }
