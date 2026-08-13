@@ -34,6 +34,7 @@ export function FacilitatorPaymentsScreen() {
   const [loading, setLoading] = useState(true);
   const [recordFor, setRecordFor] = useState<any | null>(null);
   const [rentFor, setRentFor] = useState<any | null>(null);
+  const [balanceFor, setBalanceFor] = useState<any | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editDatePay, setEditDatePay] = useState<Payment | null>(null);
   const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
@@ -204,15 +205,21 @@ export function FacilitatorPaymentsScreen() {
     const st = payStatus(m);
     const sum = paidSum(m.id);
     const rent = m.monthly_rent_cents || 0;
+    const bal = m.balance_adjustment_cents || 0;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const notStarted = m.rent_start_date && m.rent_start_date > todayStr;
     const expanded = expandedId === m.id;
     const history = payments.filter((p) => p.individualId === m.id);
     const statusText =
-      st === 'norent' ? 'No fee set'
+      notStarted ? `Plan starts ${formatDate(m.rent_start_date)}`
+      : st === 'norent' ? 'No fee set'
       : st === 'paid' ? `Paid in full (${money(sum)})`
       : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
       : `Not paid (${money(rent)} due)`;
     const statusColor =
-      st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
+      notStarted ? colors.textMuted
+      : st === 'paid' ? colors.success : st === 'partial' ? colors.warning : st === 'none' ? colors.crisis : colors.textMuted;
     const isSel = selected.has(m.id);
     return (
       <Card key={m.id} style={selectMode && isSel ? styles.cardSel : undefined}>
@@ -228,6 +235,11 @@ export function FacilitatorPaymentsScreen() {
               Fee {feeLine(m)}
             </Text>
             <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
+            {bal !== 0 ? (
+              <Text style={[styles.statusLine, { color: bal > 0 ? colors.crisis : colors.success }]}>
+                {bal > 0 ? `Balance owed: +${money(bal)}` : `Credit: ${money(-bal)}`}{m.balance_note ? ` · ${m.balance_note}` : ''}
+              </Text>
+            ) : null}
             {!selectMode ? (
               <Text style={styles.expandHint}>
                 {history.length} payment{history.length === 1 ? '' : 's'} · tap to {expanded ? 'hide' : 'view'} history
@@ -241,6 +253,9 @@ export function FacilitatorPaymentsScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.rentBtn} onPress={() => setRentFor(m)}>
                 <Text style={styles.rentBtnText}>Set membership fee</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.rentBtn} onPress={() => setBalanceFor(m)}>
+                <Text style={styles.rentBtnText}>Adjust balance</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -441,6 +456,11 @@ export function FacilitatorPaymentsScreen() {
         onClose={() => setRentFor(null)}
         onSaved={() => { setRentFor(null); load(); }}
       />
+      <BalanceModal
+        member={balanceFor}
+        onClose={() => setBalanceFor(null)}
+        onSaved={() => { setBalanceFor(null); load(); }}
+      />
       <BulkRentModal
         visible={bulkOpen}
         count={selected.size}
@@ -523,6 +543,7 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
   const [dueDow, setDueDow] = useState<number | null>(null);
   const [duesOn, setDuesOn] = useState(false);
   const [acOn, setAcOn] = useState(false);
+  const [startDate, setStartDate] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -533,6 +554,7 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
       setDueDow(member.rent_due_dow ?? null);
       setDuesOn(!!member.dues_enabled);
       setAcOn(!!member.ac_enabled);
+      setStartDate(member.rent_start_date ?? '');
     }
   }, [member]);
 
@@ -545,7 +567,7 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
     const cents = amount ? Math.round(parseFloat(amount) * 100) : null;
     setBusy(true);
     try {
-      const addons = { duesEnabled: duesOn, acEnabled: acOn };
+      const addons = { duesEnabled: duesOn, acEnabled: acOn, startDate: startDate || null };
       if (period === 'weekly') {
         await dbApi.setMemberRent(member.id, cents, { period: 'weekly', dueDow, ...addons });
       } else {
@@ -597,6 +619,10 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
             </>
           )}
 
+          {/* Optional plan start date — nothing is due before it. */}
+          <Text style={[typography.caption, { marginTop: spacing.sm }]}>Plan start date (optional — nothing is due before this)</Text>
+          <DateField value={startDate} onChange={setStartDate} placeholder="Starts immediately" />
+
           {/* Toggleable weekly add-ons */}
           <View style={rentStyles.addRow}>
             <Text style={rentStyles.addLabel}>House dues (+$5)</Text>
@@ -615,6 +641,85 @@ function RentModal({ member, onClose, onSaved }: { member: any | null; onClose: 
             <Text style={{ color: colors.textSecondary }}>Cancel</Text>
           </TouchableOpacity>
         </KeyboardModal>
+  );
+}
+
+/** Add a one-time carryover balance to a resident: a charge they owe (e.g. a
+ *  prior balance) or a credit (paid ahead / owed less). */
+function BalanceModal({ member, onClose, onSaved }: { member: any | null; onClose: () => void; onSaved: () => void }) {
+  const [kind, setKind] = useState<'owe' | 'credit'>('owe');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (member) {
+      const bal = member.balance_adjustment_cents || 0;
+      setKind(bal < 0 ? 'credit' : 'owe');
+      setAmount(bal ? (Math.abs(bal) / 100).toFixed(2) : '');
+      setNote(member.balance_note ?? '');
+    }
+  }, [member]);
+
+  if (!member) return null;
+
+  const save = async () => {
+    const cents = amount ? Math.round(parseFloat(amount) * 100) : 0;
+    const signed = kind === 'credit' ? -cents : cents;
+    setBusy(true);
+    try {
+      await dbApi.setBalanceAdjustment(member.id, signed, note);
+      onSaved();
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? 'Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try { await dbApi.setBalanceAdjustment(member.id, 0, null); onSaved(); }
+    catch (e: any) { Alert.alert('Could not clear', e?.message ?? 'Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <KeyboardModal visible onClose={onClose}>
+      <Text style={typography.h3}>Adjust balance · {member.first_name}</Text>
+      <Text style={[typography.caption, { marginBottom: spacing.sm }]}>
+        Set a one-time balance for this resident — a charge they owe (e.g. a prior balance) or a credit if they've paid ahead. This is separate from their regular membership fee.
+      </Text>
+
+      <View style={rentStyles.segment}>
+        <TouchableOpacity onPress={() => setKind('owe')} style={[rentStyles.segBtn, kind === 'owe' && rentStyles.segBtnOn]}>
+          <Text style={[rentStyles.segTxt, kind === 'owe' && rentStyles.segTxtOn]}>Owes extra</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setKind('credit')} style={[rentStyles.segBtn, kind === 'credit' && rentStyles.segBtnOn]}>
+          <Text style={[rentStyles.segTxt, kind === 'credit' && rentStyles.segTxtOn]}>Credit</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[typography.caption, { marginTop: spacing.xs }]}>{kind === 'owe' ? 'Amount they owe' : 'Credit amount'}</Text>
+      <View style={styles.amtRow}>
+        <Text style={styles.dollar}>$</Text>
+        <TextInput style={styles.amtInput} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.textMuted} />
+      </View>
+
+      <Text style={[typography.caption, { marginTop: spacing.sm }]}>Note (optional)</Text>
+      <TextInput style={styles.dueInput} value={note} onChangeText={setNote} placeholder="e.g. Prior balance, move-in credit" placeholderTextColor={colors.textMuted} />
+
+      <View style={{ height: spacing.md }} />
+      <Button title={busy ? 'Saving…' : 'Save balance'} onPress={save} disabled={busy} />
+      {(member.balance_adjustment_cents || 0) !== 0 ? (
+        <TouchableOpacity onPress={clear} style={{ alignItems: 'center', paddingVertical: spacing.sm }} disabled={busy}>
+          <Text style={{ color: colors.crisis }}>Clear balance</Text>
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
+        <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+      </TouchableOpacity>
+    </KeyboardModal>
   );
 }
 

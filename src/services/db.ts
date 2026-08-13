@@ -194,7 +194,7 @@ export async function getMyProfile() {
 // embedded signatures + photos). Pulling it into a list made an 8-resident
 // roster take 2.2s and time out to 0 residents under load. The full
 // application is fetched on demand when a profile is opened.
-const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,dues_enabled,ac_enabled,join_code,monthly_rent_cents,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,dues_enabled,ac_enabled,join_code,monthly_rent_cents,rent_start_date,balance_adjustment_cents,balance_note,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
 
 /** Fixed weekly add-on fees the owner/manager can toggle per resident. */
 export const WEEKLY_DUES_CENTS = 500;   // $5 house dues
@@ -1757,7 +1757,7 @@ export async function ensureFacilitatorOrg(name: string): Promise<string> {
 export async function setBulkRent(
   ids: string[],
   amountCents: number | null,
-  opts: { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean } = {},
+  opts: { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean; startDate?: string | null } = {},
 ) {
   if (!ids.length) return;
   const period = opts.period ?? 'monthly';
@@ -1769,6 +1769,7 @@ export async function setBulkRent(
   };
   if (typeof opts.duesEnabled === 'boolean') patch.dues_enabled = opts.duesEnabled;
   if (typeof opts.acEnabled === 'boolean') patch.ac_enabled = opts.acEnabled;
+  if (opts.startDate !== undefined) patch.rent_start_date = opts.startDate || null;
   const { error } = await db().from('individuals').update(patch).in('id', ids);
   if (error) throw error;
 }
@@ -2231,7 +2232,7 @@ export async function updateClient(
 export async function setMemberRent(
   individualId: string,
   amountCents: number | null,
-  opts: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean } = null,
+  opts: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; duesEnabled?: boolean; acEnabled?: boolean; startDate?: string | null } = null,
 ) {
   const o: any = (typeof opts === 'object' && opts !== null) ? opts : { period: 'monthly', dueDay: opts };
   const period = o.period ?? 'monthly';
@@ -2245,7 +2246,19 @@ export async function setMemberRent(
   // elsewhere doesn't silently reset dues/AC).
   if (typeof o.duesEnabled === 'boolean') patch.dues_enabled = o.duesEnabled;
   if (typeof o.acEnabled === 'boolean') patch.ac_enabled = o.acEnabled;
+  // Optional plan start date — nothing is due before it. undefined = leave as-is.
+  if (o.startDate !== undefined) patch.rent_start_date = o.startDate || null;
   const { error } = await db().from('individuals').update(patch).eq('id', individualId);
+  if (error) throw error;
+}
+
+/** Facilitator: set a one-time carryover balance on a resident. Positive cents =
+ *  they owe extra (e.g. a prior balance); negative cents = a credit (paid ahead
+ *  / owed less). Factored into what the resident's card shows as due. */
+export async function setBalanceAdjustment(individualId: string, cents: number, note?: string | null) {
+  const { error } = await db().from('individuals')
+    .update({ balance_adjustment_cents: Math.round(cents) || 0, balance_note: note?.trim() || null })
+    .eq('id', individualId);
   if (error) throw error;
 }
 

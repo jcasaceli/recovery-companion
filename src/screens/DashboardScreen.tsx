@@ -197,7 +197,15 @@ export function DashboardScreen() {
 
   // Per-resident quick stats for the occupancy list.
   const meetings7 = (id: string) => checkins.filter((c) => c.individualId === id).length;
-  const owedThisMonth = (m: any) => Math.max(0, (m.monthly_rent_cents || 0) - paidSum(m.id));
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  // Nothing due before a plan's start date; a one-time balance adjustment
+  // (+ owes / − credit) is folded in so the figure matches the payments screen.
+  const owedThisMonth = (m: any) => {
+    const started = !m.rent_start_date || m.rent_start_date <= todayStr;
+    const periodOwed = started ? Math.max(0, (m.monthly_rent_cents || 0) - paidSum(m.id)) : 0;
+    return Math.max(0, periodOwed + (m.balance_adjustment_cents || 0));
+  };
 
   const withRent = members.filter((m) => (m.monthly_rent_cents || 0) > 0);
   const expected = withRent.reduce((s, m) => s + (m.monthly_rent_cents || 0), 0);
