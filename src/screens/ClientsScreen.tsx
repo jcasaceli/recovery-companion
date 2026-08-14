@@ -7,7 +7,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listNoteFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listNoteFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions, deleteIndividuals } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -219,6 +219,33 @@ export function ClientsScreen() {
   const toggleSel = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
   const exitSelect = () => { setSelectMode(false); setSelected({}); };
 
+  // Permanently remove the selected residents — used to clean up bad imports
+  // (e.g. a competitor export that pulled in every past client).
+  const bulkRemove = () => {
+    const n = selectedIds.length;
+    if (!n) return;
+    Alert.alert(
+      `Remove ${n} ${n === 1 ? 'resident' : 'residents'}?`,
+      `This permanently deletes ${n === 1 ? 'this resident' : 'these residents'} and all of their records — payments, notes, passes, documents. It can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Remove ${n}`, style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await deleteIndividuals(selectedIds);
+              await reloadCloud();
+              exitSelect();
+              Alert.alert('Removed', `${n} ${n === 1 ? 'resident' : 'residents'} removed.`);
+            } catch (e: any) { Alert.alert('Could not remove', e?.message ?? 'Please try again.'); }
+            finally { setBusy(false); }
+          },
+        },
+      ],
+    );
+  };
+
   // Denied/never-admitted applicants live under Pending Admission for review,
   // where they can be admitted or restored. From this tab we just surface them.
   const openClient = (c: any) => {
@@ -413,11 +440,18 @@ export function ClientsScreen() {
           <Text style={styles.bulkText}>{selectedIds.length} selected</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={[styles.bulkBtn, selectedIds.length === 0 ? { opacity: 0.4 } : null]}
+            style={[styles.bulkBtnGhost, (selectedIds.length === 0 || busy) ? { opacity: 0.4 } : null]}
+            disabled={selectedIds.length === 0 || busy}
+            onPress={bulkRemove}
+          >
+            <Text style={styles.bulkBtnGhostText}>Remove</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkBtn, { marginLeft: spacing.sm }, selectedIds.length === 0 ? { opacity: 0.4 } : null]}
             disabled={selectedIds.length === 0}
             onPress={() => setBulkOpen(true)}
           >
-            <Text style={styles.bulkBtnText}>Set membership fee for {selectedIds.length}</Text>
+            <Text style={styles.bulkBtnText}>Set fee</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -523,6 +557,8 @@ const styles = StyleSheet.create({
   bulkText: { ...typography.body, fontWeight: '600' },
   bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
+  bulkBtnGhost: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderWidth: 1, borderColor: colors.crisis },
+  bulkBtnGhostText: { color: colors.crisis, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   houseFilterRow: { marginBottom: spacing.sm, flexGrow: 0, flexShrink: 0, minHeight: 56 },
   houseFilterContent: { paddingHorizontal: spacing.md, alignItems: 'center' },

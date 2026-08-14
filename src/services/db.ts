@@ -2313,6 +2313,19 @@ export async function readmitMember(individualId: string) {
   if (error) throw error;
 }
 
+/** Permanently delete a resident and all of their records (payments, notes,
+ *  passes, docs, etc.) via the delete_individual RPC, which checks the caller is
+ *  a facilitator for that resident. Used to clean up bad imports. */
+export async function deleteIndividual(individualId: string) {
+  const { error } = await db().rpc('delete_individual', { p_id: individualId });
+  if (error) throw error;
+}
+
+/** Delete several residents in one action (Members-list "Remove selected"). */
+export async function deleteIndividuals(ids: string[]) {
+  for (const id of ids) await deleteIndividual(id);
+}
+
 /** Record a payment (facilitator manual entry, or member-reported CashApp/Zelle). */
 export async function recordPayment(p: {
   individualId: string;
