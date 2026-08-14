@@ -20,7 +20,7 @@ import {
 import { StaffAttachmentPicker } from '../components/StaffAttachmentPicker';
 import { PickedFile, readFileBytes, attachmentIcon, pickPhoto, isWeb } from '../utils/attachments';
 import { sendMemberInvite } from '../services/payments';
-import { formatDateTime, formatDate, parseMoneyCents, daysSince } from '../utils/format';
+import { formatDateTime, formatDate, parseMoneyCents, daysSince, medLabel } from '../utils/format';
 import { DateField } from '../components/PickerFields';
 import { CurfewManager } from '../components/CurfewManager';
 import { DocumentsManager } from '../components/DocumentsManager';
@@ -62,7 +62,7 @@ function currentPeriod() {
 
 export function ClientProfileScreen() {
   const route = useRoute<any>();
-  const { id } = route.params;
+  const { id } = route.params ?? {};
   const { clients, setRent, setClientStatus, reloadCloud } = useAppState();
   const client = clients.find((c) => c.id === id);
 
@@ -179,7 +179,9 @@ export function ClientProfileScreen() {
     setMoveInDate(r.move_in_date ?? '');
     setDischargeDate(r.discharge_date ?? undefined);
     setTags(Array.isArray(r.tags) ? r.tags : []);
-    setMeds(Array.isArray(r.medications) ? r.medications : []);
+    // Meds may arrive as strings or structured {name,dose,freq} objects from
+    // intake/import — normalize to display strings (rendering a raw object crashes).
+    setMeds(Array.isArray(r.medications) ? r.medications.map(medLabel).filter(Boolean) : []);
     setSobrietyDate(r.sobriety_date ?? undefined);
     getAvatarUrl(r.avatar_path).then(setAvatarUrl).catch(() => {});
   }).catch(() => {});
@@ -653,7 +655,7 @@ export function ClientProfileScreen() {
             <Image source={{ uri: avatarUrl }} style={styles.photoAvatar} />
           ) : (
             <View style={[styles.photoAvatar, styles.photoAvatarEmpty]}>
-              <Text style={styles.photoInitial}>{client.firstName.charAt(0).toUpperCase()}</Text>
+              <Text style={styles.photoInitial}>{(client.firstName?.charAt(0) || '?').toUpperCase()}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -1025,10 +1027,10 @@ export function ClientProfileScreen() {
           <View style={{ marginTop: spacing.sm }}>
             {uaTests.map((t) => (
               <TouchableOpacity key={t.id} style={styles.uaRow} activeOpacity={0.7} onLongPress={() => removeUA(t)}>
-                <View style={[styles.uaDot, { backgroundColor: UA_COLOR[t.result] }]} />
+                <View style={[styles.uaDot, { backgroundColor: UA_COLOR[t.result] ?? colors.textMuted }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={typography.body}>
-                    {formatDate(t.testedAt)} · <Text style={{ fontWeight: '700', color: UA_COLOR[t.result] }}>{t.result.toUpperCase()}</Text>
+                    {formatDate(t.testedAt)} · <Text style={{ fontWeight: '700', color: UA_COLOR[t.result] ?? colors.textMuted }}>{(t.result || 'pending').toUpperCase()}</Text>
                   </Text>
                   {t.substances ? <Text style={typography.caption}>Detected: {t.substances}</Text> : null}
                   {t.notes ? <Text style={typography.caption}>{t.notes}</Text> : null}

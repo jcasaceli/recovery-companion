@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput, Switch, Alert, Linking, Share, Platform } from 'react-native';
 import { KeyboardModal } from '../components/KeyboardModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,6 +44,9 @@ export function DashboardScreen() {
   const [curfewToday, setCurfewToday] = useState<CurfewCheckin[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
+  // After the first successful load we keep showing data on refocus and refresh
+  // silently in the background, instead of blanking to a spinner every time.
+  const loadedOnce = useRef(false);
 
   // Add-house-meeting modal
   const [evtOpen, setEvtOpen] = useState(false);
@@ -118,7 +121,7 @@ export function DashboardScreen() {
   useEffect(() => { if (reportOpen) runReport(); }, [reportOpen, reportFrom, reportTo, members]);
 
   const load = useCallback(() => {
-    if (!subscriptionActive) { setLoading(false); return; }
+    if (!subscriptionActive) { loadedOnce.current = true; setLoading(false); return; }
     loadEvents();
     loadPasses();
     loadCurfews();
@@ -133,8 +136,9 @@ export function DashboardScreen() {
       setFlags(fl ?? []);
       setCheckins(ci ?? []);
       setOrg(o ? { id: o.id, name: o.name, passesEnabled: !!o.passes_enabled, intakeUrl: o.intake_url ?? undefined } : null);
+      loadedOnce.current = true;
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { loadedOnce.current = true; setLoading(false); });
   }, [subscriptionActive]);
 
   const saveEvent = async () => {
@@ -188,9 +192,12 @@ export function DashboardScreen() {
       ? `Overnight · ${formatDate(p.startDate)}${p.returnTime ? ` · back by ${to12h(p.returnTime)}` : ''}`
       : `${formatDate(p.startDate)} → ${formatDate(p.endDate)}${p.returnTime ? ` · back by ${to12h(p.returnTime)}` : ''}`;
 
-  useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
+  useFocusEffect(useCallback(() => { if (!loadedOnce.current) setLoading(true); load(); }, [load]));
 
-  const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id } });
+  // initial: false keeps the Members list under ClientProfile in the stack so the
+  // back button works when jumping in from another tab (without it, RN drops you
+  // onto the profile with no way back).
+  const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id }, initial: false });
   const nameOf = (id: string) => {
     const m = members.find((x) => x.id === id);
     return m ? `${m.first_name}${m.last_name ? ` ${m.last_name}` : ''}` : 'Member';
@@ -458,7 +465,7 @@ export function DashboardScreen() {
             Blank, fillable forms for the house — Head of House Agreement, Definition of Terms, and more. Fill in &amp; e-sign without tying them to a resident.
           </Text>
           <View style={{ height: spacing.sm }} />
-          <Button title="Open house forms" variant="secondary" onPress={() => nav.navigate('Clients', { screen: 'HouseForms' })} />
+          <Button title="Open house forms" variant="secondary" onPress={() => nav.navigate('Clients', { screen: 'HouseForms', initial: false })} />
         </Card>
 
         {/* Flags */}

@@ -22,17 +22,20 @@ function pad2(n: number) { return String(n).padStart(2, '0'); }
 
 /** Parse a 'YYYY-MM-DD' string as a LOCAL date (avoids the UTC off-by-one
  *  that `new Date("2026-06-16")` causes in negative-offset timezones). */
-function parseLocalDate(iso: string): Date {
+function parseLocalDate(iso?: string | null): Date {
+  if (!iso) return new Date(NaN);
   const [y, m, d] = iso.slice(0, 10).split('-').map((n) => parseInt(n, 10));
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
-/** "2026-06-16" -> "06-16-2026" (US MM-DD-YYYY). */
-export function formatDate(iso: string): string {
+/** "2026-06-16" -> "06-16-2026" (US MM-DD-YYYY). Null/empty -> "" (never throws). */
+export function formatDate(iso?: string | null): string {
+  if (!iso) return '';
   // Date-only strings parse as local; full timestamps keep their instant.
   const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.slice(0, 10)) && iso.length <= 10
     ? parseLocalDate(iso)
     : new Date(iso);
+  if (isNaN(d.getTime())) return '';
   return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${d.getFullYear()}`;
 }
 
@@ -174,7 +177,21 @@ export function toUsE164(raw?: string): string | undefined {
 }
 
 /** "19:00" -> "7:00 PM" */
-export function to12h(hhmm: string): string {
+/** A medication may be stored as a plain string OR a structured object
+ *  ({ name, dose, freq }) from intake/import. Always render it as a readable
+ *  string — rendering the raw object as a React child crashes the app. */
+export function medLabel(m: any): string {
+  if (m == null) return '';
+  if (typeof m === 'string') return m;
+  if (typeof m === 'object') {
+    const parts = [m.name, m.dose, m.freq].filter((x) => x != null && String(x).trim() !== '');
+    return parts.join(' · ');
+  }
+  return String(m);
+}
+
+export function to12h(hhmm?: string | null): string {
+  if (!hhmm) return '';
   const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
   if (isNaN(h)) return hhmm;
   const period = h >= 12 ? 'PM' : 'AM';

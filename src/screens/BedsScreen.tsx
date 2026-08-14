@@ -13,7 +13,8 @@ import * as dbApi from '../services/db';
 export function BedsScreen() {
   const { clients, reloadCloud } = useAppState();
   const nav = useNavigation<any>();
-  const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id } });
+  // initial: false keeps the Members list in the back stack so Back works.
+  const openClient = (id: string) => nav.navigate('Clients', { screen: 'ClientProfile', params: { id }, initial: false });
   const [houses, setHouses] = useState<dbApi.House[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [assignTo, setAssignTo] = useState<dbApi.House | null>(null);

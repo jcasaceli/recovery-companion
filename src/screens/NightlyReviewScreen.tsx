@@ -175,10 +175,10 @@ export function NightlyReviewScreen() {
                 </Text>
                 {open ? (
                   <View style={{ marginTop: spacing.sm }}>
-                    {YESNO.map((y) => answers && r.answers[y.key] ? (
+                    {YESNO.map((y) => r.answers?.[y.key] ? (
                       <Text key={y.key} style={typography.caption}>{y.q} — {r.answers[y.key]}</Text>
                     ) : null)}
-                    {REFLECT.map((q) => (r.answers[q.key] || '').trim() ? (
+                    {REFLECT.map((q) => (r.answers?.[q.key] || '').trim() ? (
                       <View key={q.key} style={{ marginTop: spacing.xs }}>
                         <Text style={[typography.caption, { fontWeight: '700' }]}>{q.q}</Text>
                         <Text style={typography.caption}>{r.answers[q.key]}</Text>

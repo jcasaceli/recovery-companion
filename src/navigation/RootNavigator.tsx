@@ -83,7 +83,7 @@ function Tabs() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarIcon: ({ focused, color, size }) => {
-          const cfg = ICONS[route.name];
+          const cfg = ICONS[route.name] ?? { active: 'ellipse' as const, inactive: 'ellipse-outline' as const };
           return <Ionicons name={focused ? cfg.active : cfg.inactive} size={size} color={color} />;
         },
       })}

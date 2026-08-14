@@ -11,7 +11,7 @@
  */
 
 import { supabase } from './supabase';
-import { nextWeeklyISO } from '../utils/format';
+import { nextWeeklyISO, medLabel } from '../utils/format';
 import {
   AppRole,
   Task,
@@ -913,7 +913,9 @@ export async function getMyMedications(): Promise<string[]> {
   if (!u.user) return [];
   const { data } = await db()
     .from('individuals').select('medications').eq('profile_id', u.user.id).maybeSingle();
-  return Array.isArray((data as any)?.medications) ? (data as any).medications : [];
+  // Meds may be strings or structured {name,dose,freq} objects — coerce to
+  // display strings so the resident's list renders (raw objects crash render).
+  return Array.isArray((data as any)?.medications) ? (data as any).medications.map(medLabel).filter(Boolean) : [];
 }
 
 /** Member: update their OWN medication list. Goes through an RPC because their
@@ -1308,7 +1310,7 @@ export async function getCareTeam(): Promise<CareTeamMember[]> {
   const { data, error } = await db().rpc('get_care_team');
   if (error) throw error;
   return (data ?? []).map((r: any) => ({
-    name: r.name,
+    name: r.name ?? 'Staff',
     role: r.is_owner ? 'Facilitator (Admin)' : 'House manager',
   }));
 }

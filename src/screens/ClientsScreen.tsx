@@ -361,7 +361,7 @@ export function ClientsScreen() {
                     <Image source={{ uri: avatars[c.avatarPath] }} style={styles.tilePhoto} />
                   ) : (
                     <View style={[styles.tilePhoto, styles.tileFallback]}>
-                      <Text style={styles.tileInitial}>{c.firstName.charAt(0).toUpperCase()}</Text>
+                      <Text style={styles.tileInitial}>{(c.firstName?.charAt(0) || '?').toUpperCase()}</Text>
                     </View>
                   )}
                   {selectMode ? <Text style={[styles.tileBadge, styles.tileCheck]}>{selected[c.id] ? '☑️' : '⬜️'}</Text> : null}
@@ -390,7 +390,7 @@ export function ClientsScreen() {
               ) : c.avatarPath && avatars[c.avatarPath] ? (
                 <Image source={{ uri: avatars[c.avatarPath] }} style={styles.avatar} />
               ) : (
-                <View style={styles.avatar}><Text style={styles.avatarText}>{c.firstName.charAt(0).toUpperCase()}</Text></View>
+                <View style={styles.avatar}><Text style={styles.avatarText}>{(c.firstName?.charAt(0) || '?').toUpperCase()}</Text></View>
               )}
               <View style={{ flex: 1 }}>
                 <Text style={typography.h3}>

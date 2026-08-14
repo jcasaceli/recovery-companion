@@ -303,7 +303,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       onboarded: true,
       lovedOne: {
         id,
-        firstName: r.first_name,
+        firstName: r.first_name ?? '',
         relationship: 'child',
         programName: r.program_name ?? '',
         programType: r.program_type ?? 'outpatient',
@@ -341,7 +341,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const list = (await dbApi.listFacilitatorIndividuals()) ?? [];
         const clients = list.map((c: any) => ({
           id: c.id,
-          firstName: c.first_name,
+          firstName: c.first_name ?? '',
           lastName: c.last_name ?? undefined,
           phone: c.phone ?? undefined,
           email: c.email ?? undefined,
