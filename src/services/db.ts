@@ -1797,6 +1797,7 @@ export async function createIndividual(input: {
   treatmentStartDate?: string;
   sobrietyDate?: string;
   levelOfCare?: string;
+  status?: 'in_care' | 'completed';
 }): Promise<{ id?: string; joinCode: string }> {
   // Generate the per-member join code now so the invite can carry it. When the
   // member redeems THIS code they link to this exact record (agreements/forms
@@ -1819,7 +1820,8 @@ export async function createIndividual(input: {
       sobriety_date: input.sobrietyDate ?? null,
       level_of_care: input.levelOfCare ?? null,
       join_code: joinCode,
-      status: 'in_care',
+      status: input.status ?? 'in_care',
+      discharge_date: input.status === 'completed' ? new Date().toISOString().slice(0, 10) : null,
     });
   if (error) throw error;
   const { data } = await db().from('individuals').select('id').eq('join_code', joinCode).maybeSingle();
@@ -2324,6 +2326,17 @@ export async function deleteIndividual(individualId: string) {
 /** Delete several residents in one action (Members-list "Remove selected"). */
 export async function deleteIndividuals(ids: string[]) {
   for (const id of ids) await deleteIndividual(id);
+}
+
+/** Archive several residents at once — moves them to the "Completed" tab
+ *  (discharged) while keeping all their records. Used to split an imported
+ *  roster into current (In Care) vs past (archived) residents. */
+export async function archiveIndividuals(ids: string[], dischargeDate: string) {
+  if (!ids.length) return;
+  const { error } = await db().from('individuals')
+    .update({ status: 'completed', discharge_date: dischargeDate, bed_label: null })
+    .in('id', ids);
+  if (error) throw error;
 }
 
 /** Record a payment (facilitator manual entry, or member-reported CashApp/Zelle). */

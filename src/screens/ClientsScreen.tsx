@@ -7,7 +7,7 @@ import { Card, SectionTitle, Button } from '../components/ui';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import { useAuth } from '../state/auth';
-import { getMyOrg, listFlaggedIndividualIds, listNoteFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions, deleteIndividuals } from '../services/db';
+import { getMyOrg, listFlaggedIndividualIds, listNoteFlaggedIndividualIds, listHouses, getMyHouseScope, House, listFacilitatorIndividuals, listOrgCheckins, listOrgPayments, getAvatarUrls, listPendingAdmissions, deleteIndividuals, archiveIndividuals } from '../services/db';
 import { ClientStatus } from '../types';
 import { Paywall } from '../components/Paywall';
 import { DEMO_CLIENTS } from '../data/demo';
@@ -173,18 +173,24 @@ export function ClientsScreen() {
       if (!text) return;
       const members = rowsToMembers(parseCsv(text));
       if (!members.length) { Alert.alert('Nothing to import', 'No names were found. Make sure there is a name column.'); return; }
+      const archivedCount = members.filter((m) => m.status === 'completed').length;
       const go = async () => {
         setImporting(true);
         let ok = 0; let fail = 0;
         for (const m of members) {
-          try { await createClient({ firstName: m.firstName, lastName: m.lastName, phone: m.phone, email: m.email, houseId: addHouseId }); ok++; }
+          // status comes from a status/discharge column in the sheet, if present —
+          // archived rows land in the "Completed" tab, current ones on the roster.
+          try { await createClient({ firstName: m.firstName, lastName: m.lastName, phone: m.phone, email: m.email, houseId: addHouseId, status: m.status }); ok++; }
           catch { fail++; }
         }
         await reloadCloud();
         setImporting(false);
-        Alert.alert('Import complete ✅', `Added ${ok} member${ok === 1 ? '' : 's'}${fail ? ` · ${fail} failed` : ''}.`);
+        Alert.alert('Import complete ✅', `Added ${ok} member${ok === 1 ? '' : 's'}${archivedCount ? ` (${archivedCount} archived to Completed)` : ''}${fail ? ` · ${fail} failed` : ''}.`);
       };
-      Alert.alert('Import members', `Found ${members.length} member${members.length === 1 ? '' : 's'} to add. Continue?`, [
+      const note = archivedCount
+        ? `Found ${members.length} members — ${members.length - archivedCount} current and ${archivedCount} archived (from the status column). Continue?`
+        : `Found ${members.length} member${members.length === 1 ? '' : 's'} to add. They'll go to your active roster — you can Select and Archive any past clients after. Continue?`;
+      Alert.alert('Import members', note, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Import', onPress: go },
       ]);
@@ -218,6 +224,39 @@ export function ClientsScreen() {
 
   const toggleSel = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
   const exitSelect = () => { setSelectMode(false); setSelected({}); };
+  // Select every resident currently shown (respects the tab + house filter), so
+  // you can e.g. select all after an import and just uncheck the few current ones.
+  const selectAll = () => setSelected(Object.fromEntries(shown.map((c) => [c.id, true])));
+
+  // Archive the selected residents — moves them to the Completed tab (discharged)
+  // while KEEPING their records. The clean way to split an imported roster:
+  // import everyone, Select all, uncheck current residents, then Archive the rest.
+  const bulkArchive = () => {
+    const n = selectedIds.length;
+    if (!n) return;
+    const today = new Date().toISOString().slice(0, 10);
+    Alert.alert(
+      `Archive ${n} ${n === 1 ? 'resident' : 'residents'}?`,
+      `${n === 1 ? 'This resident moves' : 'These residents move'} to the Completed tab as discharged. Their records are kept, and you can restore them anytime.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Archive ${n}`,
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await archiveIndividuals(selectedIds, today);
+              await reloadCloud();
+              exitSelect();
+              setFilter('completed');
+              Alert.alert('Archived', `${n} ${n === 1 ? 'resident' : 'residents'} moved to Completed.`);
+            } catch (e: any) { Alert.alert('Could not archive', e?.message ?? 'Please try again.'); }
+            finally { setBusy(false); }
+          },
+        },
+      ],
+    );
+  };
 
   // Permanently remove the selected residents — used to clean up bad imports
   // (e.g. a competitor export that pulled in every past client).
@@ -263,9 +302,16 @@ export function ClientsScreen() {
           </Text>
         </View>
         {!locked ? (
-          <TouchableOpacity onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}>
-            <Text style={styles.selectToggle}>{selectMode ? 'Cancel' : 'Select'}</Text>
-          </TouchableOpacity>
+          selectMode ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <TouchableOpacity onPress={selectAll}><Text style={styles.selectToggle}>Select all</Text></TouchableOpacity>
+              <TouchableOpacity onPress={exitSelect}><Text style={styles.selectToggle}>Cancel</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => setSelectMode(true)}>
+              <Text style={styles.selectToggle}>Select</Text>
+            </TouchableOpacity>
+          )
         ) : null}
       </View>
 
@@ -440,7 +486,14 @@ export function ClientsScreen() {
           <Text style={styles.bulkText}>{selectedIds.length} selected</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={[styles.bulkBtnGhost, (selectedIds.length === 0 || busy) ? { opacity: 0.4 } : null]}
+            style={[styles.bulkBtnArchive, (selectedIds.length === 0 || busy) ? { opacity: 0.4 } : null]}
+            disabled={selectedIds.length === 0 || busy}
+            onPress={bulkArchive}
+          >
+            <Text style={styles.bulkBtnArchiveText}>Archive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkBtnGhost, { marginLeft: spacing.sm }, (selectedIds.length === 0 || busy) ? { opacity: 0.4 } : null]}
             disabled={selectedIds.length === 0 || busy}
             onPress={bulkRemove}
           >
@@ -555,10 +608,12 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 28, color: colors.textMuted, marginLeft: spacing.sm },
   bulkBar: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   bulkText: { ...typography.body, fontWeight: '600' },
-  bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
+  bulkBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.sm + 2 },
   bulkBtnText: { color: colors.textInverse, fontWeight: '700' },
-  bulkBtnGhost: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderWidth: 1, borderColor: colors.crisis },
+  bulkBtnGhost: { borderRadius: radius.md, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.sm + 2, borderWidth: 1, borderColor: colors.crisis },
   bulkBtnGhostText: { color: colors.crisis, fontWeight: '700' },
+  bulkBtnArchive: { backgroundColor: colors.warning, borderRadius: radius.md, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.sm + 2 },
+  bulkBtnArchiveText: { color: colors.textInverse, fontWeight: '700' },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.textPrimary, marginBottom: spacing.sm },
   houseFilterRow: { marginBottom: spacing.sm, flexGrow: 0, flexShrink: 0, minHeight: 56 },
   houseFilterContent: { paddingHorizontal: spacing.md, alignItems: 'center' },

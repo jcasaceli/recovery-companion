@@ -142,6 +142,7 @@ interface AppState extends PersistedState {
     sobrietyDate?: string;
     orgName?: string;
     levelOfCare?: LevelOfCare;
+    status?: ClientStatus;
   }) => Promise<void>;
   /** Facilitator: open a client (loads their data, enters the main app). */
   selectClient: (id: string) => Promise<void>;
@@ -678,6 +679,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         treatmentStartDate: input.treatmentStartDate || undefined,
         sobrietyDate: input.sobrietyDate || undefined,
         levelOfCare: input.levelOfCare || undefined,
+        status: input.status,
       });
       // Auto-send the email app invite (with their personal join code) — best
       // effort, never blocks adding the member.

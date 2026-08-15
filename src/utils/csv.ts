@@ -70,7 +70,20 @@ export function pickCsvText(): Promise<string | null> {
   });
 }
 
-export interface ParsedMember { firstName: string; lastName?: string; phone?: string; email?: string }
+export interface ParsedMember { firstName: string; lastName?: string; phone?: string; email?: string; status?: 'in_care' | 'completed' }
+
+/** Interpret a status/active/discharge cell so imports can split current vs
+ *  archived residents. Returns undefined when unknown (caller defaults to in_care). */
+function mapStatus(statusVal?: string, dischargeVal?: string): 'in_care' | 'completed' | undefined {
+  const s = (statusVal || '').trim().toLowerCase();
+  if (s) {
+    if (/dischar|complet|inactive|past|archiv|former|graduat|closed|left|moved out/.test(s)) return 'completed';
+    if (/^n(o)?$|^false$|^0$/.test(s)) return 'completed';          // e.g. an "Active?" column = No
+    if (/care|active|current|open|^y(es)?$|^true$|^1$/.test(s)) return 'in_care';
+  }
+  if ((dischargeVal || '').trim()) return 'completed';               // a filled discharge date => archived
+  return undefined;
+}
 
 /** Map a parsed CSV (with or without a header row) to member rows. Only a name
  *  is required; phone/email are optional. Flexible header detection so sheets
@@ -91,6 +104,8 @@ export function rowsToMembers(rows: string[][]): ParsedMember[] {
     const iName = idx(['full name', 'name', 'client', 'member', 'resident']);
     const iPhone = idx(['phone', 'mobile', 'cell', 'telephone']);
     const iEmail = idx(['email', 'e-mail']);
+    const iStatus = idx(['status', 'active', 'discharged', 'archived']);
+    const iDisch = idx(['discharge date', 'date discharged', 'discharge', 'move out', 'moveout']);
     for (const r of rows.slice(1)) {
       const m = buildMember({
         first: iFirst >= 0 ? r[iFirst] : undefined,
@@ -98,6 +113,7 @@ export function rowsToMembers(rows: string[][]): ParsedMember[] {
         name: iName >= 0 ? r[iName] : undefined,
         phone: iPhone >= 0 ? r[iPhone] : undefined,
         email: iEmail >= 0 ? r[iEmail] : undefined,
+        status: mapStatus(iStatus >= 0 ? r[iStatus] : undefined, iDisch >= 0 ? r[iDisch] : undefined),
       });
       if (m) out.push(m);
     }
@@ -111,7 +127,7 @@ export function rowsToMembers(rows: string[][]): ParsedMember[] {
   return out;
 }
 
-function buildMember(v: { first?: string; last?: string; name?: string; phone?: string; email?: string }): ParsedMember | null {
+function buildMember(v: { first?: string; last?: string; name?: string; phone?: string; email?: string; status?: 'in_care' | 'completed' }): ParsedMember | null {
   let firstName = (v.first || '').trim();
   let lastName = (v.last || '').trim();
   if (!firstName && v.name) {
@@ -122,5 +138,5 @@ function buildMember(v: { first?: string; last?: string; name?: string; phone?: 
   if (!firstName) return null;
   const phone = (v.phone || '').trim();
   const email = (v.email || '').trim();
-  return { firstName, lastName: lastName || undefined, phone: phone || undefined, email: email || undefined };
+  return { firstName, lastName: lastName || undefined, phone: phone || undefined, email: email || undefined, status: v.status };
 }
