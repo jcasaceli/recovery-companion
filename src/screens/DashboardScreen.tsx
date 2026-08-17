@@ -10,7 +10,7 @@ import { DEMO_CLIENTS } from '../data/demo';
 import { colors, spacing, radius, typography, shadow } from '../theme';
 import { useAppState } from '../state/store';
 import {
-  listFacilitatorIndividuals, listOrgPayments, listOrgAgreements,
+  listFacilitatorIndividuals, listOrgPaymentsForMonth, listOrgAgreements,
   listFlaggedIndividualIds, listOrgCheckins, getMyOrg, Agreement,
   listHouses, listHouseEvents, createHouseEvent, deleteHouseEvent, House, HouseEvent,
   listOrgPasses, reviewPass, Pass, setPassesEnabled, getMyHouseScope,
@@ -126,10 +126,15 @@ export function DashboardScreen() {
     loadPasses();
     loadCurfews();
     getMyHouseScope().then((s) => setIsOwner(s.isOwner)).catch(() => {});
-    Promise.all([
-      listFacilitatorIndividuals(), listOrgPayments(), listOrgAgreements(),
+    // allSettled (not all): a single slow/failed query no longer blanks the WHOLE
+    // dashboard to zeros — each section fills from whatever succeeded.
+    Promise.allSettled([
+      listFacilitatorIndividuals(), listOrgPaymentsForMonth(period()), listOrgAgreements(),
       listFlaggedIndividualIds(), listOrgCheckins(WEEK_AGO()), getMyOrg(),
-    ]).then(([inds, pays, ags, fl, ci, o]: any) => {
+    ]).then((res) => {
+      const val = (i: number, d: any) => (res[i].status === 'fulfilled' ? (res[i] as any).value : d);
+      const inds = val(0, []); const pays = val(1, []); const ags = val(2, []);
+      const fl = val(3, []); const ci = val(4, []); const o = val(5, null);
       setMembers((inds ?? []).filter((m: any) => (m.status ?? 'in_care') === 'in_care'));
       setPayments(pays ?? []);
       setAgreements(ags ?? []);
@@ -138,7 +143,7 @@ export function DashboardScreen() {
       setOrg(o ? { id: o.id, name: o.name, passesEnabled: !!o.passes_enabled, intakeUrl: o.intake_url ?? undefined } : null);
       loadedOnce.current = true;
       setLoading(false);
-    }).catch(() => { loadedOnce.current = true; setLoading(false); });
+    });
   }, [subscriptionActive]);
 
   const saveEvent = async () => {

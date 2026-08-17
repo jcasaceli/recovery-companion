@@ -194,7 +194,11 @@ export async function getMyProfile() {
 // embedded signatures + photos). Pulling it into a list made an 8-resident
 // roster take 2.2s and time out to 0 residents under load. The full
 // application is fetched on demand when a profile is opened.
-const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,dues_enabled,ac_enabled,join_code,monthly_rent_cents,rent_start_date,balance_adjustment_cents,balance_note,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at,medications';
+// NOTE: `medications` (a jsonb array) is deliberately NOT in the list columns —
+// it makes list loads (dashboard, beds, clients) heavy for large orgs, and the
+// only place that needs it (ClientProfileScreen) loads the full record via
+// getIndividual(). Keep list rows lean.
+const INDIVIDUAL_LIST_COLS = 'id,org_id,profile_id,first_name,last_name,phone,email,program_name,program_type,treatment_start_date,sobriety_date,created_at,community_access,level_of_care,status,rent_due_day,rent_period,rent_due_dow,dues_enabled,ac_enabled,join_code,monthly_rent_cents,rent_start_date,balance_adjustment_cents,balance_note,house_name,house_id,bed_label,move_in_date,discharge_date,avatar_path,tags,applied_at';
 
 /** Fixed weekly add-on fees the owner/manager can toggle per resident. */
 export const WEEKLY_DUES_CENTS = 500;   // $5 house dues
@@ -2406,6 +2410,21 @@ export async function listOrgPayments(): Promise<Payment[]> {
   const { data, error } = await db()
     .from('payments')
     .select('*, individuals:individual_id(first_name)')
+    .order('paid_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPayment);
+}
+
+// Dashboard-only: just the current month's payments (the dashboard's collected/
+// outstanding/membership figures are all this-month). Uses the
+// payments(org_id, period_month) index, so it stays fast no matter how much
+// payment history an org has — the all-time listOrgPayments() was the query most
+// likely to time out for established homes.
+export async function listOrgPaymentsForMonth(period: string): Promise<Payment[]> {
+  const { data, error } = await db()
+    .from('payments')
+    .select('*, individuals:individual_id(first_name)')
+    .eq('period_month', `${period}-01`)
     .order('paid_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapPayment);

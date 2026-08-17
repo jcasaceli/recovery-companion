@@ -209,14 +209,40 @@ async function main() {
     await admin.from('payments').insert({ individual_id: r.id, org_id: org.id, amount_cents: 90000, method: rand(['cash', 'cashapp', 'zelle', 'card']), status: 'paid', on_time: rand([true, true, false]), period_month: daysAgo(10).slice(0, 7) + '-01', source: 'manual', paid_at: iso(rand([3, 8, 12])), created_by: owner.id });
   }
 
-  const spots = [
-    { address: 'Alano Club, 500 Congress Ave, Austin, TX', lat: 30.267, lon: -97.743 },
-    { address: 'First Methodist Church, 1201 Lavaca St, Austin, TX', lat: 30.276, lon: -97.741 },
-    { address: 'Serenity Club, 2600 S Lamar Blvd, Austin, TX', lat: 30.243, lon: -97.789 },
+  // Meeting attendance — EVERY resident gets a stack of in-person check-ins with
+  // real venue addresses and (mostly) location-confirmed badges, spread over the
+  // past ~30 days with a recent one so the "this week" count looks active. Staff
+  // attendance records are added too, so the dashboard report populates over a range.
+  const meetings = [
+    { name: 'Sunrise Group (AA)', addr: 'First United Methodist, 1201 Lavaca St, Austin, TX 78701', lat: 30.2726, lon: -97.7431 },
+    { name: 'Serenity Now (NA)', addr: 'Community Rec Center, 507 Calles St, Austin, TX 78702', lat: 30.2589, lon: -97.7280 },
+    { name: 'Keep It Simple (AA)', addr: "St. David's Episcopal, 301 E 8th St, Austin, TX 78701", lat: 30.2701, lon: -97.7395 },
+    { name: 'New Beginnings (NA)', addr: 'Eastside Club, 1013 E 6th St, Austin, TX 78702', lat: 30.2660, lon: -97.7300 },
+    { name: 'Living Sober (AA)', addr: 'Trinity Center, 304 E 7th St, Austin, TX 78701', lat: 30.2685, lon: -97.7390 },
+    { name: 'Noon Reflections (AA)', addr: 'Central Presbyterian, 200 E 8th St, Austin, TX 78701', lat: 30.2699, lon: -97.7405 },
+    { name: "Men's Step Study (AA)", addr: 'Hyde Park Christian, 610 E 45th St, Austin, TX 78751', lat: 30.3020, lon: -97.7250 },
+    { name: 'Southside Recovery (NA)', addr: 'South Austin Rec Center, 1100 Cumberland Rd, Austin, TX 78704', lat: 30.2450, lon: -97.7620 },
+    { name: 'Gratitude Group (AA)', addr: 'Westlake Bible Church, 6801 Bee Cave Rd, Austin, TX 78746', lat: 30.2830, lon: -97.8050 },
+    { name: 'Daily Reprieve (AA)', addr: 'Genesis Presbyterian, 1507 Wilshire Blvd, Austin, TX 78722', lat: 30.2840, lon: -97.7100 },
+    { name: 'Fresh Start (NA)', addr: 'North Village Rec, 2600 W Anderson Ln, Austin, TX 78757', lat: 30.3560, lon: -97.7390 },
+    { name: 'Primary Purpose (AA)', addr: 'Central Christian, 1110 Guadalupe St, Austin, TX 78701', lat: 30.2720, lon: -97.7430 },
   ];
-  for (let k = 0; k < 5; k++) {
-    const s = rand(spots);
-    await admin.from('meeting_checkins').insert({ individual_id: member.id, latitude: s.lat, longitude: s.lon, address: s.address, created_at: iso(rand([1, 3, 5, 8, 12])) });
+  for (const r of all) {
+    const nMeet = rand([5, 6, 7, 8]);
+    const days = new Set([rand([0, 1, 2, 3, 4, 5])]); // guarantee one within the last week
+    while (days.size < nMeet) days.add(Math.floor(Math.random() * 30));
+    for (const d of days) {
+      const m = rand(meetings);
+      const jLat = m.lat + (Math.random() - 0.5) * 0.002;
+      const jLon = m.lon + (Math.random() - 0.5) * 0.002;
+      const ci = { individual_id: r.id, kind: 'in_person', address: `${m.name} — ${m.addr}`, latitude: jLat, longitude: jLon, created_at: iso(d) };
+      if (Math.random() < 0.8) { // most get the ✅ location-confirmed badge
+        ci.verified_at = iso(d); ci.verify_distance_m = rand([6, 9, 12, 18, 24, 33]);
+        ci.verify_latitude = jLat; ci.verify_longitude = jLon;
+      }
+      await admin.from('meeting_checkins').insert(ci);
+      await admin.from('meeting_attendance').insert({ individual_id: r.id, meeting_name: m.name, meeting_date: daysAgo(d), attended: true, note: m.addr });
+    }
   }
 
   const intakeFields = [
