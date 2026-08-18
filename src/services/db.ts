@@ -223,6 +223,56 @@ export function effectiveFeeCents(m: { monthly_rent_cents?: number | null; dues_
   return (m.monthly_rent_cents || 0) + (m.dues_enabled ? WEEKLY_DUES_CENTS : 0) + (m.ac_enabled ? WEEKLY_AC_CENTS : 0);
 }
 
+// ---------------------------------------------------------------------------
+// Weekly balance accrual (opt-in per org — see migration 0078)
+// ---------------------------------------------------------------------------
+
+/** Turn weekly balance accrual on/off for an org. The first time it's turned
+ *  on we stamp weekly_accrual_since with today so nobody is back-charged for
+ *  weeks before the operator opted in ("today forward"). The anchor is kept on
+ *  later re-toggles so turning it off and on again doesn't wipe accrued weeks. */
+export async function setWeeklyAccrualEnabled(orgId: string, enabled: boolean) {
+  const patch: any = { weekly_accrual_enabled: enabled };
+  if (enabled) {
+    const { data: cur } = await db()
+      .from('organizations').select('weekly_accrual_since').eq('id', orgId).maybeSingle();
+    if (!cur?.weekly_accrual_since) {
+      const t = new Date();
+      patch.weekly_accrual_since =
+        `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    }
+  }
+  const { error } = await db().from('organizations').update(patch).eq('id', orgId);
+  if (error) throw error;
+}
+
+/** How many weekly charges have come due since billing started for a resident:
+ *  the number of times their due weekday (0=Sun…6=Sat) has occurred STRICTLY
+ *  after the anchor date, up to and including today. If no weekday is set it
+ *  falls back to completed 7-day periods. Counting from the day AFTER the anchor
+ *  means enabling accrual never posts a charge on day one. Calendar-day math in
+ *  local time; Math.round absorbs DST. */
+export function weeklyChargesElapsed(
+  anchorISO: string | null | undefined,
+  dueDow: number | null | undefined,
+  now: Date = new Date(),
+): number {
+  if (!anchorISO) return 0;
+  const [ay, am, ad] = anchorISO.slice(0, 10).split('-').map((n) => parseInt(n, 10));
+  if (!ay || !am || !ad) return 0;
+  const MS = 86400000;
+  const anchor = new Date(ay, am - 1, ad);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysAfter = Math.round((today.getTime() - anchor.getTime()) / MS);
+  if (daysAfter <= 0) return 0;
+  if (dueDow == null) return Math.floor(daysAfter / 7);
+  const firstDay = new Date(anchor.getTime() + MS);          // day after the anchor
+  const offset = ((dueDow - firstDay.getDay()) + 7) % 7;     // → first due-weekday on/after it
+  const firstOcc = firstDay.getTime() + offset * MS;
+  if (firstOcc > today.getTime()) return 0;
+  return Math.floor(Math.round((today.getTime() - firstOcc) / MS) / 7) + 1;
+}
+
 export async function listFacilitatorIndividuals(opts?: { activeOnly?: boolean }) {
   let q = db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
   // Billing + dashboard only care about current residents. Filtering server-side

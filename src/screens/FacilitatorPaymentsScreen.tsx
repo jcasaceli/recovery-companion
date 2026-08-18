@@ -44,15 +44,22 @@ export function FacilitatorPaymentsScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [org, setOrg] = useState<any | null>(null);
+  const [accSaving, setAccSaving] = useState(false);
   const { subscriptionActive, reloadCloud } = useAppState();
   const locked = !subscriptionActive;
 
   const load = useCallback(async () => {
     if (locked) { setLoading(false); return; }
     try {
-      const [inds, pays] = await Promise.all([dbApi.listFacilitatorIndividuals({ activeOnly: true }), dbApi.listOrgPayments()]);
+      const [inds, pays, o] = await Promise.all([
+        dbApi.listFacilitatorIndividuals({ activeOnly: true }),
+        dbApi.listOrgPayments(),
+        dbApi.getMyOrg(),
+      ]);
       setMembers((inds ?? []).filter((m: any) => (m.status ?? 'in_care') === 'in_care'));
       setPayments(pays);
+      setOrg(o);
     } catch (e) {
       // surfaced elsewhere
     } finally {
@@ -106,8 +113,40 @@ export function FacilitatorPaymentsScreen() {
       .filter((p) => p.individualId === id && p.periodMonth === period && p.status === 'paid')
       .reduce((s, p) => s + p.amountCents, 0);
 
+  // Weekly accrual mode (opt-in per org). When on, weekly residents build a
+  // running balance instead of being scored month-by-month.
+  const accrualOn = !!org?.weekly_accrual_enabled && !!org?.weekly_accrual_since;
+
+  // Sum of ALL confirmed payments for a client, across every month — accrual
+  // pays down a running balance, not a single month.
+  const paidAll = (id: string) =>
+    payments.filter((p) => p.individualId === id && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
+
+  const laterOf = (...ds: (string | null | undefined)[]) =>
+    ds.filter(Boolean).map((d) => (d as string).slice(0, 10)).sort().pop() ?? '';
+
+  // Computed weekly balance for a resident, or null if accrual doesn't apply.
+  // charged = due-weeks elapsed × fee; balance = charged − paid + adjustment.
+  const accrualBalance = (m: any): { weeks: number; chargedCents: number; paidCents: number; balanceCents: number } | null => {
+    if (!accrualOn || m.rent_period !== 'weekly') return null;
+    const fee = dbApi.effectiveFeeCents(m);
+    if (fee <= 0) return null;
+    const anchor = laterOf(org.weekly_accrual_since, m.rent_start_date, m.move_in_date);
+    const weeks = dbApi.weeklyChargesElapsed(anchor, m.rent_due_dow);
+    const chargedCents = weeks * fee;
+    const paidCents = paidAll(m.id);
+    return { weeks, chargedCents, paidCents, balanceCents: chargedCents - paidCents + (m.balance_adjustment_cents || 0) };
+  };
+
   // 'paid' (sum ≥ rent), 'partial' (0 < sum < rent), 'none' (sum 0). Only for rent > 0.
+  // Accrual residents are scored on their running balance so the pie stays honest.
   const payStatus = (m: any): 'paid' | 'partial' | 'none' | 'norent' => {
+    const acc = accrualBalance(m);
+    if (acc) {
+      if (acc.chargedCents <= 0) return 'norent';
+      if (acc.balanceCents <= 0) return 'paid';
+      return acc.paidCents > 0 ? 'partial' : 'none';
+    }
     const rent = m.monthly_rent_cents || 0;
     if (rent <= 0) return 'norent';
     const sum = paidSum(m.id);
@@ -192,6 +231,27 @@ export function FacilitatorPaymentsScreen() {
   const selectedHouses = Array.from(new Set(selectedMembers.map((m) => m.house_name || 'Unassigned')));
   const bulkHouseName = selectedHouses.length === 1 ? selectedHouses[0] : null;
 
+  // Weekly-accrual toggle. Only surfaced when the home actually has weekly
+  // residents (or already has it on), so monthly-only homes never see it.
+  const hasWeekly = members.some((m) => m.rent_period === 'weekly');
+  const toggleAccrual = async (next: boolean) => {
+    if (!org?.id || accSaving) return;
+    const prev = org;
+    const t = new Date();
+    const todayISO = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    setOrg({ ...org, weekly_accrual_enabled: next, weekly_accrual_since: org.weekly_accrual_since ?? todayISO });
+    setAccSaving(true);
+    try {
+      await dbApi.setWeeklyAccrualEnabled(org.id, next);
+      setOrg(await dbApi.getMyOrg());
+    } catch (e: any) {
+      setOrg(prev);
+      Alert.alert('Could not change', e?.message ?? 'Please try again.');
+    } finally {
+      setAccSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
@@ -206,13 +266,22 @@ export function FacilitatorPaymentsScreen() {
     const sum = paidSum(m.id);
     const rent = m.monthly_rent_cents || 0;
     const bal = m.balance_adjustment_cents || 0;
+    const acc = accrualBalance(m);
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const notStarted = m.rent_start_date && m.rent_start_date > todayStr;
     const expanded = expandedId === m.id;
     const history = payments.filter((p) => p.individualId === m.id);
+    const weeksLabel = acc ? `${acc.weeks} wk${acc.weeks === 1 ? '' : 's'}` : '';
     const statusText =
       notStarted ? `Plan starts ${formatDate(m.rent_start_date)}`
+      // Accrual residents: show the running balance, not a monthly verdict.
+      : acc && acc.chargedCents > 0 ? (
+          acc.balanceCents > 0 ? `Balance owed: ${money(acc.balanceCents)} · ${weeksLabel} billed`
+          : acc.balanceCents < 0 ? `Credit: ${money(-acc.balanceCents)}`
+          : `Up to date · ${weeksLabel} billed`
+        )
+      : acc ? 'No fee set'
       : st === 'norent' ? 'No fee set'
       : st === 'paid' ? `Paid in full (${money(sum)})`
       : st === 'partial' ? `Partial: ${money(sum)} of ${money(rent)}`
@@ -235,10 +304,13 @@ export function FacilitatorPaymentsScreen() {
               Fee {feeLine(m)}
             </Text>
             <Text style={[styles.statusLine, { color: statusColor }]}>{statusText}</Text>
-            {bal !== 0 ? (
+            {bal !== 0 && !acc ? (
               <Text style={[styles.statusLine, { color: bal > 0 ? colors.crisis : colors.success }]}>
                 {bal > 0 ? `Balance owed: +${money(bal)}` : `Credit: ${money(-bal)}`}{m.balance_note ? ` · ${m.balance_note}` : ''}
               </Text>
+            ) : null}
+            {acc && bal !== 0 && m.balance_note ? (
+              <Text style={styles.expandHint}>Adjustment applied: {m.balance_note}</Text>
             ) : null}
             {!selectMode ? (
               <Text style={styles.expandHint}>
@@ -363,6 +435,27 @@ export function FacilitatorPaymentsScreen() {
               <TouchableOpacity onPress={priceWholeHouse} style={styles.wholeHouseBtn}>
                 <Text style={styles.wholeHouseTxt}>💵 Set one price for all of {houseFilter} ({shown.length})</Text>
               </TouchableOpacity>
+            ) : null}
+
+            {(hasWeekly || accrualOn) && !selectMode ? (
+              <Card>
+                <View style={styles.accRow}>
+                  <View style={{ flex: 1, paddingRight: spacing.md }}>
+                    <Text style={typography.h3}>Track weekly balances</Text>
+                    <Text style={typography.caption}>
+                      {accrualOn
+                        ? `On since ${formatDate(org.weekly_accrual_since)} · each weekly resident builds a balance on their due day.`
+                        : 'Unpaid weeks add up into each weekly resident’s running balance. Starts from today — no back-charges.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={accrualOn}
+                    onValueChange={toggleAccrual}
+                    disabled={accSaving}
+                    trackColor={{ true: colors.primary }}
+                  />
+                </View>
+              </Card>
             ) : null}
 
             <Card style={{ alignItems: 'center' }}>
@@ -996,6 +1089,7 @@ const styles = StyleSheet.create({
   actionBtn: { backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   actionBtnTxt: { color: colors.primaryDark, fontWeight: '800', fontSize: 14 },
   memberRow: { flexDirection: 'row', alignItems: 'center' },
+  accRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statusLine: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   expandHint: { fontSize: 12, color: colors.primary, marginTop: 4, fontWeight: '600' },
   history: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
