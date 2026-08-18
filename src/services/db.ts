@@ -2409,7 +2409,7 @@ export async function declinePayment(paymentId: string) {
 export async function listOrgPayments(): Promise<Payment[]> {
   const { data, error } = await db()
     .from('payments')
-    .select('*, individuals:individual_id(first_name)')
+    .select('*, individuals:individual_id(first_name, last_name)')
     .order('paid_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapPayment);
@@ -2423,7 +2423,7 @@ export async function listOrgPayments(): Promise<Payment[]> {
 export async function listOrgPaymentsForMonth(period: string): Promise<Payment[]> {
   const { data, error } = await db()
     .from('payments')
-    .select('*, individuals:individual_id(first_name)')
+    .select('*, individuals:individual_id(first_name, last_name)')
     .eq('period_month', `${period}-01`)
     .order('paid_at', { ascending: false });
   if (error) throw error;
@@ -2481,7 +2481,7 @@ function mapPayment(r: any): Payment {
   return {
     id: r.id,
     individualId: r.individual_id,
-    memberName: r.individuals?.first_name,
+    memberName: r.individuals ? `${r.individuals.first_name}${r.individuals.last_name ? ` ${r.individuals.last_name}` : ''}` : undefined,
     amountCents: r.amount_cents,
     method: r.method,
     status: (r.status === 'reported' ? 'reported' : 'paid'),
