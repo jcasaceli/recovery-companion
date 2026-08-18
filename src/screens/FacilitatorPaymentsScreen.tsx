@@ -50,7 +50,7 @@ export function FacilitatorPaymentsScreen() {
   const load = useCallback(async () => {
     if (locked) { setLoading(false); return; }
     try {
-      const [inds, pays] = await Promise.all([dbApi.listFacilitatorIndividuals(), dbApi.listOrgPayments()]);
+      const [inds, pays] = await Promise.all([dbApi.listFacilitatorIndividuals({ activeOnly: true }), dbApi.listOrgPayments()]);
       setMembers((inds ?? []).filter((m: any) => (m.status ?? 'in_care') === 'in_care'));
       setPayments(pays);
     } catch (e) {

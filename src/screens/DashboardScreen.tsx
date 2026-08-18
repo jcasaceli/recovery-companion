@@ -129,7 +129,7 @@ export function DashboardScreen() {
     // allSettled (not all): a single slow/failed query no longer blanks the WHOLE
     // dashboard to zeros — each section fills from whatever succeeded.
     Promise.allSettled([
-      listFacilitatorIndividuals(), listOrgPaymentsForMonth(period()), listOrgAgreements(),
+      listFacilitatorIndividuals({ activeOnly: true }), listOrgPaymentsForMonth(period()), listOrgAgreements(),
       listFlaggedIndividualIds(), listOrgCheckins(WEEK_AGO()), getMyOrg(),
     ]).then((res) => {
       const val = (i: number, d: any) => (res[i].status === 'fulfilled' ? (res[i] as any).value : d);

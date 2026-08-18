@@ -208,8 +208,13 @@ export function effectiveFeeCents(m: { monthly_rent_cents?: number | null; dues_
   return (m.monthly_rent_cents || 0) + (m.dues_enabled ? WEEKLY_DUES_CENTS : 0) + (m.ac_enabled ? WEEKLY_AC_CENTS : 0);
 }
 
-export async function listFacilitatorIndividuals() {
-  const { data, error } = await db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
+export async function listFacilitatorIndividuals(opts?: { activeOnly?: boolean }) {
+  let q = db().from('individuals').select(INDIVIDUAL_LIST_COLS).order('first_name');
+  // Billing + dashboard only care about current residents. Filtering server-side
+  // (instead of loading a home's entire discharged history) keeps those tabs fast
+  // on cold start for large homes. null status is treated as in-care.
+  if (opts?.activeOnly) q = q.or('status.eq.in_care,status.is.null');
+  const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).filter((r: any) => (r.status ?? 'in_care') !== 'pending');
 }
