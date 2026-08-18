@@ -35,6 +35,21 @@ function db() {
   return supabase;
 }
 
+// Current signed-in user, shaped like getUser()'s `{ data: { user } }`.
+//
+// getSession() reads the session that's already cached in memory/storage
+// (refreshing only when the token is near expiry). getUser() instead makes a
+// network round-trip to /auth/v1/user on EVERY call to revalidate the token —
+// and takes the supabase-js auth lock to do it. With this called from ~30 db
+// functions, that was a hidden network hop per query, and on web those lock
+// acquisitions serialized behind the cold-start token refresh, hanging the
+// Dashboard/Payments tabs for minutes. RLS — not this lookup — is what secures
+// every query, so the local session id is all we need here.
+async function authUser(): Promise<{ data: { user: { id: string } | null } }> {
+  const { data } = await db().auth.getSession();
+  return { data: { user: data.session?.user ?? null } };
+}
+
 // ---------------------------------------------------------------------------
 // Auth + profile
 // ---------------------------------------------------------------------------
@@ -107,7 +122,7 @@ export async function updatePassword(newPassword: string) {
   if (error) throw error;
   // Once they've set their own password, they no longer need to be forced to.
   try {
-    const { data: u } = await db().auth.getUser();
+    const { data: u } = await authUser();
     if (u.user) await db().from('profiles').update({ must_change_password: false }).eq('id', u.user.id);
   } catch {}
 }
@@ -163,7 +178,7 @@ export async function getSession() {
 
 /** Update the signed-in user's display name (facilitator, manager, or member). */
 export async function updateMyProfileName(fullName: string): Promise<void> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const uid = u.user?.id;
   if (!uid) throw new Error('Not signed in.');
   const { error } = await db().from('profiles').update({ full_name: fullName.trim() }).eq('id', uid);
@@ -171,7 +186,7 @@ export async function updateMyProfileName(fullName: string): Promise<void> {
 }
 
 export async function getMyProfile() {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return null;
   const { data, error } = await db()
     .from('profiles')
@@ -333,7 +348,7 @@ export async function resolveMyIndividual(): Promise<{ individualId: string; rec
     return null;
   }
   // A member is linked to their record via individuals.profile_id.
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (u.user) {
     // Excludes intake_data. This runs on nearly every resident action, and an
     // applicant who submitted a full intake packet carries megabytes there —
@@ -383,7 +398,7 @@ export async function housesForCode(code: string): Promise<{ id: string; name: s
 /** Member: leave the sober living they're linked to so they can join another
  *  home with a new code. Unlinks their profile from the resident record. */
 export async function leaveSoberLiving(): Promise<void> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const uid = u.user?.id;
   if (!uid) return;
   const me = await resolveMyIndividual();
@@ -398,7 +413,7 @@ export async function leaveSoberLiving(): Promise<void> {
  *  which is correct even when they joined a different house than the org name).
  *  Falls back to the free-text house field, then the org name. */
 export async function getMyHouseName(): Promise<string | null> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return null;
   const { data: ind } = await db()
     .from('individuals')
@@ -419,7 +434,7 @@ export async function getMyHouseName(): Promise<string | null> {
  *  if they haven't connected a code yet). Used for the "you're now connected to
  *  …" confirmation. RLS policy "resident sees their org" allows this read. */
 export async function getMyNetworkName(): Promise<string | null> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return null;
   const { data: ind } = await db().from('individuals').select('org_id').eq('profile_id', u.user.id).maybeSingle();
   if (!ind?.org_id) return null;
@@ -466,14 +481,14 @@ export async function verifyMeetingCheckin(
 /** Whether the current staff user wants routine resident-activity pushes.
  *  Defaults to OFF — staff opt IN by turning the toggle on. */
 export async function getNotifyMemberActivity(): Promise<boolean> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return false;
   const { data } = await db().from('profiles').select('notify_member_activity').eq('id', u.user.id).maybeSingle();
   return data?.notify_member_activity === true;
 }
 
 export async function setNotifyMemberActivity(on: boolean) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return;
   const { error } = await db().from('profiles').update({ notify_member_activity: on }).eq('id', u.user.id);
   if (error) throw error;
@@ -502,7 +517,7 @@ function mapHouseEvent(r: any): HouseEvent {
 
 /** Staff: add a house meeting / mandatory event. */
 export async function createHouseEvent(input: { houseId: string; title: string; date: string; time?: string; mandatory?: boolean; recurring?: boolean }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('house_events').insert({
     house_id: input.houseId, title: input.title, event_date: input.date,
     event_time: input.time ?? null, mandatory: !!input.mandatory,
@@ -636,7 +651,7 @@ export async function listOrgPasses(status?: PassStatus): Promise<Pass[]> {
 
 /** Staff: approve or deny a pass, recording who reviewed it and when. */
 export async function reviewPass(id: string, status: 'approved' | 'denied', note?: string) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('passes').update({
     status, review_note: note ?? null, reviewed_by: u.user?.id, reviewed_at: new Date().toISOString(),
   }).eq('id', id);
@@ -708,7 +723,7 @@ export async function getCurfew(individualId: string): Promise<Curfew | null> {
 
 /** Staff: enable/disable curfew for a member and set the check-in times. */
 export async function setCurfew(individualId: string, input: { enabled: boolean; times: string[]; dayTimes?: Record<string, string[]> }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('curfews').upsert({
     individual_id: individualId, enabled: input.enabled,
     times: input.times, day_times: input.dayTimes ?? {},
@@ -836,7 +851,7 @@ export async function createDocument(input: {
   orgId?: string; individualId: string; title: string;
   fileData?: string; storagePath?: string; fileName?: string; mimeType?: string; sizeBytes?: number;
 }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('documents').insert({
     org_id: input.orgId ?? null, individual_id: input.individualId, title: input.title,
     file_data: input.fileData ?? null, storage_path: input.storagePath ?? null,
@@ -918,7 +933,7 @@ export async function updateClientTags(individualId: string, tags: string[]) {
 
 /** Member: the medications on their own record. */
 export async function getMyMedications(): Promise<string[]> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return [];
   const { data } = await db()
     .from('individuals').select('medications').eq('profile_id', u.user.id).maybeSingle();
@@ -993,7 +1008,7 @@ export async function listMeetingAttendance(individualId: string): Promise<Meeti
 
 /** Staff: record a member's meeting attendance with an optional note. */
 export async function addMeetingAttendance(input: { individualId: string; meetingName: string; meetingDate: string; attended: boolean; note?: string }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('meeting_attendance').insert({
     individual_id: input.individualId, meeting_name: input.meetingName, meeting_date: input.meetingDate,
     attended: input.attended, note: input.note ?? null, created_by: u.user?.id,
@@ -1080,7 +1095,7 @@ export async function listFormTemplates(): Promise<FormTemplate[]> {
 
 /** Staff: save a reusable form template. Returns the new template id. */
 export async function createFormTemplate(input: { title: string; description?: string; fields: FormField[]; bodyHtml?: string; documentData?: string; documentPages?: string[] }): Promise<string | undefined> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const org = await getMyOrg();
   const row: any = {
     org_id: org?.id ?? null, title: input.title, description: input.description ?? null,
@@ -1143,7 +1158,7 @@ export async function unarchiveTemplate(key: string, orgId?: string) {
 
 /** Staff: assign a form to a resident (snapshots the fields so it's immutable). */
 export async function assignForm(input: { individualId: string; orgId?: string; templateId?: string; title: string; fields: FormField[] }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('form_responses').insert({
     org_id: input.orgId ?? null, individual_id: input.individualId, template_id: input.templateId ?? null,
     title: input.title, fields: input.fields, answers: {}, status: 'pending', created_by: u.user?.id,
@@ -1153,7 +1168,7 @@ export async function assignForm(input: { individualId: string; orgId?: string; 
 
 /** Staff: create a house-level form (not tied to a resident) to fill in & sign. */
 export async function assignHouseForm(input: { orgId: string; templateId?: string; title: string; fields: FormField[] }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('form_responses').insert({
     org_id: input.orgId, individual_id: null, template_id: input.templateId ?? null,
     title: input.title, fields: input.fields, answers: {}, status: 'pending', created_by: u.user?.id,
@@ -1297,7 +1312,7 @@ export async function removeManagerFromHouse(houseId: string, profileId: string)
 
 /** Which houses the current staff member can see (owner = all; manager = assigned). */
 export async function getMyHouseScope(): Promise<{ isOwner: boolean; houseIds: string[] }> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const uid = u.user?.id;
   if (!uid) return { isOwner: false, houseIds: [] };
   const { data: m } = await db().from('org_members').select('is_owner').eq('profile_id', uid).maybeSingle();
@@ -1341,7 +1356,7 @@ export async function listAnnouncements(): Promise<Announcement[]> {
 
 /** Facilitator/manager: post an announcement to everyone in the org. */
 export async function postAnnouncement(orgId: string, body: string, authorName?: string) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('announcements').insert({
     org_id: orgId,
     author_id: u.user?.id,
@@ -1742,7 +1757,7 @@ export async function getMyReferrals(): Promise<ReferralSummary> {
 
 /** Facilitator onboarding: ensure the facilitator has an org (create if none). */
 export async function ensureFacilitatorOrg(name: string): Promise<string> {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const uid = u.user?.id;
   if (!uid) throw new Error('not signed in');
   const { data: existing } = await db()
@@ -1893,7 +1908,7 @@ export async function addTask(
   individualId: string,
   t: { title: string; description?: string; dueDate?: string; recurrence: TaskRecurrence },
 ) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { data, error } = await db()
     .from('tasks')
     .insert({
@@ -1950,7 +1965,7 @@ export async function addNote(
   attachment?: { path: string; name: string; mime: string },
   flagged = false,
 ) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { data, error } = await db()
     .from('notes')
     .insert({
@@ -2076,7 +2091,7 @@ export async function addScheduleEvent(
   individualId: string,
   e: { title: string; date: string; startTime?: string; endTime?: string; location?: string; source: 'manual' | 'photo' },
 ) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('schedule_events').insert({
     individual_id: individualId,
     created_by: u.user?.id ?? null,
@@ -2091,7 +2106,7 @@ export async function addScheduleEvent(
 }
 
 export async function listPosts() {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { data, error } = await db()
     .from('community_posts')
     .select('*, profiles:author_id(full_name, role), post_likes(profile_id)')
@@ -2112,7 +2127,7 @@ export async function listPosts() {
 
 /** Report a community post as objectionable (content moderation). */
 export async function reportPost(postId: string, reason?: string) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('content_reports').insert({
     post_id: postId,
     reporter_id: u.user?.id,
@@ -2122,7 +2137,7 @@ export async function reportPost(postId: string, reason?: string) {
 }
 
 export async function createPost(body: string, imagePath?: string) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('community_posts').insert({
     author_id: u.user?.id,
     body,
@@ -2132,7 +2147,7 @@ export async function createPost(body: string, imagePath?: string) {
 }
 
 export async function toggleLike(postId: string, like: boolean) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return;
   if (like) {
     await db().from('post_likes').upsert({ post_id: postId, profile_id: u.user.id });
@@ -2363,7 +2378,7 @@ export async function recordPayment(p: {
   /** If a third party is paying on the resident's behalf, their name. */
   thirdPartyName?: string;
 }) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   const { error } = await db().from('payments').insert({
     individual_id: p.individualId,
     org_id: p.orgId ?? null,
@@ -2448,7 +2463,7 @@ export async function listMyPayments(individualId: string): Promise<Payment[]> {
 
 /** Member: rent + org payment handles for the Pay rent screen (null if not linked). */
 export async function getResidentContext() {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return null;
   const { data: ind } = await db()
     .from('individuals')
@@ -2503,14 +2518,14 @@ function mapPayment(r: any): Payment {
 
 /** Member: opt in/out of community-post push alerts (stored on profile). */
 export async function setCommunityNotify(on: boolean) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return;
   const { error } = await db().from('profiles').update({ community_notify: on }).eq('id', u.user.id);
   if (error) throw error;
 }
 
 export async function savePushToken(token: string, platform: string) {
-  const { data: u } = await db().auth.getUser();
+  const { data: u } = await authUser();
   if (!u.user) return;
   const { error } = await db()
     .from('push_tokens')

@@ -139,7 +139,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setStatus(s ? 'signedIn' : 'signedOut');
       if (_e === 'PASSWORD_RECOVERY') setRecovery(true);
-      if (s) loadProfile();
+      // Defer any Supabase call OUT of this callback. supabase-js holds its auth
+      // lock while firing onAuthStateChange (a cold-start token refresh is what
+      // fires it), so awaiting getSession()/.from() synchronously here deadlocks
+      // against that lock on web — the app hung for minutes on every cold start
+      // until the lock timed out. setTimeout(0) lets the callback return and
+      // release the lock before loadProfile runs.
+      if (s) setTimeout(() => loadProfile(), 0);
       else setProfile(null);
     });
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
