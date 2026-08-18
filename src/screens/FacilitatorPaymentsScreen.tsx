@@ -117,11 +117,6 @@ export function FacilitatorPaymentsScreen() {
   // running balance instead of being scored month-by-month.
   const accrualOn = !!org?.weekly_accrual_enabled && !!org?.weekly_accrual_since;
 
-  // Sum of ALL confirmed payments for a client, across every month — accrual
-  // pays down a running balance, not a single month.
-  const paidAll = (id: string) =>
-    payments.filter((p) => p.individualId === id && p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
-
   const laterOf = (...ds: (string | null | undefined)[]) =>
     ds.filter(Boolean).map((d) => (d as string).slice(0, 10)).sort().pop() ?? '';
 
@@ -134,7 +129,12 @@ export function FacilitatorPaymentsScreen() {
     const anchor = laterOf(org.weekly_accrual_since, m.rent_start_date, m.move_in_date);
     const weeks = dbApi.weeklyChargesElapsed(anchor, m.rent_due_dow);
     const chargedCents = weeks * fee;
-    const paidCents = paidAll(m.id);
+    // Only payments made on/after billing started pay down accrued weeks. Earlier
+    // payments settled pre-accrual obligations — counting them would show a bogus
+    // credit the moment accrual is switched on ("today forward").
+    const paidCents = payments
+      .filter((p) => p.individualId === m.id && p.status === 'paid' && (p.paidAt ?? '').slice(0, 10) >= anchor)
+      .reduce((s, p) => s + p.amountCents, 0);
     return { weeks, chargedCents, paidCents, balanceCents: chargedCents - paidCents + (m.balance_adjustment_cents || 0) };
   };
 
