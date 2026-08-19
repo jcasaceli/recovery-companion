@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TextInput } from 'react-native';
 import { colors, spacing, radius, typography } from '../theme';
 import { to12h, formatDate, dayOfWeek } from '../utils/format';
 
@@ -18,11 +18,30 @@ export function DateField({
   value, onChange, placeholder = 'Select a date',
 }: { value?: string; onChange: (iso: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
   const now = new Date();
   const [cur, setCur] = useState(() => {
     if (value) { const [y, m] = value.split('-').map(Number); return { y, m: m - 1 }; }
     return { y: now.getFullYear(), m: now.getMonth() };
   });
+
+  // Manual entry: accept MM/DD/YYYY (also - or . separators, 2- or 4-digit year)
+  // so operators can just type a date instead of paging the calendar.
+  const commitTyped = () => {
+    const m = typed.trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (!m) return;
+    let y = parseInt(m[3], 10); if (y < 100) y += 2000;
+    const mo = parseInt(m[1], 10), da = parseInt(m[2], 10);
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return;
+    onChange(isoOf(y, mo - 1, da));
+    setTyped('');
+    setOpen(false);
+  };
+  const openCal = () => {
+    // Prefill the typed box with the current value so it's editable, not blank.
+    if (value) { const [y, mo, d] = value.split('-'); setTyped(`${mo}/${d}/${y}`); } else setTyped('');
+    setOpen(true);
+  };
 
   const firstDow = new Date(cur.y, cur.m, 1).getDay();
   const daysIn = new Date(cur.y, cur.m + 1, 0).getDate();
@@ -46,7 +65,7 @@ export function DateField({
 
   return (
     <>
-      <TouchableOpacity style={styles.field} onPress={() => setOpen(true)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.field} onPress={openCal} activeOpacity={0.7}>
         <Text style={[styles.fieldText, !value && { color: colors.textMuted }]}>
           {value ? `${formatDate(value)}  ·  ${dayOfWeek(value)}` : placeholder}
         </Text>
@@ -55,6 +74,23 @@ export function DateField({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
           <TouchableOpacity activeOpacity={1} style={styles.calCard}>
+            {/* Type a date directly — faster than paging the calendar. */}
+            <View style={styles.typeRow}>
+              <TextInput
+                style={styles.typeInput}
+                value={typed}
+                onChangeText={setTyped}
+                onSubmitEditing={commitTyped}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="done"
+                autoCorrect={false}
+              />
+              <TouchableOpacity style={styles.typeGo} onPress={commitTyped}>
+                <Text style={styles.typeGoText}>Set</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.calHeader}>
               <TouchableOpacity onPress={() => move(-1)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Text style={styles.navArrow}>‹</Text>
@@ -148,8 +184,19 @@ const styles = StyleSheet.create({
   },
   fieldText: { fontSize: 15, color: colors.textPrimary, flex: 1 },
   icon: { fontSize: 16, marginLeft: spacing.sm },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: spacing.lg },
-  calCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
+  // maxWidth is the fix for the "partial calendar" on desktop web: without it the
+  // card stretched to the full window width, the aspectRatio-1 day cells became
+  // huge, and the whole calendar grew taller than the viewport — hiding the month
+  // header and nav arrows off the top of the screen.
+  calCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, width: '100%', maxWidth: 360, alignSelf: 'center' },
+  typeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  typeInput: {
+    flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 15, color: colors.textPrimary,
+  },
+  typeGo: { marginLeft: spacing.sm, backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  typeGoText: { color: colors.textInverse, fontWeight: '700', fontSize: 15 },
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   calTitle: { ...typography.h3 },
   navArrow: { fontSize: 28, color: colors.primary, fontWeight: '700', paddingHorizontal: spacing.sm },

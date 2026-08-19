@@ -1326,8 +1326,15 @@ export async function createHouse(name: string): Promise<void> {
 }
 
 export async function renameHouse(id: string, name: string): Promise<void> {
-  const { error } = await db().from('houses').update({ name: name.trim() }).eq('id', id);
+  const clean = name.trim();
+  const { error } = await db().from('houses').update({ name: clean }).eq('id', id);
   if (error) throw error;
+  // Residents carry a denormalized copy of their house name (individuals.house_name)
+  // that the roster + Payments views group by. Without syncing it here, renaming a
+  // house left everyone under the OLD name — so the renamed house vanished from
+  // Payments and its residents piled under whatever the old name was.
+  const { error: e2 } = await db().from('individuals').update({ house_name: clean }).eq('house_id', id);
+  if (e2) throw e2;
 }
 
 /** Make sure the operator has at least one house — named after their sober living,
