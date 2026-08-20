@@ -70,6 +70,7 @@ export function ClientProfileScreen() {
   const [dueDay, setDueDay] = useState(client?.rentDueDay ? String(client.rentDueDay) : '');
   const [rentPeriod, setRentPeriod] = useState<'monthly' | 'weekly'>(client?.rentPeriod === 'weekly' ? 'weekly' : 'monthly');
   const [dueDow, setDueDow] = useState<number | null>(client?.rentDueDow ?? null);
+  const [startDate, setStartDate] = useState('');
   const [checkins, setCheckins] = useState<any[]>([]);
   const [locReqBusy, setLocReqBusy] = useState(false);
   const requestLocation = async () => {
@@ -177,6 +178,7 @@ export function ClientProfileScreen() {
     if (!r) return;
     setBedLabel(r.bed_label ?? '');
     setMoveInDate(r.move_in_date ?? '');
+    setStartDate(r.rent_start_date ?? '');
     setDischargeDate(r.discharge_date ?? undefined);
     setTags(Array.isArray(r.tags) ? r.tags : []);
     // Meds may arrive as strings or structured {name,dose,freq} objects from
@@ -582,7 +584,7 @@ export function ClientProfileScreen() {
     return isNaN(dn) ? null : Math.min(31, Math.max(1, dn));
   };
   /** Save with explicit period/schedule so toggle taps don't hit stale state. */
-  const commitRent = async (o: { period: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null }) => {
+  const commitRent = async (o: { period: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; startDate?: string | null }) => {
     try {
       await setRent(id, parseMoneyCents(amount), o);
     } catch (e: any) {
@@ -945,6 +947,19 @@ export function ClientProfileScreen() {
             <TextInput style={styles.input} value={dueDay} onChangeText={setDueDay} onBlur={saveRent} keyboardType="number-pad" placeholder="e.g. 1" placeholderTextColor={colors.textMuted} />
           </>
         )}
+        <Text style={[styles.label, { marginTop: spacing.sm }]}>Plan start date (optional — nothing is due before this)</Text>
+        <DateField
+          value={startDate}
+          onChange={(v) => {
+            setStartDate(v);
+            commitRent({
+              period: rentPeriod,
+              ...(rentPeriod === 'weekly' ? { dueDow } : { dueDay: parseDay(dueDay) }),
+              startDate: v || null,
+            });
+          }}
+          placeholder="Starts immediately"
+        />
         <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>Enter the amount with or without a "$" — it saves automatically.</Text>
       </Card>
 

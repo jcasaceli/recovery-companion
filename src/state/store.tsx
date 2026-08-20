@@ -157,7 +157,7 @@ interface AppState extends PersistedState {
   /** Facilitator: change a client's level of care. */
   setClientLevel: (id: string, level: LevelOfCare) => Promise<void>;
   /** Facilitator: set a client's monthly rent (cents) + due day (1-31). */
-  setRent: (id: string, amountCents: number | null, opts?: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null }) => Promise<void>;
+  setRent: (id: string, amountCents: number | null, opts?: number | null | { period?: 'monthly' | 'weekly'; dueDay?: number | null; dueDow?: number | null; startDate?: string | null }) => Promise<void>;
   /** Facilitator: edit a client's details (name/house/phone/email). */
   updateClient: (id: string, fields: { firstName?: string; lastName?: string; phone?: string; email?: string; houseName?: string }) => Promise<void>;
   /** Solo resident: log a meeting check-in on-device (no facilitator yet). */
