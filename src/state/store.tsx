@@ -58,6 +58,10 @@ const STORAGE_KEY = 'recovery-companion:state:v2';
 // etc. Their data lives on-device under a per-user key (namespaced so switching
 // accounts never leaks data) until they redeem a code and become a cloud member.
 const soloKey = (uid: string) => `recovery-companion:solo:${uid}`;
+// Cached subscription status (a boolean, NOT PHI) so a returning operator's
+// screens start in the right state on cold load instead of flashing the empty
+// "preview" state while getMyOrg is still in flight.
+const subKey = (uid: string) => `recovery-companion:sub:${uid}`;
 
 interface PersistedState {
   onboarded: boolean;
@@ -333,13 +337,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // pick a client; individuals/supporters auto-load their linked individual.
   const loadCloud = async () => {
     try {
+      // Optimistically restore the last-known subscription status FIRST (fast
+      // local read), so a returning operator's screens don't flash the empty
+      // preview state while the network confirms. getMyOrg corrects it below.
+      const uid = auth.session?.user?.id;
+      if (uid) { try { const c = await AsyncStorage.getItem(subKey(uid)); if (c === '1') setSubscriptionActive(true); } catch {} }
+
       const profile: any = await dbApi.getMyProfile();
       if (!profile) {
         setState((s) => ({ ...s, onboarded: true }));
         return;
       }
       if (profile.role === 'facilitator') {
-        const list = (await dbApi.listFacilitatorIndividuals()) ?? [];
+        // The subscription gate controls EVERY operator screen, so confirm it
+        // first — and start the (potentially large) roster load in PARALLEL, so
+        // the app unlocks the moment the org read returns instead of waiting for
+        // the whole roster to download behind it.
+        const listP = dbApi.listFacilitatorIndividuals().then((l) => l ?? []).catch(() => []);
+
+        // A transient DB timeout must NOT flip a paying operator into preview
+        // mode, so we retry, and only change the flag on a DEFINITIVE read.
+        let orgRead = false;
+        let org: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try { org = await dbApi.getMyOrg(); orgRead = true; break; }
+          catch { await new Promise((r) => setTimeout(r, 400 * (attempt + 1))); }
+        }
+        if (orgRead) {
+          const active = !!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing');
+          setSubscriptionActive(active);
+          if (uid) AsyncStorage.setItem(subKey(uid), active ? '1' : '0').catch(() => {});
+        }
+        // Always start facilitators/managers on their Dashboard — clear any
+        // resident that was open in a previous session so login never drops them
+        // back into a member's view. Unlock the app now; the roster fills in next.
+        setIndividualId(undefined);
+        setState((s) => ({ ...s, onboarded: true }));
+
+        const list = await listP;
         const clients = list.map((c: any) => ({
           id: c.id,
           firstName: c.first_name ?? '',
@@ -359,24 +394,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           avatarPath: c.avatar_path ?? undefined,
           tags: Array.isArray(c.tags) ? c.tags : undefined,
         }));
-        // Subscription gate: only an active/trialing org can manage real clients.
-        // A transient DB timeout must NOT flip a paying operator into preview
-        // mode, so we retry, and only change the flag on a DEFINITIVE read.
-        // If every attempt errors, we leave the last-known state untouched.
-        let orgRead = false;
-        let org: any = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try { org = await dbApi.getMyOrg(); orgRead = true; break; }
-          catch { await new Promise((r) => setTimeout(r, 500 * (attempt + 1))); }
-        }
-        if (orgRead) {
-          setSubscriptionActive(!!org && (org.subscription_status === 'active' || org.subscription_status === 'trialing'));
-        }
-        // Always start facilitators/managers on their Dashboard — clear any
-        // resident that was open in a previous session so login never drops them
-        // back into a member's view.
-        setIndividualId(undefined);
-        setState((s) => ({ ...s, onboarded: true, clients }));
+        setState((s) => ({ ...s, clients }));
         return; // no client selected yet → Dashboard
       }
       const resolved = await dbApi.resolveMyIndividual();
