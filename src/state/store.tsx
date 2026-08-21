@@ -681,7 +681,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const createClient: AppState['createClient'] = async (input) => {
       if (!cloud) return;
-      if (!subscriptionActive) throw new Error('Subscribe ($60/mo) to add clients.');
+      if (!subscriptionActive) throw new Error('Your account isn’t active yet — activate it to add clients.');
       const orgId = await dbApi.ensureFacilitatorOrg(input.orgName?.trim() || 'My Organization');
       const created = await dbApi.createIndividual({
         orgId,

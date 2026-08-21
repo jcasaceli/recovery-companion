@@ -542,19 +542,18 @@ export function SettingsScreen() {
             <Text style={[typography.body, { fontWeight: '600' }]}>App subscription</Text>
             {subscriptionActive ? (
               <Text style={[typography.body, { color: colors.success, fontWeight: '700', marginTop: 6 }]}>✓ You’re subscribed — thank you!</Text>
-            ) : (
+            ) : Platform.OS === 'web' ? (
               <>
                 <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
                   $60/month to use Sober Living Companion for your sober living.
                 </Text>
-                {Platform.OS !== 'web' ? (
-                  <Text style={typography.caption}>
-                    Manage your subscription from the web dashboard at soberlivingcompanion.com.
-                  </Text>
-                ) : (
-                  <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
-                )}
+                <Button title="Subscribe — $60/mo" variant="secondary" onPress={subscribe} />
               </>
+            ) : (
+              // iOS/Android: no price, no purchase, no link out (App Store 3.1.1).
+              <Text style={[typography.caption, { marginTop: 2 }]}>
+                Your account isn't active yet. Please ask your organization's owner to activate it.
+              </Text>
             )}
           </Card>
           ) : null}
@@ -565,9 +564,11 @@ export function SettingsScreen() {
               <Text style={[typography.caption, { marginTop: 2, marginBottom: spacing.sm }]}>
                 Your subscription isn't active, so adding members, houses, and join codes is locked.
               </Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})}>
-                <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})}>
+                  <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
+                </TouchableOpacity>
+              ) : null}
             </Card>
           ) : null}
 

@@ -466,13 +466,13 @@ export function ClientProfileScreen() {
     // owners can see exactly what they'd manage — including agreement upload.
     const demo = DEMO_CLIENTS.find((c) => c.id === id);
     if (!demo) return <Screen edges={[]}><Text style={typography.body}>Member not found.</Text></Screen>;
-    const previewMsg = () => Alert.alert('Preview', 'This is a sample profile. Subscribe ($60/mo) to add your real residents and send agreements they sign right on their phone.');
+    const previewMsg = () => Alert.alert('Preview', 'This is a sample profile. Activate your account to add your real residents and send agreements they sign right on their phone.');
     return (
       <Screen edges={[]}>
         <ScreenTitle title={`${demo.firstName}${demo.lastName ? ` ${demo.lastName}` : ''}`} subtitle={demo.houseName || 'Sober Living'} />
         <Card style={{ backgroundColor: colors.surfaceAlt }}>
           <Text style={[typography.body, { fontWeight: '700', color: colors.primary }]}>👀 Sample profile · preview</Text>
-          <Text style={[typography.caption, { marginTop: 2 }]}>This is what a resident's profile looks like. Subscribe to manage your own.</Text>
+          <Text style={[typography.caption, { marginTop: 2 }]}>This is what a resident's profile looks like. Activate your account to manage your own.</Text>
         </Card>
         <SectionTitle>Sobriety</SectionTitle>
         <Card><Text style={typography.h3}>96 days sober</Text><Text style={typography.caption}>Their app counts every second with a live sobriety clock.</Text></Card>

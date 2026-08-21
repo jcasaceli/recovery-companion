@@ -172,9 +172,11 @@ export function AuthScreen() {
             <TouchableOpacity onPress={() => setStep('signin')} style={styles.link}>
               <Text style={styles.linkText}>Already have an account? Sign in</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={openWebSignup} style={styles.link}>
-              <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <TouchableOpacity onPress={openWebSignup} style={styles.link}>
+                <Text style={styles.linkText}>Prefer the web dashboard? Sign up at soberlivingcompanion.com</Text>
+              </TouchableOpacity>
+            ) : null}
             <BackLink onPress={() => { setError(''); setStep('resident'); }} />
           </View>
         )}
