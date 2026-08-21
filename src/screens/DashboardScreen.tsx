@@ -628,9 +628,11 @@ export function DashboardScreen() {
         <View style={{ height: spacing.sm }} />
         <Button title="View all members" variant="secondary" onPress={() => nav.navigate('Clients')} />
 
-        <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})} style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
-          <Text style={styles.siteLink}>Visit soberlivingcompanion.com →</Text>
-        </TouchableOpacity>
+        {Platform.OS === 'web' ? (
+          <TouchableOpacity onPress={() => Linking.openURL('https://soberlivingcompanion.com').catch(() => {})} style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+            <Text style={styles.siteLink}>Visit soberlivingcompanion.com →</Text>
+          </TouchableOpacity>
+        ) : null}
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
