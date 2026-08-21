@@ -397,6 +397,24 @@ export function FacilitatorPaymentsScreen() {
           ) : null}
         </View>
 
+        {/* Weekly-accrual toggle — shown on BOTH sub-tabs so it never "disappears"
+            when the operator switches to Recent payments. */}
+        {(hasWeekly || accrualOn) && !selectMode ? (
+          <Card>
+            <View style={styles.accRow}>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={typography.h3}>Track weekly balances</Text>
+                <Text style={typography.caption}>
+                  {accrualOn
+                    ? `On since ${formatDate(org.weekly_accrual_since)} · each weekly resident builds a balance on their due day.`
+                    : 'Unpaid weeks add up into each weekly resident’s running balance. Starts from today — no back-charges.'}
+                </Text>
+              </View>
+              <Switch value={accrualOn} onValueChange={toggleAccrual} disabled={accSaving} trackColor={{ true: colors.primary }} />
+            </View>
+          </Card>
+        ) : null}
+
         {tab === 'members' ? (
           <>
             {/* Bulk fee tools: enter selection mode, then select all (respects house filter) */}
@@ -435,27 +453,6 @@ export function FacilitatorPaymentsScreen() {
               <TouchableOpacity onPress={priceWholeHouse} style={styles.wholeHouseBtn}>
                 <Text style={styles.wholeHouseTxt}>💵 Set one price for all of {houseFilter} ({shown.length})</Text>
               </TouchableOpacity>
-            ) : null}
-
-            {(hasWeekly || accrualOn) && !selectMode ? (
-              <Card>
-                <View style={styles.accRow}>
-                  <View style={{ flex: 1, paddingRight: spacing.md }}>
-                    <Text style={typography.h3}>Track weekly balances</Text>
-                    <Text style={typography.caption}>
-                      {accrualOn
-                        ? `On since ${formatDate(org.weekly_accrual_since)} · each weekly resident builds a balance on their due day.`
-                        : 'Unpaid weeks add up into each weekly resident’s running balance. Starts from today — no back-charges.'}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={accrualOn}
-                    onValueChange={toggleAccrual}
-                    disabled={accSaving}
-                    trackColor={{ true: colors.primary }}
-                  />
-                </View>
-              </Card>
             ) : null}
 
             <Card style={{ alignItems: 'center' }}>
