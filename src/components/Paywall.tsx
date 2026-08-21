@@ -60,8 +60,9 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
       <Text style={styles.lock}>🔒</Text>
       <Text style={styles.title}>Activate your sober living</Text>
       <Text style={styles.sub}>
-        You’re in preview mode. Subscribe for $60/month to start adding residents and
-        collecting rent. The roster below is sample data.
+        {Platform.OS === 'web'
+          ? 'You’re in preview mode. Subscribe for $60/month to start adding residents and collecting rent. The roster below is sample data.'
+          : 'You’re in preview mode — your account isn’t active yet. The roster below is sample data.'}
       </Text>
       <View style={styles.perks}>
         {PERKS.map((p) => (
@@ -69,12 +70,11 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
         ))}
       </View>
       {Platform.OS !== 'web' ? (
-        // Apple & Google both require their billing to unlock app features, so in
-        // the native apps we don't sell/link the subscription — it's web-managed.
+        // On iOS/Android we show NO price, no purchase, and no link out — the app
+        // is a free companion to a web-managed account (App Store Guideline 3.1.1).
         <Text style={styles.fine}>
-          Your account isn't active yet. Activate your subscription from the web
-          dashboard at soberlivingcompanion.com, then sign in here to manage your
-          residents.
+          Your account isn't active yet. Please ask your organization's owner to
+          activate it, then sign in here to manage your residents.
         </Text>
       ) : (
         <>
@@ -83,9 +83,11 @@ export function Paywall({ onChanged }: { onChanged?: () => void }) {
           <Text style={styles.fine}>Secure checkout. Rent paid by your residents goes 100% to you.</Text>
         </>
       )}
-      <TouchableOpacity onPress={() => Linking.openURL(SIGNUP_URL).catch(() => {})} style={{ marginTop: spacing.md }}>
-        <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
-      </TouchableOpacity>
+      {Platform.OS === 'web' ? (
+        <TouchableOpacity onPress={() => Linking.openURL(SIGNUP_URL).catch(() => {})} style={{ marginTop: spacing.md }}>
+          <Text style={styles.signupLink}>👉 Sign up at soberlivingcompanion.com to add members to your houses today!</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <TouchableOpacity onPress={refresh} disabled={checking} style={{ marginTop: spacing.md }}>
         <Text style={styles.refresh}>
