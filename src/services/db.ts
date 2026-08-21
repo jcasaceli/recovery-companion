@@ -2501,7 +2501,11 @@ export async function listOrgPaymentsForMonth(period: string): Promise<Payment[]
   const { data, error } = await db()
     .from('payments')
     .select('*, individuals:individual_id(first_name, last_name)')
-    .eq('period_month', `${period}-01`)
+    // period_month is stored inconsistently — most rows as 'YYYY-MM', some legacy
+    // rows as 'YYYY-MM-01'. Match BOTH (prefix LIKE) or the dashboard sees zero
+    // payments and shows every resident owing their full fee. (Bug: it queried
+    // only 'YYYY-MM-01' and missed the 'YYYY-MM' majority.)
+    .like('period_month', `${period}%`)
     .order('paid_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapPayment);
